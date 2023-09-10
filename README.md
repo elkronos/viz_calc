@@ -21,3 +21,30 @@ Contains scripts designed to compute various analysis. These tend to be more spe
 - `stacked_percentages` plots a stacked bar chart showing percentages of one categorical variable within another. It computes percentages based on counts and provides customization options for color, labels, and plot appearance. The example at the end demonstrates its usage with a sample dataset, visualizing the percentages of 'cut' categories within 'color' categories.
 
 - `timeseries_fill` creates a time series plot from a pandas DataFrame. It groups the data by the time_col column and plots the specified series columns (series_cols). It can optionally fill the area between two series if fill_between is set to True. You can customize the colors, title, x-axis label, y-axis label, alpha value, and line width. The function is demonstrated using synthetic data, visualizing crossovers between two series.
+
+## Templates
+Contains scripts designed to make general plots. Offers options to edit aesthetics, wrap in plotly, as well as facet or group by variables where applicable.
+
+- `create_barplot`
+
+- `create_boxplot`
+
+- `create_densityplot`
+
+- `create_dumbellplot`
+
+- `create_funnelplot`
+
+- `create_histogram`
+
+- `create_markermap`
+
+- `create_radarplot`
+
+- `create_scatterplot`
+
+- `create_stockplot`
+
+- `create_violinplot`
+
+- `create_wordcloud`
