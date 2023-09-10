@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-def plot_timeseries_fill(data, time_col, series_cols, colors=None, fill_between=False, 
+def timeseries_fill(data, time_col, series_cols, colors=None, fill_between=False, 
                          title=None, xlab=None, ylab=None, alpha_val=0.5, line_width=2):
     
     if fill_between and len(series_cols) != 2:
@@ -44,4 +44,4 @@ data = {"time": time, "series1": series1, "series2": series2}
 df = pd.DataFrame(data)
 
 # Use the function with synthetic data
-plot_timeseries_fill(df, "time", ["series1", "series2"], fill_between=True, colors=["blue", "red"], title="Crossover Example", xlab="Date", ylab="Value")
+timeseries_fill(df, "time", ["series1", "series2"], fill_between=True, colors=["blue", "red"], title="Crossover Example", xlab="Date", ylab="Value")
