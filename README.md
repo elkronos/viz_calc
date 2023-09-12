@@ -1,2 +1,50 @@
 # viz_calc
  Visual calutators in python
+
+## Analyses
+Contains scripts designed to compute various analysis. These tend to be more specialized in terms of their design and purpose than templates.
+
+- `bar_time` visualizes a time series dataset using a combination of bar and line plots. The function accepts a Pandas DataFrame data and parameters including date_col (the column containing date information), y_col (the column containing values to analyze), group_by (to group data by day, month, quarter, or year), window_size (to calculate moving statistics), and statistical measures bar_stat and line_stat to customize the visualization. It first validates the input parameters, then groups the data according to the specified frequency and calculates the specified statistics. The grouped data is then plotted with bars representing one statistical measure and a line plot showing the rolling average of another statistical measure.
+
+- `centered_barplot` takes a Pandas DataFrame data and visualizes the proportion of values in the column specified by y that are above and below a defined threshold, grouped by the categories specified in column x. If the threshold is not provided, it defaults to the mean of column y. The visualization is a centered bar plot, with bars above and below a central line representing the proportions above and below the threshold, respectively. The function allows customization such as adding labels on the bars and a title to the plot.
+
+- `divergent_bar` visualizes the comparison between two different sets of data (specified by col_left and col_right) across various categories (specified by col_cat) using a horizontal divergent bar plot. It receives a Pandas DataFrame data and various other parameters to customize the plot, including the colors of the bars, labels for the left and right sides, and an optional title. The data from the specified columns are extracted, combined, and sorted based on the category column to create a structured dataset for plotting. The function then constructs a divergent bar plot where one set of data is represented as negative values on the left side and the other set as positive values on the right side. The user can optionally save the plot to a file by providing a filename to the save_to_file parameter.
+
+- `grid_pecent` creates a visualization of percentages in a grid format, particularly useful for displaying binary data (like 0 and 1). This function takes in a Pandas DataFrame data and a specified column_name which should contain binary data to calculate percentages. You can specify various options, including whether to display labels (label), the colors to use for the grid (colors), and an optional facet variable (facet_var) to create separate grids for different subgroups within the data, with a potential custom order (facet_order).
+
+- `histo_group` generates histograms or density plots from a pandas DataFrame to analyze the distribution of a numerical variable, potentially grouped and faceted by other categorical variables. The function allows customization of the visualization with various parameters, including bin width, overlaying density plots, adding statistical lines (like mean or median), and modifying aesthetic elements such as title and labels. The example at the end demonstrates the use of the function with a synthesized dataset, illustrating the distribution of 'mpg' values grouped by 'type' and faceted by 'gear'.
+
+- `lollipop_plot` visualizes data from a pandas DataFrame as a lollipop chart, where it groups the data by the x_var column and calculates the specified statistic ('mean', 'median', or 'sum') for the y_var column. The resulting aggregated values are plotted as lollipops, with optional customization such as changing color, adjusting the size of the dots, and adding labels with abbreviated numbers. A helper function, abbreviate_number, is used to format the labels with appropriate suffixes ('K' for thousands, 'M' for millions, etc.). A threshold line can also be added to the plot to highlight values above or below a particular level.
+
+- `quadrant_norm` creates a scatter plot with options to display Pearson's correlation coefficient, annotate quadrants with percentages, and save the plot. It accepts data from a pandas DataFrame and rescales the specified x and y columns for standardized plotting. The function allows for customization of labels, colors, and font styles. It can be used interactively or to save the plot to a file. The example at the end demonstrates its usage with synthetic data, showcasing scatter plots with various customizations.
+
+- `stacked_percentages` plots a stacked bar chart showing percentages of one categorical variable within another. It computes percentages based on counts and provides customization options for color, labels, and plot appearance. The example at the end demonstrates its usage with a sample dataset, visualizing the percentages of 'cut' categories within 'color' categories.
+
+- `timeseries_fill` creates a time series plot from a pandas DataFrame. It groups the data by the time_col column and plots the specified series columns (series_cols). It can optionally fill the area between two series if fill_between is set to True. You can customize the colors, title, x-axis label, y-axis label, alpha value, and line width. The function is demonstrated using synthetic data, visualizing crossovers between two series.
+
+## Templates
+Contains scripts designed to make general plots. Offers options to edit aesthetics, wrap in plotly, as well as facet or group by variables where applicable.
+
+- `create_barplot`
+
+- `create_boxplot`
+
+- `create_densityplot`
+
+- `create_dumbellplot`
+
+- `create_funnelplot`
+
+- `create_histogram`
+
+- `create_markermap`
+
+- `create_radarplot`
+
+- `create_scatterplot`
+
+- `create_stockplot`
+
+- `create_violinplot`
+
+- `create_wordcloud`
