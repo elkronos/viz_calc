@@ -22,9 +22,13 @@ Contains scripts designed to compute various analysis. These tend to be more spe
 
 - `grid_pecent` creates a visualization of percentages in a grid format, particularly useful for displaying binary data (like 0 and 1). This function takes in a Pandas DataFrame data and a specified column_name which should contain binary data to calculate percentages. You can specify various options, including whether to display labels (label), the colors to use for the grid (colors), and an optional facet variable (facet_var) to create separate grids for different subgroups within the data, with a potential custom order (facet_order).
 
+- `heatmap_calendar` plots a series of calendar heatmaps for each year within a specified date range, visualizing the data from the date_values parameter. It accepts various parameters to customize the heatmap's appearance, such as colormap (cmap), fill color (fillcolor), line width (linewidth), and line color (linecolor). The function uses the pandas library to organize the data into a time series and the calmap library to plot individual yearly calendar heatmaps within a loop that iterates from the start to the end year derived from the start_date parameter. It also incorporates error handling to manage any exceptions that occur during execution.
+
 - `histo_group` generates histograms or density plots from a pandas DataFrame to analyze the distribution of a numerical variable, potentially grouped and faceted by other categorical variables. The function allows customization of the visualization with various parameters, including bin width, overlaying density plots, adding statistical lines (like mean or median), and modifying aesthetic elements such as title and labels. The example at the end demonstrates the use of the function with a synthesized dataset, illustrating the distribution of 'mpg' values grouped by 'type' and faceted by 'gear'.
 
 - `lollipop_plot` visualizes data from a pandas DataFrame as a lollipop chart, where it groups the data by the x_var column and calculates the specified statistic ('mean', 'median', or 'sum') for the y_var column. The resulting aggregated values are plotted as lollipops, with optional customization such as changing color, adjusting the size of the dots, and adding labels with abbreviated numbers. A helper function, abbreviate_number, is used to format the labels with appropriate suffixes ('K' for thousands, 'M' for millions, etc.). A threshold line can also be added to the plot to highlight values above or below a particular level.
+
+- `pairs_plots` generates a pair plot of specified variables from a dataset, which can be loaded using a URL or filepath. It offers various customization options including plot kind (plot_kind), color palette (palette), and markers style (markers). Other parameters allow control over the size (size) and aspect ratio (aspect) of the plot facets, the kind of plot on the diagonal (diag_kind), and whether to exclude the diagonal plots (corner). The function also has options to apply a log-scale transformation to the variables (log_scale) and to save the plot to a file (save_as). If return_grid is set to True, the function returns a PairGrid instance for further customization. It contains error handling to catch and report any exceptions that occur during its execution.
 
 - `quadrant_norm` creates a scatter plot with options to display Pearson's correlation coefficient, annotate quadrants with percentages, and save the plot. It accepts data from a pandas DataFrame and rescales the specified x and y columns for standardized plotting. The function allows for customization of labels, colors, and font styles. It can be used interactively or to save the plot to a file. The example at the end demonstrates its usage with synthetic data, showcasing scatter plots with various customizations.
 
@@ -38,31 +42,20 @@ Contains scripts designed to compute various analysis. These tend to be more spe
 Contains scripts designed to make general plots. Offers options to edit aesthetics, wrap in plotly, as well as facet or group by variables where applicable.
 
 - `create_barplot`
-
+- `create_boxjitter`
 - `create_boxplot`
-
 - `create_densityplot`
-
 - `create_dumbellplot`
-
 - `create_funnelplot`
-
 - `create_heatmap`
-
 - `create_histogram`
-
 - `create_markermap`
-
 - `create_radarplot`
-
+- `create_ridgeplot`
 - `create_sankeydiagram`
-
 - `create_scatterplot`
-
 - `create_stockplot`
-
+- `create_venn`
 - `create_violinplot`
-
 - `create_waterfallchart`
-
 - `create_wordcloud`
