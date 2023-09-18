@@ -44,6 +44,7 @@ Contains scripts designed to make general plots. Offers options to edit aestheti
 - `create_barplot`
 - `create_boxjitter`
 - `create_boxplot`
+- `create_circularbar`
 - `create_densityplot`
 - `create_dumbellplot`
 - `create_funnelplot`
