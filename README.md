@@ -65,5 +65,6 @@ Contains scripts designed to make general plots. Offers options to edit aestheti
 - `create_stockplot`
 - `create_venn`
 - `create_violinplot`
+- `create_waffle`
 - `create_waterfallchart`
 - `create_wordcloud`
