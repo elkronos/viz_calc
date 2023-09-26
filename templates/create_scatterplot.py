@@ -1,26 +1,19 @@
 import pandas as pd
-import numpy as np
-import plotly.express as px
+import matplotlib.pyplot as plt
+from typing import List, Optional, Dict, Union
 
-def generate_synthetic_data(data_size: int = 100) -> pd.DataFrame:
-    """Generates synthetic data for demonstration purposes."""
-    np.random.seed(42)
-    categories = ['A', 'B', 'C']
-    groups = ['X', 'Y', 'Z']
-
-    data = pd.DataFrame({
-        'Category': np.random.choice(categories, data_size),
-        'X_value': np.random.randn(data_size),
-        'Y_value': np.random.randn(data_size),
-        'Group': np.random.choice(groups, data_size),
-        'Symbol': np.random.choice(['circle', 'square', 'diamond'], data_size)
-    })
-
-    return data
-
-def create_scatterplot(data: pd.DataFrame, x_col: str, y_col: str, category_col: str, group_col: str = None, symbol_col: str = None, title: str = 'Interactive Scatter Plot', template: str = 'plotly_dark', trendline: str = None, marker_size: int = 5, marker_opacity: float = 0.7, x_label: str = None, y_label: str = None, hover_data: list = None, legend_title: str = 'Category', title_font: dict = None, axis_label_font: dict = None, annotations: list = None):
+def create_scatterplot(data: pd.DataFrame, x_col: str, y_col: str, category_col: str, 
+                       group_col: Optional[str] = None, symbol_col: Optional[str] = None, 
+                       title: str = 'Scatter Plot', template: str = 'plotly_dark', 
+                       trendline: Optional[str] = None, marker_size: int = 5, 
+                       marker_opacity: float = 0.7, x_label: Optional[str] = None, 
+                       y_label: Optional[str] = None, hover_data: Optional[List[str]] = None, 
+                       legend_title: str = 'Category', title_font: Optional[Dict[str, Union[str, int]]] = None, 
+                       axis_label_font: Optional[Dict[str, Union[str, int]]] = None, 
+                       annotations: Optional[List[Dict[str, Union[str, int]]]] = None, 
+                       interactive: bool = False) -> None:
     """
-    Create an interactive scatter plot with optional parameters for customization.
+    Create a scatter plot with optional interactivity and customization.
 
     Parameters:
     - data (pd.DataFrame): The input data frame.
@@ -41,38 +34,97 @@ def create_scatterplot(data: pd.DataFrame, x_col: str, y_col: str, category_col:
     - title_font (dict, optional): Font properties for the title.
     - axis_label_font (dict, optional): Font properties for the axis labels.
     - annotations (list, optional): List of annotations to add to the plot.
+    - interactive (bool, optional): Whether to use an interactive Plotly plot.
     
     Returns:
     None
     """
-    fig = px.scatter(data, x=x_col, y=y_col, color=category_col, facet_col=group_col, trendline=trendline, template=template, title=title)
-    fig.update_traces(marker=dict(size=marker_size, opacity=marker_opacity))
-
-    if x_label:
-        fig.update_xaxes(title_text=x_label)
+    if x_col not in data.columns or y_col not in data.columns or category_col not in data.columns:
+        raise ValueError("x_col, y_col, or category_col does not exist in the DataFrame.")
     
-    if y_label:
-        fig.update_yaxes(title_text=y_label)
+    if group_col and group_col not in data.columns:
+        raise ValueError(f"{group_col} does not exist in the DataFrame.")
     
-    if symbol_col and symbol_col in data.columns:
-        fig.update_traces(marker_symbol=data[symbol_col])
-
-    if legend_title:
-        fig.update_layout(legend_title=dict(text=legend_title))
+    if symbol_col and symbol_col not in data.columns:
+        raise ValueError(f"{symbol_col} does not exist in the DataFrame.")
     
-    if title_font:
-        fig.update_layout(title_font=title_font)
+    if interactive:
+        import plotly.express as px
 
-    if axis_label_font:
-        fig.update_xaxes(title_font=axis_label_font)
-        fig.update_yaxes(title_font=axis_label_font)
+        fig = px.scatter(data, x=x_col, y=y_col, color=category_col, facet_col=group_col, 
+                         trendline=trendline, template=template, title=title)
+        fig.update_traces(marker=dict(size=marker_size, opacity=marker_opacity))
 
-    if annotations:
-        for annotation in annotations:
-            fig.add_annotation(annotation)
-    
-    fig.show()
+        if x_label:
+            fig.update_xaxes(title_text=x_label)
 
-# Using the function to create an interactive scatter plot
-data = generate_synthetic_data()
-create_scatterplot(data, 'X_value', 'Y_value', 'Category', group_col='Group', symbol_col='Symbol', hover_data=['Group'], legend_title='Category Legend', title_font={'size': 24, 'family': 'Courier New, monospace', 'color': 'RebeccaPurple'}, axis_label_font={'size': 14, 'family': 'Courier New, monospace'}, annotations=[dict(x=0, y=0, xref='x', yref='y', text='Origin', showarrow=True, arrowhead=2, ax=20, ay=-30)])
+        if y_label:
+            fig.update_yaxes(title_text=y_label)
+
+        if symbol_col:
+            fig.update_traces(marker_symbol=data[symbol_col])
+
+        if legend_title:
+            fig.update_layout(legend_title=dict(text=legend_title))
+
+        if title_font:
+            fig.update_layout(title_font=title_font)
+
+        if axis_label_font:
+            fig.update_xaxes(title_font=axis_label_font)
+            fig.update_yaxes(title_font=axis_label_font)
+
+        if annotations:
+            for annotation in annotations:
+                fig.add_annotation(annotation)
+
+        fig.show()
+        
+    else:
+        plt.figure(figsize=(10,6))
+        categories = data[category_col].unique()
+        for category in categories:
+            subset = data[data[category_col] == category]
+            plt.scatter(subset[x_col], subset[y_col], label=category, s=marker_size*10, alpha=marker_opacity)
+        
+        plt.title(title)
+        plt.xlabel(x_label if x_label else x_col)
+        plt.ylabel(y_label if y_label else y_col)
+        plt.legend(title=legend_title)
+        plt.show()
+
+
+# Example DataFrame
+data = pd.DataFrame({
+    'Category': ['A', 'B', 'A', 'C', 'B'],
+    'X_value': [1.2, 2.4, 3.1, 4.7, 2.9],
+    'Y_value': [5.6, 4.3, 3.6, 1.8, 4.1],
+    'Group': ['X', 'Y', 'Z', 'X', 'Z'],
+    'Symbol': ['circle', 'square', 'diamond', 'circle', 'square']
+})
+
+# Using the function to create a non-interactive scatter plot
+create_scatterplot(data, 'X_value', 'Y_value', 'Category', interactive=False)
+
+# Example DataFrame 1 with multiple groups and symbols
+data1 = pd.DataFrame({
+    'Category': ['A', 'B', 'A', 'C', 'B', 'C', 'A', 'B'],
+    'X_value': [1.2, 2.4, 3.1, 4.7, 2.9, 3.5, 4.1, 1.8],
+    'Y_value': [5.6, 4.3, 3.6, 1.8, 4.1, 2.7, 3.2, 5.0],
+    'Group': ['X', 'Y', 'Z', 'X', 'Z', 'Y', 'X', 'Z'],
+    'Symbol': ['circle', 'square', 'diamond', 'circle', 'diamond', 'square', 'circle', 'square']
+})
+
+# Function call with interactive=True
+create_scatterplot(data1, 'X_value', 'Y_value', 'Category', group_col='Group', symbol_col='Symbol', interactive=True)
+
+
+# Example DataFrame 2 without group_col and symbol_col
+data2 = pd.DataFrame({
+    'Category': ['A', 'B', 'C', 'A'],
+    'X_value': [1.5, 3.0, 4.2, 2.4],
+    'Y_value': [4.6, 3.8, 2.4, 4.0],
+})
+
+# Function call with default settings
+create_scatterplot(data2, 'X_value', 'Y_value', 'Category', interactive=True)

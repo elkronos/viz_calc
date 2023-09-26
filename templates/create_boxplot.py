@@ -4,7 +4,7 @@ import plotly.express as px
 import pandas as pd
 import numpy as np
 
-def create_boxplot(data, numeric_col, categorical_col, group_col=None, colors=None, title=None, interactive=False):
+def create_boxplot(data, numeric_col, categorical_col, group_col=None, colors=None, title=None, interactive=False, template=None):
     """
     Create a boxplot with optional parameters for customization.
 
@@ -13,9 +13,10 @@ def create_boxplot(data, numeric_col, categorical_col, group_col=None, colors=No
     numeric_col (str): Column name of the numeric variable
     categorical_col (str): Column name of the categorical variable
     group_col (str, optional): Column name to group data by for faceted boxplots. Defaults to None.
-    colors (str or list, optional): Colors for the boxplots. Defaults to None.
+    colors (str, list or dict, optional): Colors for the boxplots or seaborn color palette. Defaults to None.
     title (str, optional): Title of the plot. Defaults to None.
     interactive (bool, optional): Whether to create an interactive plot. Defaults to False.
+    template (str, optional): Template for the interactive plot. Defaults to None.
 
     Returns:
     None
@@ -28,10 +29,12 @@ def create_boxplot(data, numeric_col, categorical_col, group_col=None, colors=No
         raise ValueError("Column names not found in data")
 
     if interactive:
-        fig = px.box(data, x=categorical_col, y=numeric_col, color=group_col, title=title, template="plotly_dark" if colors == "dark" else None)
+        fig = px.box(data, x=categorical_col, y=numeric_col, color=group_col, title=title, template=template)
         fig.show()
     else:
-        sns.set_theme(style="darkgrid" if colors == "dark" else "whitegrid")
+        if colors:
+            sns.set_palette(sns.color_palette(colors))
+        sns.set_style("darkgrid" if colors == "dark" else "whitegrid")
         if group_col:
             g = sns.catplot(x=categorical_col, y=numeric_col, data=data, col=group_col, kind="box")
             if title:
@@ -55,4 +58,4 @@ data = pd.DataFrame({
 })
 
 # Using the function to create a boxplot
-create_boxplot(data, 'Numeric', 'Categorical', group_col='Group', colors='dark', title='Boxplot Example', interactive=True)
+create_boxplot(data, 'Numeric', 'Categorical', group_col='Group', colors='dark', title='Boxplot Example', interactive=True, template="plotly_dark")
