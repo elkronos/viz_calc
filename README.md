@@ -34,7 +34,11 @@ Contains scripts designed to compute various analysis. These tend to be more spe
 
 - `nested_pie` provides a pie chart with sub-categories nested within the primary category from a pandas DataFrame. This function is for visualizing data with both inner and outer categories represented in concentric rings. It takes several parameters, including the DataFrame to be plotted, chart title, colormap name, figure size, edge color, line width, and optional labels for both inner and outer categories. Additionally, it provides an option to save the generated chart as a file with the specified path in the 'save_as' parameter. The function includes error handling to ensure that the input data is a pandas DataFrame and utilizes the matplotlib library to construct and display the chart.
 
+- `network_map` function generates an interactive network graph from input data, typically in the form of a Pandas DataFrame. Users can specify source and target node columns, edge weight, node size, and color columns for customization. Additional options include choosing a colorscale, enabling community detection, and interactivity. The function uses NetworkX to construct the graph, applies Louvain community detection if requested, and utilizes a spring layout algorithm for node positioning. It visualizes edges and nodes using Plotly, allowing customization of color, size, and hover information. The resulting graph is displayed with options for layout, legend, and hover settings. Users can access the Python code via a Plotly link in the graph.
+
 - `pairs_plots` generates a pair plot of specified variables from a dataset, which can be loaded using a URL or filepath. It offers various customization options including plot kind (plot_kind), color palette (palette), and markers style (markers). Other parameters allow control over the size (size) and aspect ratio (aspect) of the plot facets, the kind of plot on the diagonal (diag_kind), and whether to exclude the diagonal plots (corner). The function also has options to apply a log-scale transformation to the variables (log_scale) and to save the plot to a file (save_as). If return_grid is set to True, the function returns a PairGrid instance for further customization. It contains error handling to catch and report any exceptions that occur during its execution.
+
+- `plot_pca` conducts PCA on input data and plots the results as a scatterplot, using seaborn to differentiate groups with color. It includes circles around each group, with size and orientation determined by PCA. The function also adds group labels to the circles, and the plot has customizable aesthetics, axis labels, a title, and a legend.
 
 - `quadrant_norm` creates a scatter plot with options to display Pearson's correlation coefficient, annotate quadrants with percentages, and save the plot. It accepts data from a pandas DataFrame and rescales the specified x and y columns for standardized plotting. The function allows for customization of labels, colors, and font styles. It can be used interactively or to save the plot to a file. The example at the end demonstrates its usage with synthetic data, showcasing scatter plots with various customizations.
 
@@ -50,11 +54,13 @@ Contains scripts designed to make general plots. Offers options to edit aestheti
 - `create_barplot`
 - `create_boxjitter`
 - `create_boxplot`
+- `create_bubbleplot`
 - `create_choropleth`
 - `create_circularbar`
 - `create_densityplot`
 - `create_dumbellplot`
 - `create_funnelplot`
+- `create_gantt`
 - `create_heatmap`
 - `create_histogram`
 - `create_markermap`
