@@ -5,6 +5,7 @@ from pandas.plotting import register_matplotlib_converters
 register_matplotlib_converters()
 
 
+# Save function
 def duration_plot(start_date, end_date, start_duration, end_duration, grouping_variable, data):
     data_sorted = data.sort_values(by=start_date)
     for col in [start_date, end_date, start_duration, end_duration]:
@@ -53,5 +54,5 @@ data = pd.DataFrame({
     'End_Duration': ['2023-05-01', '2023-07-01', '2023-04-01']
 })
 
-# Run example with adjustments
+# Run example
 duration_plot('Start_Date', 'End_Date', 'Start_Duration', 'End_Duration', 'Group', data)
