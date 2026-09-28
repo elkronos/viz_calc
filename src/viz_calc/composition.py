@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+import numbers
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Literal
 
@@ -22,9 +24,14 @@ from ._core import (
     abbreviate,
     check_choice,
     check_dataframe,
+    check_has_values,
     check_numeric,
+    cleanup_on_error,
+    column_list,
     get_ax,
+    level_label,
     palette,
+    slot_colors,
     text_color,
 )
 from ._core import (
@@ -57,6 +64,7 @@ def _aggregate(data: pd.DataFrame, category: str, value: str | None) -> pd.Serie
     return data.groupby(category, sort=False, observed=True)[value].sum()
 
 
+@cleanup_on_error
 def waffle(
     data: pd.DataFrame,
     category: str,
@@ -72,7 +80,8 @@ def waffle(
     Tiles are allocated with the largest-remainder (Hamilton) method, so the
     grid is always exactly full; rounding each share independently can over-
     or under-fill it. With *value* omitted, rows are counted. Values must be
-    non-negative; missing values count as zero. Categories are drawn largest
+    non-negative; missing values count as zero, but *category* and *value*
+    each need at least one non-missing value. Categories are drawn largest
     first unless *order* is given. *order* must list every category that
     occurs and may add unused ones (drawn with zero tiles); unused categories
     of a ``Categorical`` are left out otherwise. *rows* and *columns* (the
@@ -81,8 +90,9 @@ def waffle(
     check_dataframe(data, [category, value])
     _check_count("rows", rows)
     _check_count("columns", columns)
+    check_has_values(data, category, value)
     totals = _aggregate(data, category, value)
-    if totals.sum() == 0:
+    if not (totals > 0).any():  # not totals.sum(), which can overflow
         raise ValueError("waffle needs a positive total; every value is zero")
     if order is not None:  # must list every category, or the shares would be renormalized over a subset
         levels = _levels(data[category], order, complete=True, allow_absent=True)
@@ -104,8 +114,10 @@ def waffle(
     ax.set_ylim(-0.1, rows)
     ax.set_aspect("equal")
     ax.axis("off")
-    share = totals / totals.sum() * 100 if totals.sum() else totals * 0
-    ax.legend(handles=[Patch(color=cols[i], label=f"{lvl}: {abbreviate(totals[lvl])} ({share[lvl]:.1f}%)")
+    # Rescale by a power of two (exact, as largest_remainder does) so the sum cannot overflow, e.g. near 1e308.
+    scaled = np.ldexp(totals.to_numpy(float), -int(np.frexp(float(totals.max()))[1]))
+    share = pd.Series(scaled / scaled.sum() * 100, index=totals.index)
+    ax.legend(handles=[Patch(color=cols[i], label=f"{level_label(lvl)}: {abbreviate(totals[lvl])} ({share[lvl]:.1f}%)")
                        for i, lvl in enumerate(levels)],
               frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
     ax.set_title(f"1 tile ≈ {100 / n_tiles:.2g}% of total", loc="left", fontsize="small", color=NEUTRAL)
@@ -113,6 +125,7 @@ def waffle(
     return VizResult(fig, ax, table)
 
 
+@cleanup_on_error
 def percent_grid(
     data: pd.DataFrame,
     column: str,
@@ -132,12 +145,17 @@ def percent_grid(
     Parameters
     ----------
     column
-        A binary column (two distinct values, e.g. 0/1, True/False, "yes"/"no").
+        A binary column (two distinct values, e.g. 0/1, True/False, "yes"/"no")
+        with at least one non-missing value.
     success
         The value counted as success. Defaults to ``True``/``1`` for boolean or
         0/1 data; required otherwise. It must be one of the column's two
         values (a column with a single value cannot be checked, so a
         misspelled *success* there reads as 0 %).
+    level
+        Confidence level of the interval, strictly between 0 and 1.
+    colors
+        A tuple of two colours: ``(success, other)``.
     col_wrap
         Panels per row (a positive integer).
 
@@ -153,6 +171,9 @@ def percent_grid(
     """
     check_dataframe(data, [column, facet])
     _check_count("col_wrap", col_wrap)
+    st._check_level(level)
+    colors = slot_colors(colors, ("success", "other"))
+    check_has_values(data, column)
     values = data[column].dropna()
     uniq = set(pd.unique(values))
     if len(uniq) > 2:
@@ -177,12 +198,12 @@ def percent_grid(
         filled = int(round(p * 100)) if n else 0
         xs, ys = np.meshgrid(np.arange(10), np.arange(10)[::-1])
         fill = np.arange(100) < filled
-        ax.scatter(xs.ravel(), ys.ravel(), s=70, c=np.where(fill, colors[0], colors[1]))
+        ax.scatter(xs.ravel(), ys.ravel(), s=70, c=[colors[0] if on else colors[1] for on in fill])  # any colour form
         ax.set_xlim(-0.7, 9.7)
         ax.set_ylim(-0.7, 9.7)
         ax.set_aspect("equal")
         ax.axis("off")
-        head = f"{f}: " if f is not None else ""
+        head = f"{level_label(f)}: " if f is not None else ""
         stat = f"{p:.1%}\n{level:.0%} CI {float(lo):.1%}–{float(hi):.1%}, n={n}" if n else "no data (n=0)"
         ax.set_title(f"{head}{stat}", fontsize="medium")
         rows.append({"facet": f, "n": n, "successes": k, "percent": 100 * p,
@@ -196,6 +217,7 @@ def percent_grid(
     return VizResult(fig, axes, table, {"success": success, "level": level})
 
 
+@cleanup_on_error
 def stacked_percentages(
     data: pd.DataFrame,
     group: str,
@@ -213,6 +235,7 @@ def stacked_percentages(
     Group sizes (*n*) are shown in the tick labels because percentages hide
     them. Segments smaller than *min_label* percent are not labelled. Rows
     with a missing *category* are left out of *n* and the percentages.
+    *group* and *category* must be different columns.
 
     *group_order* may list a subset of groups. *category_order* sets the
     stacking order; it must list every category that occurs (so shares add to
@@ -225,9 +248,12 @@ def stacked_percentages(
     if category_order_ is not None:
         import warnings
 
-        warnings.warn("category_order_ is deprecated; use category_order", FutureWarning, stacklevel=2)
+        # stacklevel 3: past cleanup_on_error's wrapper to the caller's line
+        warnings.warn("category_order_ is deprecated; use category_order", FutureWarning, stacklevel=3)
         category_order = category_order if category_order is not None else category_order_
     check_dataframe(data, [group, category])
+    if group == category:
+        raise ValueError(f"group and category must be different columns; both are {group!r}")
     reserved = [c for c in (group, category) if c in ("n", "percent")]
     if reserved:
         raise ValueError(f"rename column(s) {reserved}: 'n' and 'percent' are the names of the output columns")
@@ -243,12 +269,12 @@ def stacked_percentages(
     base = np.zeros(len(groups))
     for c, col in zip(cats, cols):
         vals = pct[c].to_numpy()
-        bars = (ax.barh(pos, vals, left=base, color=col, label=str(c), edgecolor="white")
-                if horizontal else ax.bar(pos, vals, bottom=base, color=col, label=str(c), edgecolor="white"))
+        bars = (ax.barh(pos, vals, left=base, color=col, label=level_label(c), edgecolor="white")
+                if horizontal else ax.bar(pos, vals, bottom=base, color=col, label=level_label(c), edgecolor="white"))
         ax.bar_label(bars, labels=[f"{v:.0f}%" if v >= min_label else "" for v in vals], label_type="center",
                      fontsize=8, color=text_color(col))
         base += vals
-    ticks = [f"{g}\n(n={n})" for g, n in zip(groups, counts.sum(axis=1))]
+    ticks = [f"{level_label(g)}\n(n={n})" for g, n in zip(groups, counts.sum(axis=1))]
     if horizontal:
         ax.set_yticks(pos, ticks)
         ax.xaxis.set_major_formatter(PercentFormatter())
@@ -266,6 +292,7 @@ def stacked_percentages(
     return VizResult(fig, ax, table)
 
 
+@cleanup_on_error
 def donut_grid(
     data: pd.DataFrame,
     columns: Sequence[str] | None = None,
@@ -278,17 +305,19 @@ def donut_grid(
 
     Every category keeps the same colour in every donut. The row total is
     printed in the centre. Shares below *min_label* percent are not labelled.
-    *columns* (any sequence of labels, e.g. ``df.columns[1:]``) defaults to
-    the numeric, non-boolean columns. Values must be non-negative and not
-    missing (fill or drop missing cells first); an all-zero row is drawn as
-    an empty grey ring. *col_wrap* (donuts per row) must be a positive integer.
+    *columns* (a list of labels or any other iterable of them, e.g.
+    ``df.columns[1:]``, but not a lone string) defaults to the numeric,
+    non-boolean columns. Values must be non-negative and not missing (fill or
+    drop missing cells first); an all-zero row is drawn as an empty grey
+    ring. *col_wrap* (donuts per row) must be a positive integer.
 
     Note: people compare angles less accurately than lengths (Cleveland &
     McGill, 1984); for precise comparisons use :func:`stacked_percentages`.
     """
-    check_dataframe(data, [] if columns is None else list(columns))
+    columns = None if columns is None else column_list("columns", columns)
+    check_dataframe(data, columns or [])
     _check_count("col_wrap", col_wrap)
-    columns = list(columns) if columns is not None else [
+    columns = columns if columns is not None else [
         c for c in data.columns if pd.api.types.is_numeric_dtype(data[c]) and not pd.api.types.is_bool_dtype(data[c])]
     if not columns:
         raise ValueError("donut_grid needs at least one category column: columns= is empty or data has no "
@@ -317,10 +346,10 @@ def donut_grid(
                     ang = np.deg2rad((w.theta1 + w.theta2) / 2)
                     ax.text(0.8 * np.cos(ang), 0.8 * np.sin(ang), f"{sh:.0f}%", ha="center", va="center", fontsize=8)
         ax.text(0, 0, abbreviate(total), ha="center", va="center", fontsize=11, weight="bold")
-        ax.set_title(str(idx), fontsize="medium")
+        ax.set_title(level_label(idx), fontsize="medium")
     for ax in list(axes.flat)[n:]:
         ax.set_visible(False)
-    fig.legend(handles=[Patch(color=c, label=str(k)) for k, c in zip(columns, cols)], frameon=False,
+    fig.legend(handles=[Patch(color=c, label=level_label(k)) for k, c in zip(columns, cols)], frameon=False,
                loc="center left", bbox_to_anchor=(1.0, 0.5))
     fig.tight_layout()
     totals = values.sum(axis=1)
@@ -332,6 +361,7 @@ def donut_grid(
     return VizResult(fig, axes, table)
 
 
+@cleanup_on_error
 def nested_pie(
     data: pd.DataFrame,
     outer: str,
@@ -346,9 +376,13 @@ def nested_pie(
     Sub-category wedges use lighter shades of their parent's colour and sit
     directly outside it, so the hierarchy is visible. With *value* omitted,
     rows are counted. Values must be non-negative, with a positive total;
-    missing values count as zero.
+    missing values count as zero. *outer* and *inner* must be different
+    columns, each with at least one non-missing value.
     """
     check_dataframe(data, [outer, inner, value])
+    if outer == inner:
+        raise ValueError(f"outer and inner must be different columns; both are {outer!r}")
+    check_has_values(data, outer, inner)  # an all-missing value column is a zero total, reported below
     if value is None:
         agg = data.groupby([outer, inner], sort=False, observed=True).size().rename("value")
     else:
@@ -370,12 +404,13 @@ def nested_pie(
     agg = pd.concat([agg[agg[outer] == p] for p in parents], ignore_index=True)
 
     fig, ax = get_ax(ax, figsize=(7, 7))
-    wedges, texts = ax.pie(parent_tot, radius=0.7, colors=base_cols, labels=[str(p) for p in parents] if labels else None,
+    wedges, texts = ax.pie(parent_tot, radius=0.7, colors=base_cols,
+                           labels=[level_label(p) for p in parents] if labels else None,
                            labeldistance=0.75, wedgeprops={"width": 0.35, "edgecolor": "white"}, startangle=90,
                            counterclock=False, textprops={"weight": "bold", "ha": "center", "fontsize": 9})
     for t, c in zip(texts, base_cols):
         t.set_color(text_color(c))
-    ax.pie(agg["value"], radius=1.0, colors=child_cols, labels=agg[inner].astype(str) if labels else None,
+    ax.pie(agg["value"], radius=1.0, colors=child_cols, labels=[level_label(v) for v in agg[inner]] if labels else None,
            labeldistance=1.06, wedgeprops={"width": 0.3, "edgecolor": "white"}, startangle=90, counterclock=False,
            textprops={"fontsize": 8})
     ax.set_aspect("equal")
@@ -386,6 +421,7 @@ def nested_pie(
     return VizResult(fig, ax, agg)
 
 
+@cleanup_on_error
 def circular_bar(
     data: pd.DataFrame,
     label: str,
@@ -402,8 +438,9 @@ def circular_bar(
     Compact for many items, but radial bars are harder to compare than a
     straight bar chart because outer bars look longer; use for overview,
     not precise comparison. Values must be non-negative; a missing value
-    leaves an empty (labelled) slot. Rows with a missing *group* are drawn
-    in grey as a final "(missing)" cluster, not dropped.
+    leaves an empty (labelled) slot, but *label* and *value* each need at
+    least one non-missing value. Rows with a missing *group* are drawn in
+    grey as a final "(missing)" cluster, not dropped.
 
     Parameters
     ----------
@@ -419,10 +456,12 @@ def circular_bar(
         raise ValueError("circular_bar needs a polar Axes, e.g. plt.subplot(projection='polar')")
     check_dataframe(data, [label, value, group])
     check_numeric(data, value)
+    check_has_values(data, label, value)
     _check_count("gap", gap, minimum=0)
     if (data[value] < 0).any():
         raise ValueError("circular_bar values must be non-negative")
-    d = data[[label, value] + ([group] if group is not None else [])].copy()
+    # dict.fromkeys: one column may play two roles (label="city", group="city"), but must be selected once
+    d = data[list(dict.fromkeys([label, value] + ([group] if group is not None else [])))].copy()
     groups = _levels(d[group]) if group is not None else [None]
     cols = palette(len(groups), colors)
     # Match rows to groups by value (as codes), which also works for nullable dtypes; -1 marks a missing group.
@@ -460,14 +499,14 @@ def circular_bar(
         # The axis runs clockwise from north, so the on-screen angle is 90° − θ.
         deg = (90 - np.rad2deg(t)) % 360
         flip = 90 < deg < 270  # keep labels on the left half upright
-        ax.text(t, inner_radius + h + 0.03, str(name), rotation=deg + 180 if flip else deg,
+        ax.text(t, inner_radius + h + 0.03, level_label(name), rotation=deg + 180 if flip else deg,
                 rotation_mode="anchor", ha="right" if flip else "left", va="center", fontsize=7)
     if group is not None:
         for i, (g, c) in enumerate(zip(groups, cols)):
             th = theta[ordered_codes == i]
             ax.plot(np.linspace(th.min(), th.max(), 30), np.full(30, inner_radius - 0.05), color=c, lw=2)
-            ax.text(th.mean(), inner_radius - 0.16, "(missing)" if g is None else str(g), ha="center", va="center",
-                    fontsize=9, weight="bold")
+            ax.text(th.mean(), inner_radius - 0.16, "(missing)" if g is None else level_label(g), ha="center",
+                    va="center", fontsize=9, weight="bold")
     ax.set_ylim(0, inner_radius + 1.35)
     ax.set_theta_zero_location("N")
     ax.set_theta_direction(-1)
@@ -476,6 +515,7 @@ def circular_bar(
     return VizResult(fig, ax, ordered)
 
 
+@cleanup_on_error
 def waterfall(
     data: pd.DataFrame,
     label: str,
@@ -490,6 +530,8 @@ def waterfall(
 
     Parameters
     ----------
+    label
+        Column naming each step; it needs at least one non-missing value.
     value
         Numeric column; every row needs a value, since one gap would make
         every later running total unknown.
@@ -504,11 +546,13 @@ def waterfall(
     total_label
         Label for a final total bar; ``None`` omits it.
     colors
-        ``(increase, decrease, total)``.
+        A tuple of three colours: ``(increase, decrease, total)``.
     """
     check_dataframe(data, [label, value])
     check_choice("values_are", values_are, ["changes", "levels"])
     check_numeric(data, value)
+    colors = slot_colors(colors, ("increase", "decrease", "total"))
+    check_has_values(data, label)
     missing = _missing_rows(data, [value], label)
     if missing:
         raise ValueError(f"{value!r} is missing for {missing}; a waterfall needs every step "
@@ -552,6 +596,7 @@ def waterfall(
     return VizResult(fig, ax, table)
 
 
+@cleanup_on_error
 def funnel(
     data: pd.DataFrame,
     stage: str,
@@ -563,15 +608,19 @@ def funnel(
 
     Stages are drawn in row order. The table reports ``pct_of_first`` and
     ``pct_of_previous`` (step conversion) and the ``drop_off`` count, so
-    *stage* and *value* may not use those names. Every stage needs a
-    non-negative, non-missing value.
+    *stage* and *value* may not use those names; they must also be different
+    columns. Every stage needs a non-negative, non-missing value, and *stage*
+    needs at least one non-missing name.
     """
     check_dataframe(data, [stage, value])
     reserved = [c for c in (stage, value) if c in ("pct_of_first", "pct_of_previous", "drop_off")]
     if reserved:
         raise ValueError(f"rename column(s) {reserved}: 'pct_of_first', 'pct_of_previous' and 'drop_off' are the "
                          "names of the output columns")
+    if stage == value:
+        raise ValueError(f"stage and value must be different columns; both are {stage!r}")
     check_numeric(data, value)
+    check_has_values(data, stage, value)
     missing = _missing_rows(data, [value], stage)
     if missing:
         raise ValueError(f"{value!r} is missing for stage(s) {missing}; a funnel needs a value for every stage")
@@ -602,6 +651,7 @@ def funnel(
     return VizResult(fig, ax, t)
 
 
+@cleanup_on_error
 def bullet(
     data: pd.DataFrame,
     label: str,
@@ -620,13 +670,16 @@ def bullet(
 
     Each row of *data* gets its own panel (and its own scale) in a new
     figure; a single row can instead be drawn into *ax*. A missing value or
-    target is left out of its panel.
+    target is left out of its panel, but *label* and *value* each need at
+    least one non-missing value.
 
     Parameters
     ----------
     bands
-        Either column names holding each row's band upper limits, or a list of
-        numeric limits shared by every row. Ascending order.
+        Either a list of column names holding each row's band upper limits,
+        or a list of finite numeric limits shared by every row; not a mix of
+        the two, and not a lone string (use ``["good"]`` for one column).
+        Ascending order.
     ax
         An Axes to draw into. Only for single-row *data* (one bullet graph);
         with more rows it raises ``ValueError``, since each row needs its own
@@ -643,10 +696,16 @@ def bullet(
     ----------
     Few, S. (2013). *Bullet Graph Design Specification*. Perceptual Edge.
     """
-    bands = [] if bands is None else list(bands)  # also accepts NumPy arrays and Series
+    bands = [] if bands is None else column_list("bands", bands)  # also accepts NumPy arrays and Series
     band_cols = [b for b in bands if isinstance(b, str)]
+    if band_cols and len(band_cols) < len(bands):
+        raise ValueError("bands must be a list of column names or a list of numbers, not a mix of both; "
+                         f"got {bands!r}")
+    if not band_cols and not all(isinstance(b, numbers.Real) and math.isfinite(b) for b in bands):
+        raise ValueError(f"bands must be a list of column names or of finite numbers, got {bands!r}")
     check_dataframe(data, [label, value, target, *band_cols])
     check_numeric(data, value, *([target] if target is not None else []), *band_cols)
+    check_has_values(data, label, value)
     n = len(data)
     if ax is not None and n != 1:
         raise ValueError(f"bullet draws one panel per row, so ax= needs data with a single row, got {n} rows; "
@@ -684,7 +743,7 @@ def bullet(
         ax.set_xlim(bottom - (pad if bottom < 0 else 0), top + pad)
         if bottom < 0:
             ax.axvline(0, color="black", lw=0.8)
-        ax.set_yticks([0], [str(row[label])])
+        ax.set_yticks([0], [level_label(row[label])])
         ax.set_ylim(-0.5, 0.5)
         ax.spines[["top", "right", "left"]].set_visible(False)
         rec = {label: row[label], "value": row[value]}
@@ -696,6 +755,7 @@ def bullet(
     return VizResult(fig, axes, pd.DataFrame(rows))
 
 
+@cleanup_on_error
 def upset(
     sets: Mapping[str, Iterable[Any]] | pd.DataFrame,
     min_size: int = 1,
@@ -713,13 +773,14 @@ def upset(
     ----------
     sets
         A mapping ``{name: iterable of members}`` or a DataFrame of boolean
-        membership columns (one row per element). One set or more; ``"size"``
-        and ``"degree"`` cannot be set names, as they name the table's count
-        columns.
+        membership columns (one row per element). One set or more, with at
+        least one member between them; ``"size"`` and ``"degree"`` cannot be
+        set names, as they name the table's count columns.
     min_size
-        Hide intersections smaller than this.
+        Hide intersections smaller than this (a number).
     max_intersections
-        Show at most this many, keeping the largest (``None`` shows all).
+        Show at most this many, keeping the largest (a positive integer;
+        ``None`` shows all).
     sort_by
         Display order: ``"size"`` (largest first) or ``"degree"`` (number of
         sets involved, then size).
@@ -730,8 +791,10 @@ def upset(
     UpSet: visualization of intersecting sets. *IEEE TVCG*, 20(12), 1983–1992.
     """
     check_choice("sort_by", sort_by, ["size", "degree"])
-    if max_intersections is not None and (not isinstance(max_intersections, (int, np.integer)) or max_intersections < 1):
-        raise ValueError("max_intersections must be a positive integer or None")
+    if not (isinstance(min_size, numbers.Real) and math.isfinite(min_size)):
+        raise ValueError(f"min_size must be a finite number, got {min_size!r}")
+    if max_intersections is not None:
+        _check_count("max_intersections", max_intersections)
     if isinstance(sets, pd.DataFrame):
         for c in sets.columns:
             bad = [v for v in pd.unique(sets[c].dropna()) if v not in (True, False)]  # 0/1 compare equal to bools
@@ -751,6 +814,8 @@ def upset(
     if reserved:  # the table's count columns would overwrite these membership columns
         raise ValueError(f"rename set(s) {reserved}: 'size' and 'degree' are the names of the output columns")
     membership = membership[membership.any(axis=1)]
+    if membership.empty:
+        raise ValueError("upset needs at least one member; every set is empty")
     combo = membership.apply(lambda r: tuple(r.to_numpy()), axis=1)
     counts = combo.value_counts()
     table = pd.DataFrame(list(counts.index), columns=names)
