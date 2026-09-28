@@ -140,10 +140,12 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
     * otherwise, ``dist[v] + len(v, w)`` may exceed ``dist[w]`` by
       ``max(rounding, min(rel_tol, len(v, w) / (4 * dist[w]))) * dist[w]``:
       paths equal up to a relative *rel_tol* (1e-10, as in igraph) count as
-      equally short (0.3, 73/9, count/total shares), but that slack never
-      exceeds a quarter of the edge being tested, so a real extra hop is not a
-      tie. Only differences within the weights' own *rounding* error, which
-      low-precision floats cannot resolve, always tie. An edge too short for
+      equally short (0.3, 73/9, count/total shares), but that slack is at
+      most a quarter of the edge being tested (the path's last edge), so that
+      edge is never absorbed; a hop earlier on the path that is shorter than
+      *rel_tol* of the path can be. Only differences within the weights' own
+      *rounding* error, which low-precision floats cannot resolve, always
+      tie. An edge too short for
       float64 to add to ``dist[v]`` leaves its ends at the same float
       distance; each such run of nodes is ordered by Dijkstra in rational
       arithmetic over those edges, from the nodes entered from outside the
@@ -186,7 +188,7 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
             for v in dist:
                 runs.setdefault(dist[v], []).append(v)
                 for w, length in out[v]:
-                    # beyond the data's own rounding, the slack never exceeds a quarter of the edge being tested
+                    # beyond the data's own rounding, the slack is at most a quarter of the edge being tested
                     slack = max(rounding * dist[w], min(rel_tol * dist[w], 0.25 * length))
                     if dist[v] < dist[w] and dist[v] + length <= dist[w] + slack:
                         preds[w].append(v)
@@ -297,16 +299,20 @@ def network_map(
     exactly, so equally short paths always tie. Other floats (0.3, 73/9,
     shares such as count/438) may stand for a value the type cannot hold, so
     path lengths within a relative 1e-10 of each other count as equal, as in
-    igraph, unless the difference is more than a quarter of a path's last
-    edge (a real extra hop). float32 and float16 columns hold only ~7 and ~3
+    igraph, unless the difference is more than a quarter of the path's last
+    edge. The cap applies to the last edge only, so a path with an extra hop
+    earlier on it that is shorter than 1e-10 of the path length can still
+    count as tied (in an undirected graph, possibly from one end of the path
+    but not the other). float32 and float16 columns hold only ~7 and ~3
     digits, so there any difference within four machine epsilons (4.8e-7 and
     0.4%) counts as equal. The choice is made for the whole weight column,
     and the result does not depend on row order. If a shortest path's length
     (the sum of 1/weight along it) exceeds the largest float, a
     ``ValueError`` asks for the weights to be rescaled, as does a node
-    strength above the largest float. Weights above 2**256 are divided by a
-    power of two for community detection and the layout, which would
-    otherwise overflow; this is exact and does not change modularity.
+    strength above the largest float. If the largest weight is above 2**256
+    or below 2**-256, the weights are divided or multiplied by a power of two
+    for community detection and the layout, which would otherwise overflow
+    or underflow to zero; this is exact and does not change modularity.
     ``info["betweenness_arithmetic"]`` says which was used and
     ``info["betweenness_tolerance"]`` gives the tolerance. For directed
     graphs, communities are found on the undirected graph with reciprocal
@@ -328,6 +334,8 @@ def network_map(
     weighted = weight is not None  # a column may legitimately be labelled 0
     if weighted:
         check_numeric(data, weight)
+        if pd.api.types.is_complex_dtype(data[weight]):
+            raise TypeError(f"edge weights in {weight!r} must be real numbers, not complex")
     check_has_values(data, source, target, weight)
     # Work on plain Python objects: categorical columns, non-string labels and nullable dtypes all behave the same.
     src = data[source].to_numpy(dtype=object)
@@ -381,15 +389,21 @@ def network_map(
         node = table["node"][np.isinf(table["strength"])].iloc[0]
         raise ValueError(f"the {weight!r} weights at node {node!r} add up to more than the largest float; divide "
                          "the weights by a constant")
-    # Louvain squares sums of strengths and the spring layout multiplies weights, so both overflow long before
-    # the weights do. Very large weights are divided by a power of two for them: exact, modularity is unchanged,
-    # and the layout no longer changes with the weights' scale at that size.
+    # Louvain squares sums of strengths and the spring layout multiplies weights, so both overflow (or, for tiny
+    # weights, underflow to zero) long before the weights do. Very large weights are divided, and very small ones
+    # multiplied, by a power of two for them: exact, modularity is unchanged, and the layout no longer changes
+    # with the weights' scale at that size.
     exponent = math.frexp(max(G[u][v][weight] for u, v in G.edges()))[1] if weighted else 0
-    scale = math.ldexp(1.0, 256 - exponent) if exponent > 256 else 1.0
+    if exponent > 256:
+        scale = math.ldexp(1.0, 256 - exponent)
+    elif exponent < -256:
+        scale = math.ldexp(1.0, -256 - exponent)
+    else:
+        scale = 1.0
     # Betweenness treats weights as distances; stronger ties should be shorter, so use 1/weight; zero-weight
     # edges carry no tie and are left out. Weights stored exactly are compared exactly, so equally short paths
-    # always tie; other floats, whose intended exact value cannot be known, use a tolerance that absorbs rounding
-    # but never a real extra hop.
+    # always tie; other floats, whose intended exact value cannot be known, use a relative tolerance that absorbs
+    # rounding, capped by a quarter of the last edge.
     method = tolerance = None
     if weighted:
         distance, lengths = {}, {}
@@ -517,14 +531,16 @@ def sankey(
     """Interactive Sankey diagram of flows between nodes (requires Plotly).
 
     Repeated source→target rows are summed; a missing source, target or flow
-    value, or a negative flow, raises an error (dropping the row would
-    silently change the totals). The table reports each node's total inflow
-    and outflow.
+    value, or a negative, infinite or complex flow, raises an error (dropping
+    the row would silently change the totals). The table reports each node's
+    total inflow and outflow.
     """
     go = require("plotly.graph_objects", "interactive")
     check_dataframe(data, [source, target, value])
     check_numeric(data, value)
     check_distinct(source=source, target=target, value=value)
+    if pd.api.types.is_complex_dtype(data[value]):
+        raise TypeError(f"flow values in {value!r} must be real numbers, not complex")
     check_has_values(data, source, target, value)
     for column in (source, target):
         missing = int(data[column].isna().sum())
@@ -534,6 +550,8 @@ def sankey(
         raise ValueError(f"flow values in {value!r} contain missing values; drop or fill them first")
     if (data[value] < 0).any():
         raise ValueError("flows must be non-negative")
+    if np.isinf(data[value].to_numpy(dtype=float, na_value=np.nan)).any():
+        raise ValueError(f"flow values in {value!r} must be finite")
     flows = data.groupby([source, target], sort=False, observed=True)[value].sum().reset_index()
     nodes = list(pd.unique(pd.concat([flows[source], flows[target]])))
     index = {n: i for i, n in enumerate(nodes)}

@@ -1,7 +1,7 @@
 # viz_calc
 
-**Visual calculators for pandas data.** Every function draws a chart *and*
-returns the numbers behind it, computed with published, citable methods.
+**Visual calculators for pandas data.** Every chart function draws a chart
+*and* returns the numbers behind it, computed with published, citable methods.
 
 ```python
 import viz_calc as vc

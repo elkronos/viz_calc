@@ -28,8 +28,9 @@ versions.
   (e.g. from a headerless CSV) are no longer ignored.
 - `level=` must be strictly between 0 and 1 (`0.95`); `level=95` raises
   instead of giving NaN intervals and misclassified `benchmark_bar` groups.
-- Options and counts are checked before anything is drawn, and a bad value
-  raises a `ValueError` listing the valid ones: `lollipop(sort=...)` (`"asc"`
+- Many options and counts are checked before anything is drawn: a bad
+  option raises a `ValueError` listing the valid ones, and a bad count an
+  error saying what is allowed. Among them: `lollipop(sort=...)` (`"asc"`
   used to sort descending; use `None` for no sorting), `network_map(size_by=)`,
   `histogram(ref_line=, bins=, col_wrap=)`, `calendar_heatmap(stat=)` (mean,
   max and min need a value column), `p_adjust`, `per_page`, `rows`,
@@ -41,9 +42,9 @@ versions.
   "viridis")` drew every bar red). `likert` needs one colour per level.
 - Column-list arguments accept any list-like (a pandas Index, array, tuple)
   and reject a single string instead of splitting it into one-letter columns.
-- An all-missing column raises "column ... has no non-missing values" in
-  every function that needs values from it, instead of an internal error or
-  an empty chart; one column passed for two roles (for
+- An all-missing column that a function needs values from raises a clear
+  error (in most functions "column ... has no non-missing values") instead of
+  an internal error or an empty chart; one column passed for two roles (for
   example `dumbbell(start="a", end="a")`) raises a clear error.
 - A plotting call that raises closes the figures it opened, so no half-drawn
   chart is left for `plt.show()` or Jupyter.
@@ -70,8 +71,9 @@ versions.
   that cannot have been rounded when stored (integers, 0.125) are compared
   exactly at any graph size, with floating point ordering the paths and
   near-ties settled exactly, and other floats within igraph's relative
-  tolerance of 1e-10 (four machine epsilons for float32/float16), never
-  merging a real extra hop; results do not depend on row order
+  tolerance of 1e-10 (four machine epsilons for float32/float16), with the
+  slack capped at a quarter of a path's last edge; results do not depend on
+  row order
   (`info["betweenness_arithmetic"]`, `info["betweenness_tolerance"]`);
   weights too small to invert, or repeated rows summing past the largest
   float, raise a clear error; directed graphs draw arrowheads (Matplotlib
@@ -145,9 +147,12 @@ versions.
   leaving their flow out; `upset` no longer counts missing values as members
   when sets are given as a mapping.
 - Columns labelled `False`/`True` (as a pivot on a boolean column gives) are
-  selected as columns, not read as a row mask; `correlogram` and the other
-  column-list functions reject a repeated column; `likert` rejects response
-  levels named `item`, `n` or `net`.
+  selected as columns, not read as a row mask (pandas itself cannot tell `0`
+  from `False`, or `1` from `True`, in the same frame's labels);
+  `correlogram`, `compare_correlations`, `donut_grid`, `likert`, `pca`,
+  `pca_plot`, `radar`, `timeseries_fill` and the `profile_*` functions reject
+  a repeated column; `likert` rejects response levels named `item`, `n` or
+  `net`.
 - `percent_grid` rounds dots half up (2.5% shows 3 dots) and accepts a
   datetime `success` value on NumPy 1.x; `funnel` shows small conversions
   such as 0.45% instead of "0%"; a missing `bullet` band limit no longer

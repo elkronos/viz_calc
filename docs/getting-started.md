@@ -203,6 +203,13 @@ same thing everywhere. The exceptions are listed here.
   and `group_order`/`category_order` in `stacked_percentages`.
 * **Grid width** of multi-panel figures is `col_wrap` in `histogram`,
   `percent_grid` and `donut_grid`, and `ncols` in the `profile_*` functions.
+* **Column labels** need not be strings: a column labelled 0 (from a
+  headerless CSV) or False/True (from a pivot on a boolean column) is
+  selected as a column. One known limitation comes from pandas itself, which
+  treats the labels 0 and False, and 1 and True, as the same key: in a frame
+  with both 0 and False (or 1 and True) as column labels, selecting either
+  label returns both columns, and viz_calc treats them as one column passed
+  twice. Rename one of them first.
 
 ## Example datasets
 

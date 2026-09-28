@@ -1,7 +1,7 @@
 # viz_calc
 
-**Visual calculators for pandas data.** Each function draws a chart *and*
-returns the numbers behind it, computed with published, citable methods:
+**Visual calculators for pandas data.** Each chart function draws a chart
+*and* returns the numbers behind it, computed with published, citable methods:
 Welch tests and bootstrap effect sizes, Wilson intervals for percentages,
 multiplicity-adjusted correlation matrices, Fisher z-tests for group
 differences in correlation, and more.
