@@ -49,7 +49,6 @@ addopts = "-q"
 filterwarnings = [
     "error::FutureWarning",
     "error::DeprecationWarning:viz_calc.*",
-    "ignore:Animation was deleted without rendering:UserWarning",
 ]
 
 [tool.ruff]

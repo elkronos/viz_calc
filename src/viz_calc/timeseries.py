@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import numbers
 import warnings
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any, Literal
 
 import matplotlib.dates as mdates
@@ -23,10 +23,16 @@ from ._core import (
     VizResult,
     category_order,
     check_choice,
+    check_count,
     check_dataframe,
+    check_has_values,
     check_numeric,
+    cleanup_on_error,
+    column_list,
     get_ax,
+    level_label,
     palette,
+    slot_colors,
 )
 
 __all__ = ["period_bars", "timeseries_fill", "calendar_heatmap", "gantt", "duration_plot", "animated_bubble"]
@@ -109,6 +115,7 @@ def _numpy_numbers(s: pd.Series) -> pd.Series:
     return pd.Series(s.to_numpy(dtype=float, na_value=np.nan), index=s.index, name=s.name)
 
 
+@cleanup_on_error
 def period_bars(
     data: pd.DataFrame,
     date: str,
@@ -129,15 +136,24 @@ def period_bars(
     The table has one row per period: ``value`` (the statistic), ``n`` (the
     number of non-missing values behind it, which is what ``count`` counts),
     ``trend`` and ``period_start``.
+
+    Parameters
+    ----------
+    trend_window
+        Number of periods in the moving average (a whole number); ``None`` or
+        ``0`` draws no trend line.
     """
     check_dataframe(data, [date, value])
     check_numeric(data, value)
     check_choice("freq", freq, list(_PERIOD))
     check_choice("stat", stat, ["sum", "mean", "median", "count", "max", "min"])
+    if trend_window is not None:
+        check_count("trend_window", trend_window, minimum=0)
+    check_has_values(data, date, value)
     d = pd.DataFrame({"period": _dates(data[date], date).dt.to_period(_PERIOD[freq]),
                       "v": _numpy_numbers(data[value])}).dropna(subset=["period"])  # empty periods: NaN, not pd.NA
-    if d.empty:
-        raise ValueError("no dated rows")
+    if not d["v"].notna().any():
+        raise ValueError(f"no row has both a date in {date!r} and a value in {value!r}")
     grouped = d.groupby("period")["v"]
     agg = pd.DataFrame({"value": grouped.agg(stat), "n": grouped.count()})
     full = pd.period_range(agg.index.min(), agg.index.max(), freq=agg.index.freq)
@@ -165,6 +181,7 @@ def period_bars(
     return VizResult(fig, ax, table, {"freq": freq, "stat": stat})
 
 
+@cleanup_on_error
 def timeseries_fill(
     data: pd.DataFrame,
     time: str,
@@ -179,12 +196,35 @@ def timeseries_fill(
     Shading is interpolated at the crossing points, so the colour switches
     exactly where the lines cross. Duplicate time stamps are averaged. The
     ``info`` reports the number of crossovers.
+
+    Parameters
+    ----------
+    series
+        A list of the two numeric columns to compare.
+    labels
+        A list of two legend names, one per series (default: the column
+        names).
+    colors
+        A tuple of two colours: ``(first series, second series)``. Each is
+        used for its series' line and for the shading where it leads.
     """
+    series = column_list("series", series)
     if len(series) != 2:
-        raise ValueError("timeseries_fill needs exactly two series")
+        raise ValueError(f"timeseries_fill needs exactly two series, got {series!r}")
     a, b = series
     check_dataframe(data, [time, a, b])
+    if a == b or time in (a, b):
+        raise ValueError(f"time and the two series must be three different columns, got time={time!r}, "
+                         f"series={series!r}")
     check_numeric(data, a, b)
+    if labels is None:
+        names = [a, b]
+    else:  # a lone string or number is one name, not a list of them
+        names = list(labels) if isinstance(labels, Iterable) and not isinstance(labels, str) else [labels]
+    if len(names) != 2:
+        raise ValueError(f"labels must be a list of two names, one per series, got {labels!r}")
+    colors = slot_colors(colors, ("first series", "second series"))
+    check_has_values(data, time, a, b)
     d = data[[time, a, b]].copy()
     col = d[time]
     if isinstance(col.dtype, pd.CategoricalDtype):  # judge a Categorical by its values (NaN-safe)
@@ -205,10 +245,9 @@ def timeseries_fill(
     t = d[time]
     ya = d[a].to_numpy(dtype=float, na_value=np.nan)  # nullable dtypes with NA on pandas 2.0
     yb = d[b].to_numpy(dtype=float, na_value=np.nan)
-    labels = list(labels) if labels else [a, b]
     fig, ax = get_ax(ax, figsize=(10, 4.5))
-    ax.plot(t, ya, color=colors[0], lw=1.8, label=labels[0])
-    ax.plot(t, yb, color=colors[1], lw=1.8, label=labels[1])
+    ax.plot(t, ya, color=colors[0], lw=1.8, label=names[0])
+    ax.plot(t, yb, color=colors[1], lw=1.8, label=names[1])
     ax.fill_between(t, ya, yb, where=ya >= yb, interpolate=True, color=colors[0], alpha=alpha, lw=0)
     ax.fill_between(t, ya, yb, where=ya < yb, interpolate=True, color=colors[1], alpha=alpha, lw=0)
     if pd.api.types.is_datetime64_any_dtype(t):
@@ -221,10 +260,11 @@ def timeseries_fill(
     sign = sign[sign != 0]
     crossings = int(np.sum(sign[1:] != sign[:-1]))
     table = pd.DataFrame({time: d[time].to_numpy(), a: ya, b: yb, "difference": diff,
-                          "leader": np.where(np.isnan(diff), None, np.where(diff >= 0, labels[0], labels[1]))})
+                          "leader": np.where(np.isnan(diff), None, np.where(diff >= 0, names[0], names[1]))})
     return VizResult(fig, ax, table, {"crossovers": crossings})
 
 
+@cleanup_on_error
 def calendar_heatmap(
     data: pd.DataFrame,
     date: str,
@@ -238,16 +278,27 @@ def calendar_heatmap(
     Days are aggregated with *stat* (count rows when *value* is omitted).
     Days without data are drawn in *missing_color* so they are not confused
     with zero. One colour scale is shared across years.
+
+    Parameters
+    ----------
+    stat
+        How each day's values of *value* are combined. Without *value* each
+        day shows its number of rows, so only ``"sum"`` (the default) and
+        ``"count"`` are accepted then.
     """
     check_dataframe(data, [date, value])
     check_choice("stat", stat, ["sum", "mean", "count", "max", "min"])
+    if value is None and stat not in ("sum", "count"):
+        raise ValueError(f"stat={stat!r} needs a value column; without one calendar_heatmap counts rows per day")
+    if value is not None:
+        check_numeric(data, value)
+    check_has_values(data, date, value)
     cm = plt.get_cmap(cmap).with_extremes(bad=missing_color)  # an unknown cmap fails before any work is done
     d = pd.DataFrame({"day": _dates(data[date], date).dt.normalize()})  # tz-aware dates: local calendar day
     if value is None:
         daily = d.groupby("day").size().astype(float)
         stat = "count"
     else:
-        check_numeric(data, value)
         d["v"] = data[value].to_numpy()
         grouped = d.groupby("day")["v"]
         daily = grouped.agg(stat).astype(float)
@@ -315,6 +366,7 @@ def _timeline(ax: Axes, labels: list[str], starts: pd.Series, ends: pd.Series, c
             zorder=zorder)
 
 
+@cleanup_on_error
 def gantt(
     data: pd.DataFrame,
     task: str,
@@ -333,6 +385,7 @@ def gantt(
     or ``"now"``) to draw a reference line.
     """
     check_dataframe(data, [task, start, end, group])
+    check_has_values(data, start, end)
     d = data.copy()
     tz = _timeline_columns(d, [start, end])
     bad = d[d[end] < d[start]]
@@ -354,18 +407,19 @@ def gantt(
         d = d.sort_values(start, kind="stable")
     groups = category_order(d[group]) if group is not None else [None]
     cols = palette(len(groups), colors)
-    # Match by value (not hashing), so datetime-like groups work; a missing group is drawn grey.
-    codes = pd.Categorical(d[group], categories=groups).codes if group is not None else np.zeros(len(d), dtype=int)
+    # An Index matches datetime-like groups by value; a missing group (-1) is drawn grey.
+    codes = pd.Index(groups).get_indexer(d[group]) if group is not None else np.zeros(len(d), dtype=int)
     col = [cols[c] if c >= 0 else NEUTRAL for c in codes]
+    names = [level_label(v) for v in d[task]]
     fig, ax = get_ax(ax, figsize=(10, 0.45 * len(d) + 1.5))
-    _timeline(ax, d[task].astype(str).tolist(), d[start], d[end], col, 0.6)
-    ax.set_yticks(np.arange(len(d))[::-1], d[task].astype(str))
+    _timeline(ax, names, d[start], d[end], col, 0.6)
+    ax.set_yticks(np.arange(len(d))[::-1], names)
     ax.xaxis_date()
     _date_axis(ax, tz=tz)
     if today is not None:
         ax.axvline(mdates.date2num(_instant(t)), color=OKABE_ITO[5], lw=1.5, ls="--")
     if group is not None:
-        handles = [Patch(color=c, label=str(g)) for g, c in zip(groups, cols)]
+        handles = [Patch(color=c, label=level_label(g)) for g, c in zip(groups, cols)]
         if (codes < 0).any():
             handles.append(Patch(color=NEUTRAL, label="(missing)"))
         ax.legend(handles=handles, title=str(group), frameon=False,
@@ -378,6 +432,7 @@ def gantt(
     return VizResult(fig, ax, table)
 
 
+@cleanup_on_error
 def duration_plot(
     data: pd.DataFrame,
     label: str,
@@ -395,9 +450,17 @@ def duration_plot(
 
     Example: a contract period with the time actually worked. The table
     reports both lengths in days and the inner share of the window. Like
-    :func:`gantt`, it raises if a window ends before it starts.
+    :func:`gantt`, it raises if a window ends before it starts. Rows whose
+    inner window is missing get no inner bar.
+
+    Parameters
+    ----------
+    colors
+        A tuple of two colours: ``(outer, inner)``.
     """
     check_dataframe(data, [label, start, end, inner_start, inner_end])
+    colors = slot_colors(colors, ("outer", "inner"))
+    check_has_values(data, start, end)
     d = data.copy()
     tz = _timeline_columns(d, [start, end, inner_start, inner_end])
     for s, e in ((start, end), (inner_start, inner_end)):
@@ -406,7 +469,7 @@ def duration_plot(
             raise ValueError(f"{e!r} is before {s!r} for row(s): {bad[label].tolist()}")
     if sort:
         d = d.sort_values(start, kind="stable")
-    names = d[label].astype(str).tolist()
+    names = [level_label(v) for v in d[label]]
     fig, ax = get_ax(ax, figsize=(10, 0.5 * len(d) + 1.5))
     _timeline(ax, names, d[start], d[end], [colors[0]] * len(d), 0.7, zorder=2)
     _timeline(ax, names, d[inner_start], d[inner_end], [colors[1]] * len(d), 0.35, zorder=3)
@@ -485,6 +548,13 @@ def _stamps(frames: list[Any]) -> list[str]:
     return [str(int(f)) if isinstance(f, (float, np.floating)) and float(f).is_integer() else str(f) for f in frames]
 
 
+def _check_positive(name: str, value: Any) -> None:
+    """Raise unless *value* is a finite number above zero."""
+    if isinstance(value, bool) or not isinstance(value, numbers.Real) or not 0 < value < np.inf:
+        raise ValueError(f"{name} must be a positive number, got {value!r}")
+
+
+@cleanup_on_error
 def animated_bubble(
     data: pd.DataFrame,
     time: str,
@@ -519,18 +589,25 @@ def animated_bubble(
     one row per frame, in the same order. Save the animation with
     ``anim.save("out.gif")`` or show it in a notebook with
     ``IPython.display.HTML(anim.to_jshtml())``.
+
+    Parameters
+    ----------
+    max_area
+        Area, in points², of the bubble for the largest *size*; a positive
+        number.
+    interval
+        Delay between frames in milliseconds; a positive number.
     """
     check_dataframe(data, [time, x, y, size, color, label])
     check_numeric(data, x, y, size)
-    if data[x].notna().sum() == 0 or data[y].notna().sum() == 0:
-        raise ValueError("x and y need at least one non-missing value")
+    check_has_values(data, time, x, y, size)
+    _check_positive("max_area", max_area)
+    _check_positive("interval", interval)
     data = data.copy()
     for c in dict.fromkeys((x, y, size)):  # nullable (Int64/Float64) columns -> float with NaN
         data[c] = data[c].to_numpy(dtype=float, na_value=np.nan)
     if (data[size] < 0).any():
         raise ValueError("size must be non-negative")
-    if data[size].notna().sum() == 0:
-        raise ValueError(f"{size!r} has no non-missing values, so no bubble can be drawn")
     frames = _frames(data[time], time)
     stamps = _stamps(frames)
     cats = category_order(data[color]) if color is not None else [None]
@@ -554,7 +631,7 @@ def animated_bubble(
             elif c is None:
                 sub, name = cur[cur[color].isna()], "(missing)"
             else:
-                sub, name = cur[cur[color] == c], str(c)
+                sub, name = cur[cur[color] == c], level_label(c)
             ax.scatter(sub[x], sub[y], s=sub[size] / smax * max_area, color=col, alpha=0.65, edgecolors="white",
                        label=name)
             if label is not None:  # label only the bubbles that are drawn, and only when there is a label

@@ -82,12 +82,34 @@ any task (or inner window) ends before it starts.
 ## 5. Animated bubbles
 
 ```python
-from IPython.display import HTML
-# df: one row per country and year, e.g. a Gapminder-style table
-res = vc.animated_bubble(df, time="year", x="gdp", y="life_exp", size="population", color="continent")
-HTML(res.info["animation"].to_jshtml())      # in a notebook
-res.info["animation"].save("bubbles.gif")    # or to a file (Pillow comes with Matplotlib)
+import pandas as pd
+
+# df: one row per country and year, Gapminder style (made-up numbers for six countries)
+first = pd.DataFrame({"country": ["A", "B", "C", "D", "E", "F"],
+                      "continent": ["Africa", "Africa", "Asia", "Asia", "Europe", "Europe"],
+                      "gdp": [1.5, 3.0, 4.0, 9.0, 25.0, 35.0],               # per person, $1,000s, in 2000
+                      "life_exp": [55.0, 60.0, 66.0, 71.0, 77.0, 80.0],      # years
+                      "population": [30.0, 60.0, 90.0, 140.0, 10.0, 70.0]})  # millions
+df = pd.concat([first.assign(year=year, gdp=first["gdp"] * 1.04 ** (year - 2000),
+                             life_exp=first["life_exp"] + 0.25 * (year - 2000),
+                             population=first["population"] * 1.01 ** (year - 2000))
+                for year in range(2000, 2021, 5)], ignore_index=True)
+
+res = vc.animated_bubble(df, time="year", x="gdp", y="life_exp", size="population",
+                         color="continent", label="country")
+anim = res.info["animation"]
+anim.save("bubbles.gif", writer="pillow")   # to a file (Pillow comes with Matplotlib)
+html = anim.to_jshtml()                     # in a notebook, show it with IPython.display.HTML(html)
+res.table                                   # one row per frame: the mean of x, y and size
 ```
+
+| year | gdp | life_exp | population |
+|---|---|---|---|
+| 2000 | 12.9 | 68.2 | 66.7 |
+| 2005 | 15.7 | 69.4 | 70.1 |
+| 2010 | 19.1 | 70.7 | 73.6 |
+| 2015 | 23.3 | 71.9 | 77.4 |
+| 2020 | 28.3 | 73.2 | 81.3 |
 
 Two details keep frames comparable: bubble **area** is proportional to
 `size` on **one scale for the whole animation**, and the axis limits are fixed

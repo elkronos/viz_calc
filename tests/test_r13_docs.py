@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PAGES = ["README.md", "docs/index.md", "docs/getting-started.md",
          "docs/walkthroughs/comparing-groups.md", "docs/walkthroughs/correlations.md",
          "docs/walkthroughs/proportions-and-surveys.md", "docs/walkthroughs/exploring-a-dataset.md",
-         "docs/walkthroughs/multivariate-and-networks.md"]
+         "docs/walkthroughs/multivariate-and-networks.md", "docs/walkthroughs/time-and-projects.md"]
 BLOCK = re.compile(r"^```python\n(.*?)^```", re.S | re.M)
 NOT_CHARTS = {"palette", "pca", "to_pptx", "VizResult"}
 CHARTS = sorted(n for n in vc.__all__ if callable(getattr(vc, n)) and n not in NOT_CHARTS)
