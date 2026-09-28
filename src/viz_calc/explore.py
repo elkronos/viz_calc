@@ -16,6 +16,7 @@ from ._core import (
     NEUTRAL,
     OKABE_ITO,
     VizResult,
+    category_order,
     check_choice,
     check_count,
     check_dataframe,
@@ -141,7 +142,7 @@ def profile_boxes(
     for start, fig, axes in _pages(len(table), per_page, ncols):
         for ax, r in zip(axes, table.iloc[start:].itertuples()):
             d = data[[r.categorical, r.numeric]].dropna()
-            levels = sorted(d[r.categorical].unique(), key=str)
+            levels = category_order(d[r.categorical])
             ax.boxplot([d.loc[d[r.categorical] == lv, r.numeric] for lv in levels], showfliers=True,
                        flierprops={"markersize": 2, "markeredgecolor": NEUTRAL}, medianprops={"color": OKABE_ITO[5]})
             ax.set_xticks(range(1, len(levels) + 1), [level_label(lv) for lv in levels], rotation=45, ha="right")
@@ -225,7 +226,9 @@ def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: i
     scaled to fit a 13.33 × 7.5 inch (16:9) slide while keeping their aspect
     ratio.
 
-    *titles* gives one title per item in *figures*. A multi-page result (such
+    *figures* is one figure or result, or any iterable of them. *titles*
+    gives one title per item in *figures*; a single string is the title of
+    the first item. A multi-page result (such
     as the ``profile_*`` functions return) puts one page per slide, and each
     slide gets the item's title with a page counter, e.g. ``"Counts (2/3)"``.
     Only Matplotlib figures are supported; save Plotly figures with
@@ -235,8 +238,9 @@ def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: i
     from PIL import Image
     from pptx.util import Inches, Pt
 
-    items = list(figures) if isinstance(figures, (list, tuple)) else [figures]
-    titles = list(titles) if titles is not None else []
+    single = isinstance(figures, VizResult) or hasattr(figures, "savefig") or not isinstance(figures, Iterable)
+    items = [figures] if single else list(figures)
+    titles = [titles] if isinstance(titles, str) else list(titles) if titles is not None else []
     slides = []  # (figure, title) pairs
     for i, it in enumerate(items):
         fig = it.figure if isinstance(it, VizResult) else it

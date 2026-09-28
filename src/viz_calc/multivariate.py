@@ -108,7 +108,9 @@ def pca_plot(
 ) -> VizResult:
     """Scores on two principal components, with group ellipses and optional biplot arrows.
 
-    Axis labels give the share of variance each component explains.
+    Axis labels give the share of variance each component explains. Rows
+    whose *group* is missing are still scored and drawn, in grey as
+    ``(missing)`` and without an ellipse.
 
     Parameters
     ----------
@@ -151,6 +153,9 @@ def pca_plot(
         ax.scatter(sub[pc_x], sub[pc_y], s=22, color=c, alpha=0.75, lw=0, label=None if g is None else level_label(g))
         if ellipse:
             ellipses[g] = _ellipse(ax, sub[[pc_x, pc_y]].to_numpy(float), level, ellipse, c)
+    if group is not None and scores[group].isna().any():
+        sub = scores[scores[group].isna()]
+        ax.scatter(sub[pc_x], sub[pc_y], s=22, color=NEUTRAL, alpha=0.75, lw=0, label="(missing)")
     if loadings:
         L = res["loadings"][[pc_x, pc_y]]
         n = len(L) if loadings is True else int(loadings)

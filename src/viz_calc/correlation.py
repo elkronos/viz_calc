@@ -19,6 +19,7 @@ from ._core import (
     category_order,
     check_choice,
     check_dataframe,
+    check_distinct,
     check_numeric,
     cleanup_on_error,
     column_list,
@@ -209,6 +210,10 @@ def compare_correlations(
     check_dataframe(data, [group])
     check_choice("method", method, ["pearson", "spearman"])
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
+    if columns is not None:
+        columns = column_list("columns", columns)
+        if group in columns:
+            raise ValueError(f"group column {group!r} cannot also be one of columns")
     cols = _numeric_columns(data.drop(columns=[group]), columns)
     groups = category_order(data[group], order)
     if len(groups) < 2:
@@ -252,6 +257,14 @@ def compare_correlations(
                                         "group_correlations": per_group})
 
 
+def _zscores(values: np.ndarray, center: float) -> tuple[np.ndarray, float]:
+    """z-scores of *values* and of *center* on the same scale, safe at any magnitude."""
+    s = st._unit_scale(values)  # an exact power of two, so the variance can neither overflow nor underflow
+    v, c = values / s, center / s
+    mean, sd = v.mean(), v.std(ddof=1)
+    return (v - mean) / sd, (c - mean) / sd
+
+
 @cleanup_on_error
 def quadrant_plot(
     data: pd.DataFrame,
@@ -280,15 +293,17 @@ def quadrant_plot(
         centre count as "high", including values that differ from the mean
         only by floating-point rounding.
     label
-        Optional column whose values annotate each point.
+        Optional column whose values annotate each point. It may be *x* or
+        *y* itself.
     fit
         Draw the ordinary least-squares line.
     """
     check_dataframe(data, [x, y, label])
+    check_distinct(x=x, y=y)
     check_numeric(data, x, y)
     check_choice("center", center, ["mean", "median"])
     check_choice("method", method, ["pearson", "spearman"])
-    d = data[[x, y] + ([label] if label is not None else [])].dropna(subset=[x, y])
+    d = data[[c for c in dict.fromkeys([x, y, label]) if c is not None]].dropna(subset=[x, y])
     if len(d) < 3:
         raise ValueError("need at least three complete observations")
     constant = [c for c in (x, y) if d[c].nunique() < 2]
@@ -306,8 +321,8 @@ def quadrant_plot(
             hint = " (heavy ties); try center='mean'" if center == "median" else ""
             raise ValueError(f"every point of {name!r} is on one side of its {center}{hint}")
     if standardize:
-        xv, yv = (xr - xr.mean()) / xr.std(ddof=1), (yr - yr.mean()) / yr.std(ddof=1)
-        cx, cy = (rx - xr.mean()) / xr.std(ddof=1), (ry - yr.mean()) / yr.std(ddof=1)
+        xv, cx = _zscores(xr, rx)
+        yv, cy = _zscores(yr, ry)
     else:
         xv, yv, cx, cy = xr, yr, rx, ry
 

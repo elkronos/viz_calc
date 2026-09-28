@@ -130,7 +130,8 @@ additions. How you change a chart's colours depends on what it colours:
 
 | Argument | Takes | Functions |
 |---|---|---|
-| `colors=` | a Matplotlib colormap name (e.g. `"viridis"`) or a list of colours, cycled if short; one colour per group or category | `estimation_plot`, `likert`, `histogram`, `ridgeplot`, `raincloud`, `waffle`, `stacked_percentages`, `donut_grid`, `nested_pie`, `circular_bar`, `gantt`, `animated_bubble`, `pca_plot`, `radar` |
+| `colors=` | a Matplotlib colormap name (e.g. `"viridis"`) or a list of colours, cycled if short; one colour per group or category | `estimation_plot`, `histogram`, `ridgeplot`, `raincloud`, `waffle`, `stacked_percentages`, `donut_grid`, `nested_pie`, `circular_bar`, `gantt`, `animated_bubble`, `pca_plot`, `radar` |
+| `colors=` | a diverging colormap name (default `"RdBu"`) or a list of exactly one colour per level, most negative first | `likert` |
 | `colors=` | a tuple with one colour per role, in this order (not a colormap name) | `benchmark_bar` (below, above, indistinguishable), `waterfall` (increase, decrease, total), `dumbbell` (start, end), `divergent_bar` (left, right), `centered_bar` (at or above, below), `percent_grid` (success, other), `timeseries_fill` (first series, second series), `duration_plot` (outer, inner) |
 | `color=` | one colour | `lollipop`, `quadrant_plot`, `funnel`, `upset`, `period_bars`, `profile_bars` |
 | `bar_color=` | one colour for the measure; the bands are shades of grey | `bullet` |

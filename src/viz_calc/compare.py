@@ -23,6 +23,7 @@ from ._core import (
     category_order,
     check_choice,
     check_dataframe,
+    check_distinct,
     check_has_values,
     check_numeric,
     cleanup_on_error,
@@ -423,13 +424,16 @@ def dumbbell(
 
     Parameters
     ----------
+    label
+        Column naming each item. It may be *start* or *end* itself.
     colors
         A tuple of two colours: ``(start, end)``.
     """
     check_dataframe(data, [label, start, end])
+    check_distinct(start=start, end=end)
     check_numeric(data, start, end)
     colors = slot_colors(colors, ("start", "end"))
-    table = data[[label, start, end]].copy()
+    table = data[list(dict.fromkeys([label, start, end]))].copy()
     for c in dict.fromkeys((start, end)):
         # Subtract in a safe dtype: complete integer columns (any width, signed or not, nullable or not) become
         # int64, which neither wraps nor loses precision; anything else becomes float64 with NaN for missing.
@@ -485,7 +489,9 @@ def divergent_bar(
 
     *left* values are drawn to the left of zero, *right* values to the right.
     Axis labels show absolute values, so nothing reads as negative.
-    Rows with a repeated category are summed.
+    Rows with a repeated category are summed. Categories are drawn bottom to
+    top in the order of a ``Categorical`` column, and in the order they
+    first appear otherwise.
 
     Parameters
     ----------
@@ -493,12 +499,14 @@ def divergent_bar(
         A tuple of two colours: ``(left, right)``.
     """
     check_dataframe(data, [category, left, right])
+    check_distinct(category=category, left=left, right=right)
     check_numeric(data, left, right)
     check_has_values(data, category)
     colors = slot_colors(colors, ("left", "right"))
     if (data[[left, right]] < 0).any().any():
         raise ValueError("divergent_bar expects non-negative values in both columns")
-    table = data.groupby(category, sort=False, observed=True)[[left, right]].sum().reset_index()
+    by_levels = isinstance(data[category].dtype, pd.CategoricalDtype)  # grouping sorts a Categorical by its categories
+    table = data.groupby(category, sort=by_levels, observed=True)[[left, right]].sum().reset_index()
     if sort:
         table["total"] = table[left] + table[right]
         table = table.sort_values("total", ignore_index=True).drop(columns="total")

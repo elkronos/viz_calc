@@ -164,6 +164,20 @@ def check_has_values(data: pd.DataFrame, *columns: str | None) -> None:
             raise ValueError(f"column {c!r} has no non-missing values")
 
 
+def check_distinct(**roles: str | None) -> None:
+    """Raise unless the columns given for different roles, such as ``start`` and ``end``, are different columns.
+
+    Roles given as ``None`` are ignored.
+    """
+    seen: dict[Any, str] = {}
+    for role, column in roles.items():
+        if column is None:
+            continue
+        if column in seen:
+            raise ValueError(f"{seen[column]} and {role} must be different columns; both are {column!r}")
+        seen[column] = role
+
+
 def column_list(name: str, columns: Any) -> list[Any]:
     """*columns* (any iterable of column names) as a list.
 
@@ -316,12 +330,14 @@ def _level_key(value: Any) -> Any:
 
 
 def level_label(value: Any) -> str:
-    """Text for a category level. A date with no time of day reads ``2024-01-01``."""
+    """Text for a category level. A date with no time of day reads ``2024-01-01``, with or without a time zone."""
     value = _level_key(value)
     if isinstance(value, datetime) and not isinstance(value, pd.Timestamp):
         value = pd.Timestamp(value)
-    if isinstance(value, pd.Timestamp) and value.tz is None and value == value.normalize():
-        return value.strftime("%Y-%m-%d")
+    if isinstance(value, pd.Timestamp):
+        wall = value.tz_localize(None)  # local clock time; normalizing in the zone could land on a skipped midnight
+        if wall == wall.normalize():
+            return value.strftime("%Y-%m-%d")
     return str(value)
 
 
@@ -339,6 +355,8 @@ def abbreviate(num: float, digits: int = 1) -> str:
     * 1 to 9,999: thousands separator, up to *digits* decimals (``1,105``).
     * Below 1: *digits* + 1 significant digits (``0.034``, ``0.5``), so
       small rates and proportions never collapse to ``0``.
+    * Beyond the T range (a rounded 1,000T and above): scientific notation
+      with *digits* decimals (``2.5e18``).
 
     The unit is chosen after rounding, so 999,999 reads ``1M`` (not
     ``1000K``) and 9,999.96 reads ``10K``.
@@ -353,8 +371,12 @@ def abbreviate(num: float, digits: int = 1) -> str:
         return f"{sign}{float(f'{num:.{digits + 1}g}'):g}"
     if float(f"{num:.{digits}f}") < 1e4:
         return f"{sign}{_strip(f'{num:,.{digits}f}')}"
-    # The first of K, M, B in which the rounded value stays below 1000; T otherwise.
-    unit, suffix = next(((t, s) for t, s in reversed(_SUFFIXES) if float(f"{num / t:.{digits}f}") < 1000), _SUFFIXES[0])
+    # The first of K, M, B, T in which the rounded value stays below 1000.
+    found = next(((t, s) for t, s in reversed(_SUFFIXES) if float(f"{num / t:.{digits}f}") < 1000), None)
+    if found is None:  # a count of T would print every digit
+        mantissa, exponent = f"{num:.{digits}e}".split("e")
+        return f"{sign}{_strip(mantissa)}e{int(exponent)}"
+    unit, suffix = found
     return f"{sign}{_strip(f'{num / unit:.{digits}f}')}{suffix}"
 
 
@@ -363,22 +385,28 @@ def exact_mean(values: Any) -> float:
 
     Floating-point summation rounds at every step and ``sum / n`` rounds
     again, which can put a value that sits exactly on the mean just below
-    it. Here ``math.fsum`` gives the sum and the part its rounding lost, and
-    the division is exact, so the result is rounded only once.
+    it. Here the sum is found exactly and the division is exact, so the
+    result is rounded only once.
     """
     v = np.asarray(values, dtype=float).ravel().tolist()
     if not v:
         return math.nan
     try:
-        total = math.fsum(v)
-    except OverflowError:  # the sum leaves the float range, the mean cannot: scale by an exact power of two
-        return 2.0**64 * exact_mean([x * 2.0**-64 for x in v])
+        parts = [math.fsum(v)]
+        # fsum is correctly rounded, so each pass recovers the next piece of what the earlier pieces missed; the
+        # remainder shrinks by 2**-53 or more per pass, and the pieces end up adding to the exact sum.
+        while math.isfinite(parts[0]):
+            rest = math.fsum([*v, *(-p for p in parts)])
+            if not rest:
+                break
+            parts.append(rest)
+    except OverflowError:  # the sum leaves the float range, the mean cannot
+        return float(sum(map(Fraction, v)) / len(v))
     except ValueError:  # both +inf and -inf
         return math.nan
-    if not math.isfinite(total):
-        return total
-    lost = math.fsum([*v, -total])  # exact unless |total| > 2**53 * the smallest |value|; then off by < 2**-105
-    return float((Fraction(total) + Fraction(lost)) / len(v))
+    if not math.isfinite(parts[0]):
+        return parts[0]
+    return float(sum(map(Fraction, parts)) / len(v))
 
 
 class AbbrevFormatter(ScalarFormatter):
@@ -415,6 +443,8 @@ class AbbrevFormatter(ScalarFormatter):
             labels = [abbreviate(abs(t) if self.absolute else t) for t in ticks]
             return "each" if len(set(labels)) == len(labels) else None  # never repeat a label
         big = float(np.max(np.abs(ticks)))
+        if big >= 1e15:  # beyond the T range; Matplotlib's scientific offset reads better than thousands of T
+            return None
         unit, suffix = next((t, suf) for t, suf in _SUFFIXES if big >= t)
         values = (np.abs(ticks) if self.absolute else ticks) / unit
         for decimals in range(4):

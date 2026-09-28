@@ -308,7 +308,7 @@ def test_datetime_levels_are_labelled_as_dates(monthly):
     assert [level_label(v) for v in (pd.Timestamp("2024-01-01"), np.datetime64("2024-01-01T00:00:00.000000000"))] \
         == ["2024-01-01", "2024-01-01"]
     assert level_label(pd.Timestamp("2024-01-01 06:30")) == "2024-01-01 06:30:00"
-    assert level_label(pd.Timestamp("2024-01-01", tz="UTC")) == str(pd.Timestamp("2024-01-01", tz="UTC"))
+    assert level_label(pd.Timestamp("2024-01-01", tz="UTC")) == "2024-01-01"
     assert level_label(np.timedelta64(1, "D")) == str(pd.Timedelta(days=1))
     assert level_label("a") == "a" and level_label(3) == "3"
     res = vc.histogram(monthly, x="y", facet="month", hue="month")
@@ -323,7 +323,7 @@ def test_datetime_levels_are_labelled_as_dates(monthly):
 @pytest.mark.parametrize("num,text", [
     (999_999, "1M"), (999_950, "1M"), (999_949, "999.9K"), (999_999_999, "1B"), (999_999_999_999, "1T"),
     (-999_999, "-1M"), (9_999.96, "10K"), (9_999.94, "9,999.9"), (10_000, "10K"), (12_345, "12.3K"),
-    (1_000_000, "1M"), (2.5e15, "2500T"), (0.99999, "1"),
+    (1_000_000, "1M"), (2.5e15, "2.5e15"), (0.99999, "1"),
 ])
 def test_abbreviate_chooses_the_unit_after_rounding(num, text):
     assert abbreviate(num) == text
