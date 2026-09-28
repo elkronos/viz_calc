@@ -232,7 +232,9 @@ def benchmark_bar(
         s = data.loc[data[x] == g, y].dropna().to_numpy(float)
         m, lo, hi = st.mean_ci(s, level)
         sd = s.std(ddof=1) if s.size > 1 else np.nan
-        if classify == "ci":
+        if s.size == 0:
+            status = "no data"
+        elif classify == "ci":
             status = "above" if lo > thr else "below" if hi < thr else "indistinguishable"
         else:
             status = "above" if m >= thr else "below"
@@ -249,7 +251,7 @@ def benchmark_bar(
         err = table[error].to_numpy()
         err_text = "±1 SE" if error == "se" else "±1 SD"
 
-    color_for = {"below": colors[0], "above": colors[1], "indistinguishable": colors[2]}
+    color_for = {"below": colors[0], "above": colors[1], "indistinguishable": colors[2], "no data": colors[2]}
     fig, ax = get_ax(ax)
     pos = np.arange(len(table))
     ax.bar(pos, table["mean"], color=[color_for[s] for s in table["status"]], width=0.65, zorder=2)
@@ -264,7 +266,7 @@ def benchmark_bar(
     ax.set_xlabel(x)
     ax.set_ylabel(f"Mean {y}")
     ax.set_title(f"Mean {y} by {x} vs benchmark {thr:.3g} (bars: {err_text})", loc="left")
-    present = [s for s in ("above", "below", "indistinguishable") if s in set(table["status"])]
+    present = [s for s in ("above", "below", "indistinguishable", "no data") if s in set(table["status"])]
     ax.legend(handles=[Patch(color=color_for[s], label=s) for s in present], frameon=False, loc="upper left",
               bbox_to_anchor=(1.01, 1))
     ax.spines[["top", "right"]].set_visible(False)
@@ -371,6 +373,7 @@ def dumbbell(
     check_dataframe(data, [label, start, end])
     check_numeric(data, start, end)
     table = data[[label, start, end]].copy()
+    table[[start, end]] = table[[start, end]].astype(float)  # booleans pass check_numeric but cannot be subtracted
     table["change"] = table[end] - table[start]
     with np.errstate(divide="ignore", invalid="ignore"):
         table["pct_change"] = np.where(table[start] != 0, table["change"] / table[start].abs() * 100, np.nan)

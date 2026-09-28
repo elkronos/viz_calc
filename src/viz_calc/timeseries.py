@@ -116,10 +116,11 @@ def timeseries_fill(
     a, b = series
     check_dataframe(data, [time, a, b])
     check_numeric(data, a, b)
-    d = data[[time, a, b]].groupby(time, as_index=False).mean().sort_values(time)
+    d = data[[time, a, b]].copy()
+    if not pd.api.types.is_numeric_dtype(d[time]):
+        d[time] = _dates(d[time], time)  # parse before grouping so dates sort chronologically, not as text
+    d = d.dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
     t = d[time]
-    if not pd.api.types.is_numeric_dtype(t):
-        t = _dates(t, time)
     ya, yb = d[a].to_numpy(float), d[b].to_numpy(float)
     labels = list(labels) if labels else [a, b]
     fig, ax = get_ax(ax, figsize=(10, 4.5))
@@ -156,16 +157,22 @@ def calendar_heatmap(
     with zero. One colour scale is shared across years.
     """
     check_dataframe(data, [date, value])
-    d = pd.DataFrame({"day": _dates(data[date], date).dt.normalize()})
+    days = _dates(data[date], date)
+    if days.dt.tz is not None:  # place each day by its local calendar date
+        days = days.dt.tz_localize(None)
+    d = pd.DataFrame({"day": days.dt.normalize()})
     if value is None:
         daily = d.groupby("day").size().astype(float)
         stat = "count"
     else:
         check_numeric(data, value)
         d["v"] = data[value].to_numpy()
-        daily = d.groupby("day")["v"].agg(stat)
-    if daily.empty:
-        raise ValueError("no dated rows")
+        grouped = d.groupby("day")["v"]
+        daily = grouped.agg(stat).astype(float)
+        if stat != "count":
+            daily[grouped.count() == 0] = np.nan  # a day whose values are all missing is "no data", not 0
+    if daily.empty or daily.isna().all():
+        raise ValueError("no dated rows with data")
     years = list(range(daily.index.min().year, daily.index.max().year + 1))
     vmin, vmax = float(np.nanmin(daily)), float(np.nanmax(daily))
     fig, axes = plt.subplots(len(years), 1, figsize=(12, 2.1 * len(years) + 0.4), squeeze=False)
@@ -227,7 +234,8 @@ def gantt(
         d = d.sort_values(start, kind="stable")
     groups = category_order(d[group]) if group else [None]
     cols = palette(len(groups), colors)
-    col = [cols[groups.index(g)] for g in d[group]] if group else [cols[0]] * len(d)
+    color_of = dict(zip(groups, cols))
+    col = [color_of.get(g, NEUTRAL) for g in d[group]] if group else [cols[0]] * len(d)  # missing group: grey
     fig, ax = get_ax(ax, figsize=(10, 0.45 * len(d) + 1.5))
     _timeline(ax, d[task].astype(str).tolist(), d[start], d[end], col, 0.6)
     ax.set_yticks(np.arange(len(d))[::-1], d[task].astype(str))
@@ -322,8 +330,11 @@ def animated_bubble(
     cols = palette(len(cats), colors)
     smax = float(data[size].max()) or 1.0
     fig, ax = plt.subplots(figsize=(9, 6))
-    pad_x = 0.08 * (np.ptp(data[x]) or 1)
-    pad_y = 0.08 * (np.ptp(data[y]) or 1)
+    if data[x].notna().sum() == 0 or data[y].notna().sum() == 0:
+        raise ValueError("x and y need at least one non-missing value")
+    # Missing values are skipped (pandas min/max ignore NaN) so the fixed limits stay finite.
+    pad_x = 0.08 * ((data[x].max() - data[x].min()) or 1)
+    pad_y = 0.08 * ((data[y].max() - data[y].min()) or 1)
     xlim = (data[x].min() - pad_x, data[x].max() + pad_x)
     ylim = (data[y].min() - pad_y, data[y].max() + pad_y)
 

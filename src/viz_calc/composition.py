@@ -19,12 +19,15 @@ from ._core import (
     OKABE_ITO,
     VizResult,
     abbreviate,
-    category_order,
+    check_choice,
     check_dataframe,
     check_numeric,
     get_ax,
     palette,
     text_color,
+)
+from ._core import (
+    category_order as _levels,
 )
 
 __all__ = ["waffle", "percent_grid", "stacked_percentages", "donut_grid", "nested_pie", "circular_bar",
@@ -53,13 +56,19 @@ def waffle(
     Tiles are allocated with the largest-remainder (Hamilton) method, so the
     grid is always exactly full; rounding each share independently can over-
     or under-fill it. With *value* omitted, rows are counted. Categories are
-    drawn largest first unless *order* is given.
+    drawn largest first unless *order* is given; *order* must list every
+    category.
     """
     check_dataframe(data, [category, value])
     totals = _aggregate(data, category, value)
     if (totals < 0).any():
         raise ValueError("waffle values must be non-negative")
-    levels = list(order) if order is not None else list(totals.sort_values(ascending=False, kind="stable").index)
+    if totals.sum() == 0:
+        raise ValueError("waffle needs a positive total; every value is zero")
+    if order is not None:  # must list every category, or the shares would be renormalized over a subset
+        levels = _levels(data[category], order, complete=True)
+    else:
+        levels = list(totals.sort_values(ascending=False, kind="stable").index)
     totals = totals.reindex(levels).fillna(0)
     n_tiles = rows * columns
     tiles = st.largest_remainder(totals.to_numpy(float), n_tiles)
@@ -118,7 +127,9 @@ def percent_grid(
             success = 1
         else:
             raise ValueError(f"set success= to the value of {column!r} to count (found {sorted(map(str, uniq))})")
-    facets = category_order(data[facet], facet_order) if facet else [None]
+    elif len(uniq) == 2 and success not in uniq:
+        raise ValueError(f"success={success!r} does not occur in {column!r}; its values are {sorted(map(str, uniq))}")
+    facets = _levels(data[facet], facet_order) if facet else [None]
     ncol = min(col_wrap, len(facets))
     nrow = int(np.ceil(len(facets) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.2 * ncol, 3.6 * nrow), squeeze=False)
@@ -154,7 +165,7 @@ def stacked_percentages(
     group: str,
     category: str,
     group_order: Sequence[Any] | None = None,
-    category_order_: Sequence[Any] | None = None,
+    category_order: Sequence[Any] | None = None,
     horizontal: bool = False,
     min_label: float = 5.0,
     colors: Sequence[str] | str | None = None,
@@ -163,13 +174,18 @@ def stacked_percentages(
     """100 % stacked bars: the share of each *category* within each *group*.
 
     Group sizes (*n*) are shown in the tick labels because percentages hide
-    them. Segments smaller than *min_label* percent are not labelled.
+    them. Segments smaller than *min_label* percent are not labelled. Rows
+    with a missing *category* are left out of *n* and the percentages.
+
+    *group_order* may list a subset of groups. *category_order* sets the
+    stacking order and must list every category, so shares always add to
+    100 %.
     """
     check_dataframe(data, [group, category])
-    groups = category_order(data[group], group_order)
-    cats = category_order(data[category], category_order_)
+    groups = _levels(data[group], group_order)
+    cats = _levels(data[category], category_order, complete=True)
     counts = pd.crosstab(data[group], data[category]).reindex(index=groups, columns=cats, fill_value=0)
-    pct = counts.div(counts.sum(axis=1), axis=0) * 100
+    pct = counts.div(counts.sum(axis=1).replace(0, np.nan), axis=0).fillna(0) * 100
     cols = palette(len(cats), colors)
     fig, ax = get_ax(ax, figsize=(9, max(3, 0.5 * len(groups) + 1.5)) if horizontal else (max(6, 0.9 * len(groups) + 3), 5))
     pos = np.arange(len(groups))
@@ -194,7 +210,8 @@ def stacked_percentages(
     ax.legend(title=category, frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
     ax.spines[["top", "right"]].set_visible(False)
     table = counts.stack().rename("n").reset_index()
-    table["percent"] = pct.stack().to_numpy()
+    group_n = table.groupby(group)["n"].transform("sum")
+    table["percent"] = (table["n"] / group_n.replace(0, np.nan) * 100).fillna(0)
     return VizResult(fig, ax, table)
 
 
@@ -317,7 +334,7 @@ def circular_bar(
     if (data[value] < 0).any():
         raise ValueError("circular_bar values must be non-negative")
     d = data[[label, value] + ([group] if group else [])].copy()
-    groups = category_order(d[group]) if group else [None]
+    groups = _levels(d[group]) if group else [None]
     parts, slot_idx, slot = [], [], 0
     for g in groups:
         sub = d if g is None else d[d[group] == g]
@@ -539,15 +556,25 @@ def upset(
     min_size
         Hide intersections smaller than this.
     max_intersections
-        Show at most this many (largest first).
+        Show at most this many, keeping the largest.
+    sort_by
+        Display order: ``"size"`` (largest first) or ``"degree"`` (number of
+        sets involved, then size).
 
     References
     ----------
     Lex, A., Gehlenborg, N., Strobelt, H., Vuillemot, R., & Pfister, H. (2014).
     UpSet: visualization of intersecting sets. *IEEE TVCG*, 20(12), 1983–1992.
     """
+    check_choice("sort_by", sort_by, ["size", "degree"])
     if isinstance(sets, pd.DataFrame):
-        membership = sets.astype(bool)
+        for c in sets.columns:
+            bad = [v for v in pd.unique(sets[c].dropna()) if v not in (True, False)]  # 0/1 compare equal to bools
+            if bad:
+                raise ValueError(f"membership column {c!r} must hold True/False or 1/0 (missing = not a member); "
+                                 f"found {bad[:5]}")
+        membership = pd.DataFrame({c: [bool(v) if pd.notna(v) else False for v in sets[c]] for c in sets.columns},
+                                  index=sets.index)
     else:
         sets = {k: set(v) for k, v in sets.items()}
         universe = sorted(set().union(*sets.values()), key=str)
@@ -562,10 +589,11 @@ def upset(
     table["size"] = counts.to_numpy()
     table["degree"] = table[names].sum(axis=1)
     table = table[table["size"] >= min_size]
-    table = table.sort_values(["size", "degree"] if sort_by == "size" else ["degree", "size"],
-                              ascending=[False, False] if sort_by == "size" else [True, False], ignore_index=True)
-    if max_intersections:
+    table = table.sort_values(["size", "degree"], ascending=[False, False], ignore_index=True)
+    if max_intersections:  # keep the largest intersections, then apply the requested display order
         table = table.head(max_intersections)
+    if sort_by == "degree":
+        table = table.sort_values(["degree", "size"], ascending=[True, False], ignore_index=True)
     set_sizes = membership.sum().reindex(names)
 
     k, m = len(names), len(table)

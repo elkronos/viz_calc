@@ -119,7 +119,8 @@ def pca_plot(
     scores = res["scores"][[pc_x, pc_y]].copy()
     groups = [None]
     if group:
-        scores[group] = data.loc[scores.index, group]
+        complete = data[list(features)].notna().all(axis=1)  # the rows pca() kept, matched by position
+        scores[group] = data.loc[complete, group].to_numpy()
         groups = category_order(scores[group], order)
     cols = palette(len(groups), colors)
 
@@ -178,13 +179,15 @@ def radar(
       differences and always puts one group at the centre.
     * ``"none"``: raw values (only sensible when metrics share a unit).
 
-    Raw and scaled values are in the returned table. Radar charts are best
+    A group with no data on a metric is left as a gap on that axis. Raw and
+    scaled values are in the returned table. Radar charts are best
     for spotting profile *shapes*; the enclosed area depends on the order of
     the metrics and should not be compared.
     """
     check_dataframe(data, [*metrics, group])
     check_numeric(data, *metrics)
     check_choice("normalize", normalize, ["data", "groups", "none"])
+    check_choice("stat", stat, ["mean", "median"])
     if len(metrics) < 3:
         raise ValueError("radar needs at least three metrics")
     groups = category_order(data[group], order)
@@ -193,7 +196,10 @@ def radar(
     if normalize != "none":
         ref = data[list(metrics)] if normalize == "data" else raw
         lo, span = ref.min(), (ref.max() - ref.min()).replace(0, np.nan)
-        scaled = ((raw - lo) / span).fillna(0.5)
+        scaled = (raw - lo) / span
+        flat = [m for m in metrics if pd.isna(span[m])]  # metric has one value only: put groups mid-scale
+        for m in flat:
+            scaled[m] = raw[m].where(raw[m].isna(), 0.5)  # a group with no data stays missing (a gap)
     angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False)
     closed = np.r_[angles, angles[0]]
     cols = palette(len(groups), colors)
@@ -204,7 +210,8 @@ def radar(
     for g, c in zip(groups, cols):
         vals = scaled.loc[g].to_numpy(float)
         ax.plot(closed, np.r_[vals, vals[0]], color=c, lw=2, label=str(g))
-        ax.fill(closed, np.r_[vals, vals[0]], color=c, alpha=0.12)
+        if not np.isnan(vals).any():  # a polygon with a missing vertex would be misleading
+            ax.fill(closed, np.r_[vals, vals[0]], color=c, alpha=0.12)
     ax.set_xticks(angles, list(metrics))
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)

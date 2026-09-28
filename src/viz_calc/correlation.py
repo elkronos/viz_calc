@@ -129,14 +129,15 @@ def correlogram(
                     text[i, j] = ""
                 else:
                     text[i, j] = f"{mat[i, j]:.{decimals}f}" + ("*" if sig[i, j] else "")
-    if hide_nonsignificant:
+    full = mat.copy()
+    if hide_nonsignificant:  # blank the drawn cells only; info["matrix"] keeps every coefficient
         mat = np.where(sig | np.eye(k, dtype=bool), mat, 0.0)
 
     fig, ax = get_ax(ax, figsize=(1.0 * k + 3, 0.9 * k + 2))
     _draw_matrix(ax, mat, cols, triangle, 1.0, cmap, text, f"{method.title()} correlation")
     note = "none" if p_adjust == "none" else p_adjust
     ax.set_title(f"{method.title()} correlations  (* p < {alpha}, {note}-adjusted)", loc="left", fontsize="medium")
-    matrix = pd.DataFrame(np.where(np.eye(k, dtype=bool), 1.0, mat), index=cols, columns=cols)
+    matrix = pd.DataFrame(np.where(np.eye(k, dtype=bool), 1.0, full), index=cols, columns=cols)
     return VizResult(fig, ax, table, {"matrix": matrix, "method": method, "p_adjust": p_adjust, "alpha": alpha})
 
 
@@ -244,9 +245,13 @@ def quadrant_plot(
     check_dataframe(data, [x, y, label])
     check_numeric(data, x, y)
     check_choice("center", center, ["mean", "median"])
+    check_choice("method", method, ["pearson", "spearman"])
     d = data[[x, y] + ([label] if label else [])].dropna(subset=[x, y])
     if len(d) < 3:
         raise ValueError("need at least three complete observations")
+    constant = [c for c in (x, y) if d[c].nunique() < 2]
+    if constant:
+        raise ValueError(f"column(s) have a single value, so there are no quadrants: {constant}")
     xv, yv = d[x].to_numpy(float), d[y].to_numpy(float)
     if standardize:
         xv = (xv - xv.mean()) / xv.std(ddof=1)

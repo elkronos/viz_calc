@@ -55,6 +55,10 @@ def histogram(
     ``ref_line`` draws the mean or median **of each facet** (and of each hue
     group within it), not a single global value.
 
+    If the Freedman–Diaconis width is zero (the IQR is zero, e.g. zero-inflated
+    data) Sturges' rule is used instead; ``info["bin_rule"]`` says which rule
+    was applied.
+
     References
     ----------
     Freedman, D., & Diaconis, P. (1981). *Z. Wahrscheinlichkeitstheorie verw.
@@ -64,7 +68,10 @@ def histogram(
     check_numeric(data, x)
     check_choice("stat", stat, ["count", "density", "percent"])
     values = data[x].dropna().to_numpy(float)
-    edges = st.histogram_bins(values, bins) if isinstance(bins, str) else np.histogram_bin_edges(values, bins=bins)
+    if isinstance(bins, str):
+        edges, rule = st._bin_edges(values, bins)
+    else:
+        edges, rule = np.histogram_bin_edges(values, bins=bins), "user"
 
     facets = category_order(data[facet], facet_order) if facet else [None]
     hues = category_order(data[hue], hue_order) if hue else [None]
@@ -113,11 +120,10 @@ def histogram(
         ax.set_ylabel({"count": "Count", "density": "Density", "percent": "Percent"}[stat])
     if hue:
         axes.flat[0].legend(title=hue, frameon=False)
-    rule = bins if isinstance(bins, str) else "user"
     fig.suptitle(f"Distribution of {x}  (bins: {rule}, width ≈ {np.mean(width):.3g})", x=0.01, ha="left")
     fig.tight_layout()
     table = pd.DataFrame(rows).drop(columns=[c for c, used in (("facet", facet), ("hue", hue)) if not used])
-    return VizResult(fig, axes, table, {"bin_edges": edges, "stat": stat})
+    return VizResult(fig, axes, table, {"bin_edges": edges, "bin_rule": rule, "stat": stat})
 
 
 def ridgeplot(

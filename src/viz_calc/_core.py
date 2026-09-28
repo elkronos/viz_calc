@@ -89,6 +89,8 @@ def check_dataframe(data: Any, columns: Iterable[str | None] = ()) -> pd.DataFra
     missing = [c for c in columns if c is not None and c not in data.columns]
     if missing:
         raise KeyError(f"column(s) not found in data: {missing}. Available: {list(data.columns)}")
+    if data.empty:
+        raise ValueError("data has no rows")
     return data
 
 
@@ -146,18 +148,27 @@ def text_color(background: str) -> str:
     return "black" if (lum + 0.05) / 0.05 >= 1.05 / (lum + 0.05) else "white"
 
 
-def category_order(values: pd.Series, order: Sequence[Any] | None = None) -> list[Any]:
+def category_order(values: pd.Series, order: Sequence[Any] | None = None, complete: bool = False) -> list[Any]:
     """Levels of a categorical series in a stable order.
 
     Uses *order* if given (every entry must exist), the categorical order for
-    ``Categorical`` data, and sorted order otherwise.
+    ``Categorical`` data, and sorted order otherwise. With ``complete=True``
+    the *order* must also list every level present, for charts whose shares
+    would otherwise be silently renormalized over a subset.
     """
     present = pd.unique(values.dropna())
+    if len(present) == 0:
+        raise ValueError(f"column {values.name!r} has no non-missing values")
     if order is not None:
+        order = list(order)
         unknown = [o for o in order if o not in set(present)]
         if unknown:
-            raise ValueError(f"order contains levels not in the data: {unknown}")
-        return list(order)
+            raise ValueError(f"order for {values.name!r} contains levels not in the data: {unknown}")
+        if complete:
+            left_out = [p for p in present if p not in set(order)]
+            if left_out:
+                raise ValueError(f"order for {values.name!r} must list every level; missing: {left_out}")
+        return order
     if isinstance(values.dtype, pd.CategoricalDtype):
         return [c for c in values.cat.categories if c in set(present)]
     try:

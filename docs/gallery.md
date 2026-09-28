@@ -155,7 +155,7 @@ res = vc.percent_grid(trial, column="improved", facet="arm")
 
 ```python
 res = vc.stacked_percentages(survey, group="team", category="Meetings are useful",
-    category_order_=levels, colors="RdBu", horizontal=True)
+    category_order=levels, colors="RdBu", horizontal=True)
 ```
 
 ![stacked_percentages](images/stacked_percentages.png)

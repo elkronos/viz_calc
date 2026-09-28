@@ -99,5 +99,5 @@ res.info["correlation"]   # r = 0.33, 95% CI 0.16–0.48, n = 120
 
 ![Quadrant plot](../images/quadrant_plot.png)
 
-67% of people fall in the "agreeing" quadrants (high–high 34%, low–low 33%).
+67.5% of people fall in the "agreeing" quadrants (high–high 34.2%, low–low 33.3%).
 With the median split the four margins are balanced, which suits skewed data.

@@ -150,6 +150,8 @@ def profile_scatters(
         columns = [c for c in data.columns if pd.api.types.is_numeric_dtype(data[c])
                    and not pd.api.types.is_bool_dtype(data[c]) and data[c].nunique() >= min_levels]
     check_dataframe(data, columns)
+    if method not in ("pearson", "spearman"):
+        raise ValueError(f"method must be 'pearson' or 'spearman', got {method!r}")
     pairs = list(combinations(columns, 2))
     if not pairs:
         raise ValueError(f"need at least two numeric columns with ≥{min_levels} distinct values")

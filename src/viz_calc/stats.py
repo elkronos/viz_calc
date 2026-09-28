@@ -238,7 +238,15 @@ def adjust_pvalues(p: Sequence[float], method: Literal["holm", "fdr_bh", "bonfer
 def _fisher_se(n: np.ndarray | float, method: str) -> np.ndarray | float:
     # Spearman's rho has a larger sampling variance than Pearson's r; the
     # 1.06 / (n - 3) approximation is from Fieller, Hartley & Pearson (1957).
-    return np.sqrt((1.06 if method == "spearman" else 1.0) / (np.asarray(n, dtype=float) - 3))
+    # The standard error is undefined for n <= 3; return nan rather than inf/0.
+    n = np.asarray(n, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.where(n > 3, np.sqrt((1.06 if method == "spearman" else 1.0) / (n - 3)), np.nan)
+
+
+def _check_method(method: str) -> None:
+    if method not in ("pearson", "spearman"):
+        raise ValueError(f"method must be 'pearson' or 'spearman', got {method!r}")
 
 
 def correlation_test(x: Sequence[float], y: Sequence[float], method: Literal["pearson", "spearman"] = "pearson",
@@ -255,6 +263,7 @@ def correlation_test(x: Sequence[float], y: Sequence[float], method: Literal["pe
     Fieller, E. C., Hartley, H. O., & Pearson, E. S. (1957). Tests for rank
     correlation coefficients. I. *Biometrika*, 44(3/4), 470–481.
     """
+    _check_method(method)
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     keep = ~(np.isnan(x) | np.isnan(y))
@@ -280,7 +289,8 @@ def compare_correlations_test(r1: float | np.ndarray, n1: int | np.ndarray, r2: 
 
     Fisher's r-to-z test: ``z = (atanh r1 - atanh r2) / sqrt(se1² + se2²)``,
     two-sided. Works element-wise on arrays, e.g. two correlation matrices.
-    Only valid when the correlations come from different people/units.
+    Only valid when the correlations come from different people/units. The
+    result is ``nan`` wherever either ``n`` is 3 or less.
 
     References
     ----------
@@ -289,6 +299,7 @@ def compare_correlations_test(r1: float | np.ndarray, n1: int | np.ndarray, r2: 
     Regression/Correlation Analysis for the Behavioral Sciences* (3rd ed.).
     Erlbaum.
     """
+    _check_method(method)
     r1, r2 = np.clip(np.asarray(r1, dtype=float), -0.999999, 0.999999), np.clip(np.asarray(r2, dtype=float), -0.999999, 0.999999)
     se = np.sqrt(_fisher_se(n1, method) ** 2 + _fisher_se(n2, method) ** 2)
     z = (np.arctanh(r1) - np.arctanh(r2)) / se
@@ -304,7 +315,11 @@ def histogram_bins(x: Sequence[float], rule: Literal["fd", "sturges", "scott", "
     * ``"scott"`` – Scott (1979): width ``3.49·σ·n^(-1/3)``.
     * ``"sturges"`` – Sturges (1926): ``log2(n) + 1`` bins; only for small,
       roughly normal samples.
-    * ``"auto"`` – the larger bin count of FD and Sturges (NumPy's default).
+    * ``"auto"`` – the larger bin count of FD and Sturges (NumPy's ``"auto"``).
+
+    When the IQR is zero (heavily tied or zero-inflated data) the FD width is
+    zero and would give a single bin; Sturges is used instead. Use
+    :func:`_bin_edges` internally to learn which rule was applied.
 
     References
     ----------
@@ -314,10 +329,19 @@ def histogram_bins(x: Sequence[float], rule: Literal["fd", "sturges", "scott", "
     Scott, D. W. (1979). On optimal and data-based histograms. *Biometrika*,
     66(3), 605–610.
     """
+    return _bin_edges(x, rule)[0]
+
+
+def _bin_edges(x: Sequence[float], rule: str) -> tuple[np.ndarray, str]:
+    """Bin edges and the rule actually used (FD falls back to Sturges when IQR = 0)."""
     x = _clean(x)
     if x.size == 0:
         raise ValueError("no non-missing values")
-    return np.histogram_bin_edges(x, bins=rule)
+    if rule not in ("fd", "sturges", "scott", "auto"):
+        raise ValueError(f"rule must be 'fd', 'sturges', 'scott' or 'auto', got {rule!r}")
+    if rule == "fd" and np.ptp(x) > 0 and np.subtract(*np.percentile(x, [75, 25])) == 0:
+        return np.histogram_bin_edges(x, bins="sturges"), "sturges (IQR = 0, FD undefined)"
+    return np.histogram_bin_edges(x, bins=rule), rule
 
 
 def largest_remainder(values: Sequence[float], total: int) -> np.ndarray:
@@ -325,8 +349,9 @@ def largest_remainder(values: Sequence[float], total: int) -> np.ndarray:
 
     Hamilton's largest-remainder method: take the floor of each exact quota,
     then give the leftover units to the largest fractional remainders. The
-    result always sums to *total*, unlike independent rounding, which can over-
-    or under-fill a waffle chart or a 100 % stacked label set.
+    result sums to *total* (unless every value is zero, which returns all
+    zeros), unlike independent rounding, which can over- or under-fill a
+    waffle chart or a 100 % stacked label set.
 
     References
     ----------

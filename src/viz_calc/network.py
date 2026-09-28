@@ -34,7 +34,8 @@ def network_map(
     (weighted degree), betweenness centrality and, if *communities* is on,
     Louvain communities (Blondel et al., 2008), using NetworkX's built-in
     implementation. Node size encodes *size_by*; colour encodes community.
-    The layout is seeded so it is reproducible.
+    The layout is seeded so it is reproducible. Repeated edges (including
+    B→A after A→B in an undirected graph) are merged, summing their weights.
 
     Set ``interactive=True`` for a Plotly figure with hover details.
 
@@ -47,7 +48,17 @@ def network_map(
     check_dataframe(data, [source, target, weight])
     if weight:
         check_numeric(data, weight)
-    G = nx.from_pandas_edgelist(data, source, target, edge_attr=weight,
+        if (data[weight] < 0).any():
+            raise ValueError("edge weights must be non-negative")
+    edges = data[[source, target] + ([weight] if weight else [])].dropna(subset=[source, target])
+    if not directed:  # A–B and B–A are the same undirected edge
+        swap = edges[source].astype(str) > edges[target].astype(str)
+        edges = edges.assign(**{source: edges[source].where(~swap, edges[target]),
+                                target: edges[target].where(~swap, edges[source])})
+    # Repeated edges are combined (weights summed) instead of letting the last row win.
+    grouped = edges.groupby([source, target], sort=False)
+    merged = grouped[weight].sum().reset_index() if weight else grouped.size().reset_index()[[source, target]]
+    G = nx.from_pandas_edgelist(merged, source, target, edge_attr=weight,
                                 create_using=nx.DiGraph if directed else nx.Graph)
     wkey = weight if weight else None
     nodes = list(G.nodes())
@@ -76,7 +87,7 @@ def network_map(
     if weight:
         w = np.array([d[weight] for _, _, d in G.edges(data=True)], float)
         widths = 0.5 + 3.5 * (w - w.min()) / (np.ptp(w) or 1)
-    info = {"graph": G, "positions": pos, "n_communities": ncomm}
+    info = {"graph": G, "positions": pos, "n_communities": ncomm, "duplicate_rows_merged": len(edges) - len(merged)}
 
     if interactive:
         go = require("plotly.graph_objects", "interactive")
