@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Literal
 
 import matplotlib.pyplot as plt
@@ -48,7 +49,8 @@ def network_map(
     """
     nx = require("networkx", "network")
     check_dataframe(data, [source, target, weight])
-    if weight:
+    weighted = weight is not None  # a column may legitimately be labelled 0
+    if weighted:
         check_numeric(data, weight)
         if (data[weight] < 0).any():
             raise ValueError("edge weights must be non-negative")
@@ -56,9 +58,11 @@ def network_map(
     src = data[source].to_numpy(dtype=object)
     tgt = data[target].to_numpy(dtype=object)
     keep = ~(pd.isna(src) | pd.isna(tgt))
-    wts = data[weight].to_numpy(dtype=float, na_value=np.nan) if weight else np.ones(len(data))
-    if weight and np.isnan(wts[keep]).any():
+    wts = data[weight].to_numpy(dtype=float, na_value=np.nan) if weighted else np.ones(len(data))
+    if weighted and np.isnan(wts[keep]).any():
         raise ValueError(f"edge weights in {weight!r} contain missing values; drop or fill them first")
+    if weighted and np.isinf(wts[keep]).any():
+        raise ValueError(f"edge weights in {weight!r} must be finite")
     # Repeated edges are combined (weights summed) instead of letting the last row win; each edge keeps
     # the orientation it was first seen with.
     merged: dict = {}
@@ -72,20 +76,23 @@ def network_map(
     G.add_nodes_from(pd.unique(np.column_stack([src[keep], tgt[keep]]).ravel()))  # first-appearance order
     for u, v, w in merged.values():
         G.add_edge(u, v)
-        if weight:
+        if weighted:
             G[u][v][weight] = float(w)
-    wkey = weight if weight else None
+    wkey = weight if weighted else None
     nodes = list(G.nodes())
     table = pd.DataFrame({"node": nodes})
     table["degree"] = [G.degree(n) for n in nodes]
     table["strength"] = [G.degree(n, weight=wkey) for n in nodes]
     # Betweenness treats weights as distances; stronger ties should be shorter, so use 1/weight.
     # Zero-weight edges carry no tie and are left out of the paths.
-    if weight:
+    # Distances are exact fractions so that equally short paths tie exactly (1/2 + 1/12 == 1/3 + 1/4);
+    # with floats one path would win by rounding and take all the credit.
+    if weighted:
         H = G.__class__()
         H.add_nodes_from(G)
-        H.add_edges_from((u, v, {"distance": 1.0 / d[weight]}) for u, v, d in G.edges(data=True) if d[weight] > 0)
-        bc = nx.betweenness_centrality(H, weight="distance")
+        H.add_edges_from((u, v, {"distance": 1 / Fraction(d[weight])}) for u, v, d in G.edges(data=True)
+                         if d[weight] > 0)
+        bc = {n: float(b) for n, b in nx.betweenness_centrality(H, weight="distance").items()}
     else:
         bc = nx.betweenness_centrality(G)
     table["betweenness"] = [bc[n] for n in nodes]
@@ -94,7 +101,7 @@ def network_map(
         U = nx.Graph()
         U.add_nodes_from(G)
         for u, v, d in G.edges(data=True):
-            w = d[weight] if weight else 1.0
+            w = d[weight] if weighted else 1.0
             if U.has_edge(u, v):
                 U[u][v]["w"] += w
             else:
@@ -114,7 +121,7 @@ def network_map(
     cols = palette(ncomm)
     node_colors = [cols[c] for c in table["community"]]
     widths = np.ones(G.number_of_edges())
-    if weight:
+    if weighted:
         w = np.array([d[weight] for _, _, d in G.edges(data=True)], float)
         widths = 0.5 + 3.5 * (w - w.min()) / (np.ptp(w) or 1)
     info = {"graph": G, "positions": pos, "n_communities": ncomm,
@@ -123,9 +130,16 @@ def network_map(
     if interactive:
         go = require("plotly.graph_objects", "interactive")
         fig = go.Figure()
+        marker_px = dict(zip(nodes, np.sqrt(sizes) * 1.3))
         for (u, v), wdt in zip(G.edges(), widths):
-            fig.add_trace(go.Scatter(x=[pos[u][0], pos[v][0]], y=[pos[u][1], pos[v][1]], mode="lines",
-                                     line={"width": float(wdt), "color": "#aaaaaa"}, hoverinfo="skip", showlegend=False))
+            if directed:  # an arrow annotation, stopping at the target marker's rim
+                fig.add_annotation(x=pos[v][0], y=pos[v][1], ax=pos[u][0], ay=pos[u][1], xref="x", yref="y",
+                                   axref="x", ayref="y", text="", showarrow=True, arrowhead=2, arrowsize=1,
+                                   arrowwidth=float(wdt), arrowcolor="#aaaaaa", standoff=float(marker_px[v]) / 2)
+            else:
+                fig.add_trace(go.Scatter(x=[pos[u][0], pos[v][0]], y=[pos[u][1], pos[v][1]], mode="lines",
+                                         line={"width": float(wdt), "color": "#aaaaaa"}, hoverinfo="skip",
+                                         showlegend=False))
         hover = [f"<b>{r.node}</b><br>degree {r.degree}<br>strength {r.strength:.3g}<br>"
                  f"betweenness {r.betweenness:.3f}<br>community {r.community}" for r in table.itertuples()]
         fig.add_trace(go.Scatter(x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes],
@@ -141,7 +155,8 @@ def network_map(
         fig, ax = plt.subplots(figsize=(8, 7))
     else:
         fig = ax.figure
-    nx.draw_networkx_edges(G, pos, ax=ax, width=widths, edge_color="#aaaaaa", arrows=directed)
+    edge_kw = {"arrows": True, "arrowsize": 14, "node_size": sizes, "arrowstyle": "-|>"} if directed else {"arrows": False}
+    nx.draw_networkx_edges(G, pos, ax=ax, width=widths, edge_color="#aaaaaa", **edge_kw)  # arrows stop at the node rim
     nx.draw_networkx_nodes(G, pos, ax=ax, node_size=sizes, node_color=node_colors, edgecolors="white")
     if labels:
         nx.draw_networkx_labels(G, pos, ax=ax, font_size=8)

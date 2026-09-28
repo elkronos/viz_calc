@@ -31,48 +31,53 @@ __all__ = ["period_bars", "timeseries_fill", "calendar_heatmap", "gantt", "durat
 _PERIOD = {"day": "D", "week": "W", "month": "M", "quarter": "Q", "year": "Y"}
 
 
-def _dates(s: pd.Series, name: str) -> pd.Series:
-    """Parse *s* to timezone-naive datetimes.
+def _dates(s: pd.Series, name: str, keep_tz: bool = False) -> pd.Series:
+    """Parse *s* to datetimes, strictly.
 
-    Timezone-aware values (including strings whose UTC offset changes across
-    a daylight-saving switch) keep their local wall-clock time, so each value
-    lands on the calendar day and hour it was recorded in.
+    Accepts datetime columns, strings pandas can parse with one consistent
+    format, and ISO-8601 strings that mix date-only and date-time values or
+    carry different UTC offsets (e.g. across a daylight-saving change).
+    Ambiguous mixtures (such as day-first and month-first strings) raise
+    instead of being guessed element by element.
+
+    With ``keep_tz=False`` timezone-aware values become naive local wall-clock
+    times, so each value lands on the calendar day it was recorded in. With
+    ``keep_tz=True`` time zones are kept (mixed offsets become UTC), so
+    elapsed times and instants stay exact.
     """
     import warnings
 
-    out = s if pd.api.types.is_datetime64_any_dtype(s) else None
-    if out is None:
-        for kwargs in ({}, {"format": "mixed"}):  # "mixed": e.g. date-only and date-time ISO strings together
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", FutureWarning)  # pandas 2.x warns about mixed offsets
-                    parsed = pd.to_datetime(s, **kwargs)
-            except (ValueError, TypeError):
-                continue
-            if pd.api.types.is_datetime64_any_dtype(parsed):
-                out = parsed
-                break
-    if out is None:  # mixed UTC offsets: parse each value and keep its local time
-        def local(v):
-            if pd.isna(v):
-                return pd.NaT
-            t = pd.Timestamp(v)
-            return t.tz_localize(None) if t.tzinfo is not None else t
-
+    def attempt(**kwargs):
         try:
-            out = pd.to_datetime(s.map(local))
-        except (ValueError, TypeError) as exc:
-            raise ValueError(f"column {name!r} could not be parsed as dates") from exc
-    if getattr(out.dt, "tz", None) is not None:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)  # pandas 2.x warns about mixed offsets
+                out = pd.to_datetime(s, **kwargs)
+        except (ValueError, TypeError, OverflowError):
+            return None
+        return out if pd.api.types.is_datetime64_any_dtype(out) else None
+
+    out = s if pd.api.types.is_datetime64_any_dtype(s) else attempt()
+    if out is None:
+        out = attempt(format="ISO8601")  # date-only and date-time ISO strings together
+    if out is None:
+        utc = attempt(format="ISO8601", utc=True)  # ISO strings with different UTC offsets
+        if utc is None:
+            raise ValueError(f"column {name!r} could not be parsed as dates; use one consistent format, "
+                             "ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
+        if keep_tz:
+            out = utc
+        else:  # the strings are valid ISO 8601, so element-wise parsing is unambiguous
+            out = pd.to_datetime(s.map(lambda v: pd.NaT if pd.isna(v) else pd.Timestamp(v).tz_localize(None)))
+    if not keep_tz and getattr(out.dt, "tz", None) is not None:
         out = out.dt.tz_localize(None)
     return out
 
 
-def _date_axis(ax: Axes, axis: str = "x") -> None:
-    locator = mdates.AutoDateLocator()
+def _date_axis(ax: Axes, axis: str = "x", tz: Any = None) -> None:
+    locator = mdates.AutoDateLocator(tz=tz)  # label ticks in the data's own time zone
     target = ax.xaxis if axis == "x" else ax.yaxis
     target.set_major_locator(locator)
-    target.set_major_formatter(mdates.ConciseDateFormatter(locator))
+    target.set_major_formatter(mdates.ConciseDateFormatter(locator, tz=tz))
 
 
 def period_bars(
@@ -147,14 +152,25 @@ def timeseries_fill(
     check_dataframe(data, [time, a, b])
     check_numeric(data, a, b)
     d = data[[time, a, b]].copy()
-    if not pd.api.types.is_numeric_dtype(d[time]):
-        if pd.api.types.infer_dtype(d[time], skipna=True) in ("integer", "floating", "mixed-integer-float", "decimal"):
-            d[time] = pd.to_numeric(d[time])  # e.g. years stored as objects: keep them numeric
-        else:
-            d[time] = _dates(d[time], time)  # parse before grouping so dates sort chronologically, not as text
+    col = d[time]
+    if isinstance(col.dtype, pd.CategoricalDtype):  # judge a Categorical by its categories
+        col = col.astype(col.cat.categories.dtype if pd.api.types.is_numeric_dtype(col.cat.categories) else object)
+    if not pd.api.types.is_numeric_dtype(col) and not pd.api.types.is_datetime64_any_dtype(col):
+        kind = pd.api.types.infer_dtype(col, skipna=True)
+        numeric = None
+        if kind in ("integer", "floating", "mixed-integer-float", "decimal", "mixed-integer"):
+            try:  # e.g. years stored as objects, possibly some as text: keep them numeric
+                numeric = pd.to_numeric(col)
+            except (ValueError, TypeError):
+                numeric = None
+        # Parse dates before grouping so they sort chronologically, and keep time zones so the two
+        # readings in the repeated hour of a daylight-saving change are not merged.
+        col = numeric if numeric is not None else _dates(col, time, keep_tz=True)
+    d[time] = col
     d = d.dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
     t = d[time]
-    ya, yb = d[a].to_numpy(float), d[b].to_numpy(float)
+    ya = d[a].to_numpy(dtype=float, na_value=np.nan)  # nullable dtypes with NA on pandas 2.0
+    yb = d[b].to_numpy(dtype=float, na_value=np.nan)
     labels = list(labels) if labels else [a, b]
     fig, ax = get_ax(ax, figsize=(10, 4.5))
     ax.plot(t, ya, color=colors[0], lw=1.8, label=labels[0])
@@ -162,7 +178,7 @@ def timeseries_fill(
     ax.fill_between(t, ya, yb, where=ya >= yb, interpolate=True, color=colors[0], alpha=alpha, lw=0)
     ax.fill_between(t, ya, yb, where=ya < yb, interpolate=True, color=colors[1], alpha=alpha, lw=0)
     if pd.api.types.is_datetime64_any_dtype(t):
-        _date_axis(ax)
+        _date_axis(ax, tz=getattr(t.dt, "tz", None))
     ax.set_xlabel(time)
     ax.legend(frameon=False, loc="upper left")
     ax.spines[["top", "right"]].set_visible(False)
@@ -226,15 +242,33 @@ def calendar_heatmap(
             s.set_visible(False)
         ax.set_ylabel(str(year), rotation=0, ha="right", va="center", fontsize=11, weight="bold")
     fig.colorbar(mesh, ax=axes[:, 0].tolist(), orientation="horizontal", fraction=0.04, pad=0.08,
-                 label=f"{stat}{' of ' + value if value else ''} per day")
+                 label=f"{stat}{' of ' + value if value is not None else ''} per day")
     return VizResult(fig, axes[:, 0], daily.rename("value").rename_axis("date").reset_index())
+
+
+def _instant(t: Any) -> Any:
+    """Matplotlib date numbers are UTC: convert tz-aware values to naive UTC (naive values are left alone)."""
+    if isinstance(t, pd.Series):
+        return t.dt.tz_convert("UTC").dt.tz_localize(None) if getattr(t.dt, "tz", None) is not None else t
+    return t.tz_convert("UTC").tz_localize(None) if t.tzinfo is not None else t
+
+
+def _timeline_columns(d: pd.DataFrame, columns: Sequence[str]) -> Any:
+    """Parse timeline columns keeping time zones; return the zone used to label the axis."""
+    for c in columns:
+        d[c] = _dates(d[c], c, keep_tz=True)
+    zones = [getattr(d[c].dt, "tz", None) for c in columns]
+    if any(z is None for z in zones) and any(z is not None for z in zones):
+        raise ValueError(f"columns {list(columns)} mix timezone-aware and naive dates; make them consistent")
+    return zones[0]
 
 
 def _timeline(ax: Axes, labels: list[str], starts: pd.Series, ends: pd.Series, colors: list[str], height: float,
               alpha: float = 1.0, zorder: int = 2) -> None:
     pos = np.arange(len(labels))[::-1]
-    widths = (ends - starts).dt.total_seconds() / 86400
-    ax.barh(pos, widths, left=mdates.date2num(starts), height=height, color=colors, alpha=alpha, zorder=zorder)
+    widths = (ends - starts).dt.total_seconds() / 86400  # true elapsed time, across time zones and DST
+    ax.barh(pos, widths, left=mdates.date2num(_instant(starts)), height=height, color=colors, alpha=alpha,
+            zorder=zorder)
 
 
 def gantt(
@@ -256,26 +290,30 @@ def gantt(
     """
     check_dataframe(data, [task, start, end, group])
     d = data.copy()
-    d[start], d[end] = _dates(d[start], start), _dates(d[end], end)
+    tz = _timeline_columns(d, [start, end])
     bad = d[d[end] < d[start]]
     if len(bad):
         raise ValueError(f"end is before start for task(s): {bad[task].tolist()}")
     if sort:
         d = d.sort_values(start, kind="stable")
-    groups = category_order(d[group]) if group else [None]
+    groups = category_order(d[group]) if group is not None else [None]
     cols = palette(len(groups), colors)
     # Match by value (not hashing), so datetime-like groups work; a missing group is drawn grey.
-    codes = pd.Categorical(d[group], categories=groups).codes if group else np.zeros(len(d), dtype=int)
+    codes = pd.Categorical(d[group], categories=groups).codes if group is not None else np.zeros(len(d), dtype=int)
     col = [cols[c] if c >= 0 else NEUTRAL for c in codes]
     fig, ax = get_ax(ax, figsize=(10, 0.45 * len(d) + 1.5))
     _timeline(ax, d[task].astype(str).tolist(), d[start], d[end], col, 0.6)
     ax.set_yticks(np.arange(len(d))[::-1], d[task].astype(str))
     ax.xaxis_date()
-    _date_axis(ax)
+    _date_axis(ax, tz=tz)
     if today is not None:
-        t = pd.Timestamp.now() if today == "now" else pd.Timestamp(today)
-        ax.axvline(mdates.date2num(t), color=OKABE_ITO[5], lw=1.5, ls="--")
-    if group:
+        t = pd.Timestamp.now(tz=tz) if today == "now" else pd.Timestamp(today)
+        if tz is not None and t.tzinfo is None:
+            t = t.tz_localize(tz)  # a plain date/time means local time in the data's zone
+        elif tz is None and t.tzinfo is not None:
+            t = t.tz_localize(None)
+        ax.axvline(mdates.date2num(_instant(t)), color=OKABE_ITO[5], lw=1.5, ls="--")
+    if group is not None:
         handles = [Patch(color=c, label=str(g)) for g, c in zip(groups, cols)]
         if (codes < 0).any():
             handles.append(Patch(color=NEUTRAL, label="(missing)"))
@@ -284,7 +322,7 @@ def gantt(
     ax.grid(axis="x", color="#eeeeee")
     ax.set_axisbelow(True)
     ax.spines[["top", "right"]].set_visible(False)
-    table = d[[task, start, end] + ([group] if group else [])].reset_index(drop=True)
+    table = d[[task, start, end] + ([group] if group is not None else [])].reset_index(drop=True)
     table["duration_days"] = (table[end] - table[start]).dt.total_seconds() / 86400
     return VizResult(fig, ax, table)
 
@@ -309,8 +347,7 @@ def duration_plot(
     """
     check_dataframe(data, [label, start, end, inner_start, inner_end])
     d = data.copy()
-    for c in (start, end, inner_start, inner_end):
-        d[c] = _dates(d[c], c)
+    tz = _timeline_columns(d, [start, end, inner_start, inner_end])
     if sort:
         d = d.sort_values(start, kind="stable")
     names = d[label].astype(str).tolist()
@@ -319,7 +356,7 @@ def duration_plot(
     _timeline(ax, names, d[inner_start], d[inner_end], [colors[1]] * len(d), 0.35, zorder=3)
     ax.set_yticks(np.arange(len(d))[::-1], names)
     ax.xaxis_date()
-    _date_axis(ax)
+    _date_axis(ax, tz=tz)
     ax.legend(handles=[Patch(color=colors[0], label=outer_name), Patch(color=colors[1], label=inner_name)],
               frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
     ax.grid(axis="x", color="#eeeeee")
@@ -364,10 +401,12 @@ def animated_bubble(
         data[c] = data[c].to_numpy(dtype=float, na_value=np.nan)
     if (data[size] < 0).any():
         raise ValueError("size must be non-negative")
+    if data[size].notna().sum() == 0:
+        raise ValueError(f"{size!r} has no non-missing values, so no bubble can be drawn")
     frames = sorted(pd.unique(data[time].dropna()))
-    cats = category_order(data[color]) if color else [None]
+    cats = category_order(data[color]) if color is not None else [None]
     cols = palette(len(cats), colors)
-    if color and data[color].isna().any():  # rows without a colour category are drawn grey, not dropped
+    if color is not None and data[color].isna().any():  # rows without a colour category are drawn grey, not dropped
         cats, cols = cats + [None], cols + [NEUTRAL]
     smax = float(data[size].max()) or 1.0
     fig, ax = plt.subplots(figsize=(9, 6))
@@ -381,7 +420,7 @@ def animated_bubble(
         ax.clear()
         cur = data[data[time] == frames[i]]
         for c, col in zip(cats, cols):
-            if not color:
+            if color is None:
                 sub, name = cur, None
             elif c is None:
                 sub, name = cur[cur[color].isna()], "(missing)"
@@ -389,8 +428,8 @@ def animated_bubble(
                 sub, name = cur[cur[color] == c], str(c)
             ax.scatter(sub[x], sub[y], s=sub[size] / smax * max_area, color=col, alpha=0.65, edgecolors="white",
                        label=name)
-            if label:
-                for _, r in sub.dropna(subset=[x, y]).iterrows():
+            if label is not None:  # label only the bubbles that are drawn, and only when there is a label
+                for _, r in sub.dropna(subset=[x, y, size, label]).iterrows():
                     ax.annotate(str(r[label]), (r[x], r[y]), fontsize=7, ha="center", va="center")
         ax.set_xlim(*xlim)
         ax.set_ylim(*ylim)
@@ -399,7 +438,7 @@ def animated_bubble(
         stamp = frames[i]
         stamp = stamp.strftime("%Y-%m-%d") if hasattr(stamp, "strftime") else str(stamp)
         ax.text(0.98, 0.04, stamp, transform=ax.transAxes, ha="right", fontsize=22, color=NEUTRAL, alpha=0.5)
-        if color:
+        if color is not None:
             ax.legend(title=color, frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
         ax.spines[["top", "right"]].set_visible(False)
         return ax.collections

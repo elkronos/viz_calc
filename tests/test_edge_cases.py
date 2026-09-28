@@ -422,3 +422,154 @@ def test_donut_grid_skips_boolean_columns():
 def test_upset_max_intersections_validated(bad):
     with pytest.raises(ValueError, match="max_intersections"):
         vc.upset({"A": {1, 2}, "B": {2, 3}}, max_intersections=bad)
+
+
+# --- third verification round ------------------------------------------------------------------------------------
+
+
+def _ticks(ax, axis="y"):
+    ax.figure.canvas.draw()
+    lo, hi = ax.get_ylim() if axis == "y" else ax.get_xlim()
+    labels = ax.get_yticklabels() if axis == "y" else ax.get_xticklabels()
+    k = 1 if axis == "y" else 0
+    return {round(t.get_position()[k], 6): t.get_text() for t in labels if lo <= t.get_position()[k] <= hi}
+
+
+def test_abbrev_formatter_shows_true_values_at_2_5_steps():
+    res = vc.waterfall(pd.DataFrame({"s": ["Start", "Q1", "Q2", "Q3", "Q4"], "d": [12000, 3000, -2500, 4000, 1200]}),
+                       label="s", value="d")
+    ticks = _ticks(res.axes)
+    assert ticks[2500] == "2.5K" and ticks[7500] == "7.5K" and ticks[17500] == "17.5K"
+
+
+def test_abbrev_formatter_log_axis_and_narrow_range():
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    ax.set_xscale("log")
+    d = pd.DataFrame({"f": list("abcd"), "a": [150, 2_000, 40_000, 900_000], "b": [300, 3_500, 60_000, 2_400_000]})
+    vc.dumbbell(d, label="f", start="a", end="b", ax=ax)
+    ticks = _ticks(ax, "x")
+    assert ticks[100] == "100" and ticks[1_000_000] == "1M"
+    d = pd.DataFrame({"c": list("abc"), "a": [1_200_150, 1_200_400, 1_200_700], "b": [1_200_300, 1_200_650, 1_200_900]})
+    res = vc.dumbbell(d, label="c", start="a", end="b")
+    labels = list(_ticks(res.axes, "x").values())
+    assert len(set(labels)) == len(labels)
+    assert res.axes.xaxis.get_offset_text().get_text() != ""  # Matplotlib's offset carries the magnitude
+
+
+def test_fd_keeps_outliers_and_heavy_tails():
+    rng = np.random.default_rng(0)
+    income = np.r_[rng.normal(50_000, 15_000, 999), 25_000_000]
+    assert st._bin_edges(income, "fd")[1] == "fd"
+    assert st._bin_edges(rng.standard_cauchy(1000), "fd")[1] == "fd"
+    assert "IQR is 0" in vc.histogram(pd.DataFrame({"x": np.r_[np.zeros(80), np.arange(1, 21)]}), x="x").info["bin_rule"]
+
+
+def test_save_to_file_like_objects():
+    from io import BytesIO
+
+    buf = BytesIO()
+    assert vc.waffle(datasets.survey(), category="team").save(buf) is buf and buf.getbuffer().nbytes > 0
+
+
+def test_network_weight_column_labelled_zero_and_infinite_weights():
+    e = pd.DataFrame([(5.0, "A", "B"), (1.0, "B", "C"), (1.0, "A", "C")])
+    res = vc.network_map(e, 1, 2, weight=0)
+    assert res.info["graph"]["A"]["B"][0] == 5.0
+    assert res.table.set_index("node").loc["A", "strength"] == 6.0
+    bad = e.copy()
+    bad[0] = [np.inf, 1.0, 1.0]
+    with pytest.raises(ValueError, match="finite"):
+        vc.network_map(bad, 1, 2, weight=0)
+
+
+def test_weighted_betweenness_splits_equal_paths_exactly():
+    # 1/2 + 1/12 == 1/3 + 1/4: both brokers carry half of the S-E shortest paths
+    e = pd.DataFrame({"s": ["S", "B", "S", "C"], "t": ["B", "E", "C", "E"], "w": [2, 12, 3, 4]})
+    bc = vc.network_map(e, "s", "t", weight="w").table.set_index("node")["betweenness"]
+    assert bc["B"] == pytest.approx(bc["C"]) and bc["B"] > 0
+
+
+def test_directed_network_draws_arrows():
+    e = pd.DataFrame({"s": ["A", "B"], "t": ["B", "C"]})
+    res = vc.network_map(e, "s", "t", directed=True)
+    assert any(p.__class__.__name__ == "FancyArrowPatch" for p in res.axes.patches)
+    pytest.importorskip("plotly")
+    fig = vc.network_map(e, "s", "t", directed=True, interactive=True).figure
+    assert len(fig.layout.annotations) == 2 and all(a.showarrow for a in fig.layout.annotations)
+
+
+def test_day_first_dates_raise_instead_of_being_guessed():
+    df = pd.DataFrame({"when": ["01/02/2024", "15/02/2024", "28/02/2024"], "v": [1.0, 2.0, 3.0]})
+    with pytest.raises(ValueError, match="consistent format"):
+        vc.period_bars(df, date="when", value="v")
+
+
+def test_timeseries_fill_keeps_distinct_instants_across_dst():
+    t = pd.date_range("2024-11-03 00:00", periods=4, freq="h", tz="America/New_York")  # 01:00 occurs twice
+    df = pd.DataFrame({"t": t, "a": [1.0, 2.0, 3.0, 4.0], "b": [2.0, 2.0, 2.0, 2.0]})
+    res = vc.timeseries_fill(df, time="t", series=["a", "b"])
+    assert len(res.table) == 4 and res.table["t"].dt.tz is not None
+
+
+def test_timeline_durations_use_real_elapsed_time():
+    tz = "America/New_York"
+    g = pd.DataFrame({"task": ["A"], "s": [pd.Timestamp("2024-03-09 12:00", tz=tz)],
+                      "e": [pd.Timestamp("2024-03-10 12:00", tz=tz)]})
+    assert vc.gantt(g, "task", "s", "e").table["duration_days"].iloc[0] == pytest.approx(23 / 24)
+    x = pd.DataFrame({"task": ["deploy"], "s": pd.to_datetime(["2024-06-01 22:00"]).tz_localize("UTC"),
+                      "e": pd.to_datetime(["2024-06-01 20:00"]).tz_localize(tz)})
+    assert vc.gantt(x, "task", "s", "e").table["duration_days"].iloc[0] == pytest.approx(2 / 24)
+    with pytest.raises(ValueError, match="mix"):
+        vc.gantt(g.assign(e=pd.Timestamp("2024-03-10 12:00")), "task", "s", "e")
+
+
+@pytest.mark.parametrize("years", [pd.Categorical([2020, 2021, 2022]), pd.Series([2020, "2021", 2022], dtype=object)])
+def test_timeseries_fill_numeric_years_stay_numeric(years):
+    df = pd.DataFrame({"year": years, "a": [1.0, 3.0, 2.0], "b": [2.0, 1.0, 3.0]})
+    assert vc.timeseries_fill(df, time="year", series=["a", "b"]).table["year"].tolist() == [2020, 2021, 2022]
+
+
+def test_animated_bubble_labels_only_drawn_points_and_rejects_all_missing_size():
+    df = pd.DataFrame({"t": [1, 1, 1], "x": [0.0, 1.0, 2.0], "y": [0.0, 1.0, 2.0], "s": [1.0, np.nan, 2.0],
+                       "lab": ["p", "q", None]})
+    res = vc.animated_bubble(df, time="t", x="x", y="y", size="s", label="lab")
+    assert [t.get_text() for t in res.axes.texts if t.get_text() in ("p", "q", "None", "nan")] == ["p"]
+    with pytest.raises(ValueError, match="no non-missing"):
+        vc.animated_bubble(df.assign(s=np.nan), time="t", x="x", y="y", size="s")
+
+
+@pytest.mark.parametrize("dtype,start,end,change", [("uint8", 5, 3, -2), ("int8", 100, -100, -200)])
+def test_dumbbell_small_and_unsigned_integers_do_not_wrap(dtype, start, end, change):
+    df = pd.DataFrame({"k": ["a"], "s": np.array([start], dtype=dtype), "e": np.array([end], dtype=dtype)})
+    assert vc.dumbbell(df, label="k", start="s", end="e").table["change"].iloc[0] == change
+
+
+def test_dumbbell_nullable_with_missing():
+    df = pd.DataFrame({"k": ["a", "b"], "s": pd.array([1, None], dtype="Int64"), "e": pd.array([2, 3], dtype="Int64")})
+    t = vc.dumbbell(df, label="k", start="s", end="e", sort=False).table
+    assert t["change"].iloc[0] == 1 and np.isnan(t["change"].iloc[1])
+
+
+def test_quadrant_points_on_the_mean_count_as_high_with_standardization():
+    x = [5, 3, 1, 5, 2, 2, 4, 4, 3, 1, 3, 3, 4, 2, 3, 2, 1, 4, 5, 2, 1, 3, 2, 2, 4, 5, 1, 2, 3, 2, 4, 4, 3, 2, 2, 4, 5, 5, 5, 2]
+    df = pd.DataFrame({"x": x, "y": np.arange(40) % 7})
+    a = vc.quadrant_plot(df, "x", "y").table["n"].tolist()
+    b = vc.quadrant_plot(df, "x", "y", standardize=False).table["n"].tolist()
+    assert a == b
+
+
+def test_quadrant_error_leaves_no_half_drawn_figure():
+    import matplotlib.pyplot as plt
+
+    before = len(plt.get_fignums())
+    with pytest.raises(ValueError):
+        vc.quadrant_plot(pd.DataFrame({"x": [0] * 8 + [5, 9], "y": np.arange(10.0)}), "x", "y", center="median")
+    assert len(plt.get_fignums()) == before
+
+
+def test_bullet_all_negative_keeps_zero_and_target_visible():
+    df = pd.DataFrame({"k": ["loss"], "v": [-8.0], "t": [-5.0]})
+    lo, hi = vc.bullet(df, label="k", value="v", target="t", bands=[-10.0, -6.0]).axes[0].get_xlim()
+    assert lo < -8 and hi >= 0

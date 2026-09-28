@@ -59,7 +59,9 @@ class VizResult:
         """Save the figure to *path* (PNG/SVG/PDF for Matplotlib, HTML for Plotly).
 
         Multi-page results (a list of figures) are saved as ``name_1.png``,
-        ``name_2.png``, … and the list of paths is returned.
+        ``name_2.png``, … and the list of paths is returned. A path without an
+        extension gets Matplotlib's default format (``.html`` for Plotly), and
+        the returned path includes it. File-like objects are passed through.
         """
         if isinstance(self.figure, list):
             from pathlib import Path
@@ -67,22 +69,27 @@ class VizResult:
             p = Path(path)
             return [VizResult(f).save(str(p.with_name(f"{p.stem}_{i}{p.suffix}")), **kwargs)
                     for i, f in enumerate(self.figure, start=1)]
+        import os
         from pathlib import Path
 
+        is_path = isinstance(path, (str, os.PathLike))
         if hasattr(self.figure, "savefig"):
-            if not Path(path).suffix and "format" not in kwargs:  # Matplotlib would add one; return the real path
+            if is_path and not Path(path).suffix and "format" not in kwargs:  # Matplotlib would add one
                 path = f"{path}.{plt.rcParams['savefig.format']}"
             kwargs.setdefault("bbox_inches", "tight")
             kwargs.setdefault("dpi", 150)
             self.figure.savefig(path, **kwargs)
-            return str(path)
-        if not Path(path).suffix:
-            path = f"{path}.html"
-        if str(path).lower().endswith((".html", ".htm")):
+            return str(path) if is_path else path
+        if is_path and not Path(path).suffix:
+            if "format" in kwargs:
+                path = f"{path}.{kwargs['format']}"
+            else:
+                path = f"{path}.html"
+        if is_path and str(path).lower().endswith((".html", ".htm")):
             self.figure.write_html(path, **kwargs)
         else:
             self.figure.write_image(path, **kwargs)
-        return str(path)
+        return str(path) if is_path else path
 
     def _repr_html_(self) -> str | None:  # pragma: no cover - notebook display
         if hasattr(self.figure, "_repr_html_"):
@@ -224,39 +231,52 @@ def abbreviate(num: float, digits: int = 1) -> str:
 class AbbrevFormatter(ScalarFormatter):
     """Axis formatter: K/M/B/T suffixes when ticks reach 10,000, Matplotlib's defaults otherwise.
 
-    Unlike formatting each tick with :func:`abbreviate`, the precision is
-    chosen from the tick spacing so neighbouring ticks never share a label.
+    For evenly spaced ticks, one unit is used and the number of decimals is
+    the smallest that shows every tick exactly (so a 2,500 step gives
+    ``2.5K, 5K, 7.5K``); if that needs more than three decimals (a narrow
+    range at a large magnitude), Matplotlib's own offset notation is used
+    instead. Log-scaled or unevenly spaced ticks are abbreviated one by one.
     """
 
     def __init__(self, absolute: bool = False) -> None:
         super().__init__()
         self.absolute = absolute
-        self._ticks = np.array([])
+        self._mode: Any = None
 
     def set_locs(self, locs: Sequence[float]) -> None:
-        self._ticks = np.asarray(locs, dtype=float)  # own copy: Formatter.locs is deprecated in Matplotlib 3.11
+        self._mode = self._choose(np.asarray(locs, dtype=float))  # Formatter.locs is deprecated in Matplotlib 3.11
         super().set_locs(locs)
 
-    def _scale(self) -> tuple[float, str] | None:
-        big = float(np.max(np.abs(self._ticks))) if self._ticks.size else 0.0
-        if big < 1e4:
+    def _choose(self, ticks: np.ndarray) -> Any:
+        ticks = ticks[np.isfinite(ticks)]
+        if ticks.size == 0 or np.max(np.abs(ticks)) < 1e4:
             return None
-        return next((t, suf) for t, suf in _SUFFIXES if big >= t)
+        scale = self.axis.get_scale() if self.axis is not None else "linear"
+        steps = np.diff(np.sort(ticks))
+        if scale != "linear" or (steps.size and not np.allclose(steps, steps[0], rtol=1e-6)):
+            return "each"
+        big = float(np.max(np.abs(ticks)))
+        unit, suffix = next((t, suf) for t, suf in _SUFFIXES if big >= t)
+        values = (np.abs(ticks) if self.absolute else ticks) / unit
+        for decimals in range(4):
+            labels = [f"{v:.{decimals}f}" for v in values]
+            exact = all(abs(float(lab) - v) <= 1e-9 * max(1.0, abs(v)) for lab, v in zip(labels, values))
+            if exact and len(set(labels)) == len(set(np.round(values, 12))):
+                return unit, suffix, decimals
+        return None
 
     def __call__(self, x: float, pos: int | None = None) -> str:
-        scale = self._scale()
-        if scale is None:
-            text = super().__call__(abs(x) if self.absolute else x, pos)
-            return text.lstrip("\u2212-") if self.absolute else text
-        unit, suffix = scale
-        locs = np.sort(self._ticks)
-        step = float(np.min(np.diff(locs))) if locs.size > 1 else unit
-        decimals = int(min(3, max(0, -np.floor(np.log10(step / unit))))) if step > 0 else 0
         value = abs(x) if self.absolute else x
+        if self._mode is None:
+            text = super().__call__(value, pos)
+            return text.lstrip("\u2212-") if self.absolute else text
+        if self._mode == "each":
+            return abbreviate(value)
+        unit, suffix, decimals = self._mode
         return f"{value / unit:.{decimals}f}{suffix}" if value else "0"
 
     def get_offset(self) -> str:
-        return "" if self._scale() is not None else super().get_offset()
+        return "" if self._mode is not None else super().get_offset()
 
 
 def require(module: str, extra: str) -> Any:

@@ -132,7 +132,7 @@ def percent_grid(
             raise ValueError(f"set success= to the value of {column!r} to count (found {sorted(map(str, uniq))})")
     elif len(uniq) == 2 and success not in uniq:
         raise ValueError(f"success={success!r} does not occur in {column!r}; its values are {sorted(map(str, uniq))}")
-    facets = _levels(data[facet], facet_order) if facet else [None]
+    facets = _levels(data[facet], facet_order) if facet is not None else [None]
     ncol = min(col_wrap, len(facets))
     nrow = int(np.ceil(len(facets) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.2 * ncol, 3.6 * nrow), squeeze=False)
@@ -158,7 +158,7 @@ def percent_grid(
         ax.set_visible(False)
     fig.tight_layout()
     table = pd.DataFrame(rows)
-    if not facet:
+    if facet is None:
         table = table.drop(columns="facet")
     return VizResult(fig, axes, table, {"success": success, "level": level})
 
@@ -350,8 +350,8 @@ def circular_bar(
     check_numeric(data, value)
     if (data[value] < 0).any():
         raise ValueError("circular_bar values must be non-negative")
-    d = data[[label, value] + ([group] if group else [])].copy()
-    groups = _levels(d[group]) if group else [None]
+    d = data[[label, value] + ([group] if group is not None else [])].copy()
+    groups = _levels(d[group]) if group is not None else [None]
     parts, slot_idx, slot = [], [], 0
     for g in groups:
         sub = d if g is None else d[d[group] == g]
@@ -359,14 +359,14 @@ def circular_bar(
             sub = sub.sort_values(value, ascending=False)
         parts.append(sub)
         slot_idx += range(slot, slot + len(sub))
-        slot += len(sub) + (gap if group else 0)  # empty slots separate the groups
+        slot += len(sub) + (gap if group is not None else 0)  # empty slots separate the groups
     ordered = pd.concat(parts, ignore_index=True)
     n_slots = max(slot, 1)
     theta = np.linspace(0, 2 * np.pi, n_slots, endpoint=False)[slot_idx]
     vmax = float(ordered[value].max()) or 1.0
     heights = ordered[value].to_numpy(float) / vmax
     cols = palette(len(groups), colors)
-    col_for = [cols[groups.index(g)] for g in ordered[group]] if group else [cols[0]] * len(ordered)
+    col_for = [cols[groups.index(g)] for g in ordered[group]] if group is not None else [cols[0]] * len(ordered)
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 8), subplot_kw={"polar": True})
@@ -380,7 +380,7 @@ def circular_bar(
         flip = 90 < deg < 270  # keep labels on the left half upright
         ax.text(t, inner_radius + h + 0.03, str(name), rotation=deg + 180 if flip else deg,
                 rotation_mode="anchor", ha="right" if flip else "left", va="center", fontsize=7)
-    if group:
+    if group is not None:
         for g, c in zip(groups, cols):
             th = theta[(ordered[group] == g).to_numpy()]
             ax.plot(np.linspace(th.min(), th.max(), 30), np.full(30, inner_radius - 0.05), color=c, lw=2)
@@ -530,30 +530,33 @@ def bullet(
     bands = [] if bands is None else list(bands)  # also accepts NumPy arrays and Series
     band_cols = [b for b in bands if isinstance(b, str)]
     check_dataframe(data, [label, value, target, *band_cols])
-    check_numeric(data, value, *([target] if target else []), *band_cols)
+    check_numeric(data, value, *([target] if target is not None else []), *band_cols)
     n = len(data)
     fig, axes = plt.subplots(n, 1, figsize=(8, 0.9 * n + 0.6), squeeze=False)
     rows = []
     for ax, (_, row) in zip(axes[:, 0], data.iterrows()):
         limits = [float(row[b]) for b in band_cols] if band_cols else [float(b) for b in bands]
-        top = max(limits + [float(row[value]), float(row[target]) if target else 0.0]) or 1.0
-        bottom = min(0.0, float(row[value]), float(row[target]) if target else 0.0)  # show negative measures
+        points = limits + [float(row[value])] + ([float(row[target])] if target is not None else [])
+        top, bottom = max([0.0] + points), min([0.0] + points)  # the zero baseline is always in view
+        if top == bottom:
+            top = 1.0
         greys = plt.get_cmap("Greys")(np.linspace(0.45, 0.15, max(len(limits), 1)))
         prev = 0.0
         for lim, g in zip(sorted(limits), greys):
             ax.barh(0, lim - prev, left=prev, height=1, color=g)
             prev = lim
         ax.barh(0, row[value], height=0.35, color=bar_color)
-        if target:
+        if target is not None:
             ax.plot([row[target]] * 2, [-0.35, 0.35], color="black", lw=2.5)
-        ax.set_xlim(bottom * 1.02, top * 1.02)
+        pad = 0.02 * (top - bottom)
+        ax.set_xlim(bottom - (pad if bottom < 0 else 0), top + pad)
         if bottom < 0:
             ax.axvline(0, color="black", lw=0.8)
         ax.set_yticks([0], [str(row[label])])
         ax.set_ylim(-0.5, 0.5)
         ax.spines[["top", "right", "left"]].set_visible(False)
         rec = {label: row[label], "value": row[value]}
-        if target:
+        if target is not None:
             rec.update(target=row[target], pct_of_target=row[value] / row[target] * 100 if row[target] else np.nan)
         rows.append(rec)
     fig.tight_layout()

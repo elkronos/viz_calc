@@ -247,18 +247,27 @@ def quadrant_plot(
     check_numeric(data, x, y)
     check_choice("center", center, ["mean", "median"])
     check_choice("method", method, ["pearson", "spearman"])
-    d = data[[x, y] + ([label] if label else [])].dropna(subset=[x, y])
+    d = data[[x, y] + ([label] if label is not None else [])].dropna(subset=[x, y])
     if len(d) < 3:
         raise ValueError("need at least three complete observations")
     constant = [c for c in (x, y) if d[c].nunique() < 2]
     if constant:
         raise ValueError(f"column(s) have a single value, so there are no quadrants: {constant}")
-    xv, yv = d[x].to_numpy(float), d[y].to_numpy(float)
+    xr, yr = d[x].to_numpy(float), d[y].to_numpy(float)
+    rx = float(np.mean(xr) if center == "mean" else np.median(xr))
+    ry = float(np.mean(yr) if center == "mean" else np.median(yr))
+    # Classify on the raw values: standardizing cannot change which side a point is on, but its rounding
+    # error can move a point that sits exactly on the mean across the line.
+    right, top = xr >= rx, yr >= ry  # points exactly at the centre count as "high"
+    for name, side in ((x, right), (y, top)):
+        if side.all() or not side.any():
+            hint = " (heavy ties); try center='mean'" if center == "median" else ""
+            raise ValueError(f"every point of {name!r} is on one side of its {center}{hint}")
     if standardize:
-        xv = (xv - xv.mean()) / xv.std(ddof=1)
-        yv = (yv - yv.mean()) / yv.std(ddof=1)
-    cx = float(np.mean(xv) if center == "mean" else np.median(xv))
-    cy = float(np.mean(yv) if center == "mean" else np.median(yv))
+        xv, yv = (xr - xr.mean()) / xr.std(ddof=1), (yr - yr.mean()) / yr.std(ddof=1)
+        cx, cy = (rx - xr.mean()) / xr.std(ddof=1), (ry - yr.mean()) / yr.std(ddof=1)
+    else:
+        xv, yv, cx, cy = xr, yr, rx, ry
 
     fig, ax = get_ax(ax, figsize=(7, 6))
     ax.scatter(xv, yv, s=22, color=color, alpha=0.7, lw=0)
@@ -268,16 +277,10 @@ def quadrant_plot(
         slope, intercept = np.polyfit(xv, yv, 1)
         grid = np.linspace(xv.min(), xv.max(), 50)
         ax.plot(grid, intercept + slope * grid, color=OKABE_ITO[5], lw=1.5)
-    if label:
+    if label is not None:
         for xi, yi, t in zip(xv, yv, d[label]):
             ax.annotate(str(t), (xi, yi), xytext=(3, 3), textcoords="offset points", fontsize=7, color=NEUTRAL)
 
-    right, top = xv >= cx, yv >= cy  # points exactly at the centre count as "high"
-    for name, side in ((x, right), (y, top)):
-        if side.all() or not side.any():
-            raise ValueError(f"every point of {name!r} is on one side of its {center} (heavy ties); "
-                             "try center='mean'" if center == "median" else
-                             f"every point of {name!r} is on one side of its {center}")
     spec = [("high x, high y", right & top, 0.97, 0.97, "right", "top"),
             ("low x, high y", ~right & top, 0.03, 0.97, "left", "top"),
             ("low x, low y", ~right & ~top, 0.03, 0.03, "left", "bottom"),

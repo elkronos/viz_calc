@@ -55,9 +55,10 @@ def histogram(
     ``ref_line`` draws the mean or median **of each facet** (and of each hue
     group within it), not a single global value.
 
-    If the Freedman–Diaconis width is zero (the IQR is zero, e.g. zero-inflated
-    data) Sturges' rule is used instead; ``info["bin_rule"]`` says which rule
-    was applied.
+    If the Freedman–Diaconis width is unusable (the IQR is zero, e.g. heavily
+    tied or zero-inflated data, or FD would need more than 100,000 bins)
+    Sturges' rule is used instead; ``info["bin_rule"]`` says which rule was
+    applied and why.
 
     References
     ----------
@@ -73,8 +74,8 @@ def histogram(
     else:
         edges, rule = np.histogram_bin_edges(values, bins=bins), "user"
 
-    facets = category_order(data[facet], facet_order) if facet else [None]
-    hues = category_order(data[hue], hue_order) if hue else [None]
+    facets = category_order(data[facet], facet_order) if facet is not None else [None]
+    hues = category_order(data[hue], hue_order) if hue is not None else [None]
     cols = palette(len(hues), colors)
     ncol = min(col_wrap, len(facets))
     nrow = int(np.ceil(len(facets) / ncol))
@@ -118,11 +119,11 @@ def histogram(
         ax.set_xlabel(x)
     for ax in axes[:, 0]:
         ax.set_ylabel({"count": "Count", "density": "Density", "percent": "Percent"}[stat])
-    if hue:
+    if hue is not None:
         axes.flat[0].legend(title=hue, frameon=False)
     fig.suptitle(f"Distribution of {x}  (bins: {rule}, width ≈ {np.mean(width):.3g})", x=0.01, ha="left")
     fig.tight_layout()
-    table = pd.DataFrame(rows).drop(columns=[c for c, used in (("facet", facet), ("hue", hue)) if not used])
+    table = pd.DataFrame(rows).drop(columns=[c for c, used in (("facet", facet), ("hue", hue)) if used is None])
     return VizResult(fig, axes, table, {"bin_edges": edges, "bin_rule": rule, "stat": stat})
 
 

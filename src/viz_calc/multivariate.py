@@ -118,7 +118,7 @@ def pca_plot(
     pc_x, pc_y = f"PC{ci}", f"PC{cj}"
     scores = res["scores"][[pc_x, pc_y]].copy()
     groups = [None]
-    if group:
+    if group is not None:
         complete = data[list(features)].notna().all(axis=1)  # the rows pca() kept, matched by position
         scores[group] = data.loc[complete, group].array  # positional, and keeps a Categorical's order
         groups = category_order(scores[group], order)
@@ -147,7 +147,7 @@ def pca_plot(
     ax.axhline(0, color="#dddddd", lw=0.8, zorder=0)
     ax.axvline(0, color="#dddddd", lw=0.8, zorder=0)
     ax.set_aspect("equal", adjustable="datalim")
-    if group:
+    if group is not None:
         ax.legend(title=group, frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
     title = "standardized features" if scale else "unscaled features"
     if ellipse:

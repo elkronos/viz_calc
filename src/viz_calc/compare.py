@@ -375,8 +375,10 @@ def dumbbell(
     check_numeric(data, start, end)
     table = data[[label, start, end]].copy()
     for c in dict.fromkeys((start, end)):
-        if pd.api.types.is_bool_dtype(table[c]):  # booleans pass check_numeric but cannot be subtracted
-            table[c] = table[c].astype(int)
+        # Subtract in a safe dtype: plain int64 stays exact; booleans, unsigned or small integers (which would
+        # wrap around) and nullable columns with missing values become float64 with NaN.
+        if table[c].dtype != np.int64:
+            table[c] = table[c].to_numpy(dtype=float, na_value=np.nan)
     table["change"] = table[end] - table[start]
     with np.errstate(divide="ignore", invalid="ignore"):
         table["pct_change"] = np.where(table[start] != 0, table["change"] / table[start].abs() * 100, np.nan)

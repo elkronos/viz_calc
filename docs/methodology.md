@@ -61,10 +61,11 @@ need Steiger's (1980) test. Used by `compare_correlations`.
 ### Histogram bin width
 Freedman–Diaconis by default: width $= 2\,\mathrm{IQR}\,n^{-1/3}$, which is
 robust to outliers (Freedman & Diaconis, 1981). On heavily tied or
-zero-inflated data the IQR can be zero or nearly zero, which would give one
-bin or millions; whenever FD would produce more bins than observations,
-Sturges' rule is used instead and `info["bin_rule"]` records it. Scott (1979)
-and Sturges (1926) are also available. Bins are computed once on all data so groups and
+zero-inflated data the IQR can be zero (or zero up to floating-point noise),
+which would give one bin or billions; then, or if FD would need more than
+100,000 bins, Sturges' rule is used instead and `info["bin_rule"]` records
+why. Outliers alone never trigger the switch. Scott (1979) and Sturges (1926)
+are also available. Bins are computed once on all data so groups and
 facets are directly comparable.
 
 ### Kernel density estimates

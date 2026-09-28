@@ -318,10 +318,12 @@ def histogram_bins(x: Sequence[float], rule: Literal["fd", "sturges", "scott", "
     * ``"auto"`` – NumPy's ``"auto"`` rule, which combines FD and Sturges
       (its exact definition differs between NumPy versions).
 
-    FD breaks down on heavily tied or zero-inflated data: when the IQR is zero
-    (or tiny relative to the range) its width is zero or near zero, giving
-    one bin or millions of bins. Whenever FD would give more bins than there
-    are observations, Sturges is used instead (for ``"fd"`` and ``"auto"``).
+    FD breaks down on heavily tied or zero-inflated data: when the IQR is zero,
+    or zero up to floating-point noise (below 1e-9 of the range), its width
+    is zero or near zero, giving one bin or billions. In that case, and as a
+    safety limit whenever FD would need more than 100,000 bins, Sturges is
+    used instead (for ``"fd"`` and ``"auto"``). Outliers alone do not trigger
+    the switch: FD's robustness to them is why it is the default.
 
     References
     ----------
@@ -342,12 +344,14 @@ def _bin_edges(x: Sequence[float], rule: str) -> tuple[np.ndarray, str]:
     if rule not in ("fd", "sturges", "scott", "auto"):
         raise ValueError(f"rule must be 'fd', 'sturges', 'scott' or 'auto', got {rule!r}")
     if rule in ("fd", "auto") and np.ptp(x) > 0:
-        iqr = np.subtract(*np.percentile(x, [75, 25]))
-        width = 2 * iqr * x.size ** (-1 / 3)
         # Decide before calling NumPy, which would try to allocate the huge bin array.
-        if width <= 0 or np.ptp(x) / width > x.size:
-            reason = "IQR = 0" if iqr == 0 else "IQR near 0"
-            return np.histogram_bin_edges(x, bins="sturges"), f"sturges ({reason}, FD degenerate)"
+        span = float(np.ptp(x))
+        iqr = float(np.subtract(*np.percentile(x, [75, 25])))
+        if iqr <= 1e-9 * span:
+            return np.histogram_bin_edges(x, bins="sturges"), "sturges (IQR is 0, so FD is undefined)"
+        n_bins = span / (2 * iqr * x.size ** (-1 / 3))
+        if n_bins > 100_000:
+            return np.histogram_bin_edges(x, bins="sturges"), f"sturges (FD would need {n_bins:,.0f} bins)"
     return np.histogram_bin_edges(x, bins=rule), rule
 
 

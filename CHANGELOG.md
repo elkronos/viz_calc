@@ -11,35 +11,49 @@ dependency versions.
   the old name still works with a `FutureWarning`.
 - Category orders (`waffle`, `stacked_percentages`) must list every level that
   occurs, may add unused levels (drawn as zero) and may not repeat a level.
-- Unknown correlation methods, a `success` value that never occurs, empty
-  data, all-missing grouping columns, one-sided quadrant splits, missing edge
-  weights and non-positive `upset(max_intersections=...)` now raise clear errors.
+- Unknown correlation methods, a `success` value that is not one of a
+  two-valued column's values, empty data, all-missing grouping columns,
+  one-sided quadrant splits, missing or infinite edge weights, ambiguous date
+  strings (e.g. day-first mixed with month-first) and non-positive
+  `upset(max_intersections=...)` now raise clear errors.
 - Number labels keep significant digits below 1 (`0.034`, not `0`); axes that
-  reach 10,000 use K/M/B/T with precision chosen from the tick spacing.
+  reach 10,000 use K/M/B/T with the fewest decimals that show every tick
+  exactly (`2.5K, 5.0K, 7.5K`), per-tick labels on log axes, and Matplotlib's
+  offset notation for narrow ranges at large magnitudes.
+- Optional column arguments are compared with `None`, so columns labelled `0`
+  (e.g. from a headerless CSV) are no longer ignored.
 
 ### Fixed
 - Histograms fall back from Freedman–Diaconis to Sturges when the IQR is zero
-  or near zero (previously one bin, or a MemoryError).
+  (or zero up to floating-point noise), or FD would need over 100,000 bins
+  (previously one bin, or a MemoryError). Outliers alone keep FD.
 - `network_map`: repeated edges are summed instead of the last row winning;
   categorical node columns, non-string column labels and node order work;
-  directed communities use summed reciprocal weights.
-- Dates: timezone-aware values (including mixed UTC offsets across DST) are
-  placed by local time; mixed ISO date/date-time strings parse; string dates
-  sort chronologically in `timeseries_fill`; numeric years stored as objects
-  stay numeric.
+  directed communities use summed reciprocal weights; weighted betweenness
+  uses exact fractions so equally short paths share credit; directed graphs
+  draw arrowheads (Matplotlib and Plotly).
+- Dates: calendar views (`calendar_heatmap`, `period_bars`) place
+  timezone-aware values by their local day, including mixed UTC offsets
+  across DST; `gantt`, `duration_plot` and `timeseries_fill` keep time zones,
+  so durations are true elapsed times and the repeated DST hour is not merged;
+  mixed ISO date/date-time strings parse; string dates sort chronologically in
+  `timeseries_fill`; numeric years (object or Categorical) stay numeric.
 - `calendar_heatmap` shows all-missing days as no data, not zero.
 - `upset` no longer counts missing values or `"0"` strings as membership.
 - `radar` leaves a missing group metric as a gap (with vertex markers) and
   handles nullable dtypes; `pca_plot` keeps categorical group order with any
   index; `correlogram(hide_nonsignificant=True)` keeps `info["matrix"]`.
-- `raincloud` draws densities for narrow groups; `bullet` shows negative
-  measures and accepts array bands; `waterfall` uses `start_label`;
-  `gantt`/`animated_bubble` draw missing groups in grey with a legend entry;
-  `animated_bubble` handles NaN and nullable columns; `dumbbell` handles
-  booleans without casting integers; `donut_grid` skips boolean columns.
+- `raincloud` draws densities for narrow groups; `bullet` keeps zero, negative
+  measures and targets in view and accepts array bands; `waterfall` uses
+  `start_label`; `gantt`/`animated_bubble` draw missing groups in grey with a
+  legend entry; `animated_bubble` handles NaN and nullable columns and labels
+  only drawn bubbles; `dumbbell` computes changes safely for booleans,
+  unsigned/small and nullable integers while keeping int64 exact;
+  `quadrant_plot` classifies points on the mean consistently whether or not it
+  standardizes; `donut_grid` skips boolean columns.
 - `to_pptx` keeps each image's true aspect ratio and puts one title per item
   on every page of multi-page results; `VizResult.save` returns the real path
-  when no extension is given.
+  when no extension is given and accepts file-like objects.
 
 ## 1.0.0
 
