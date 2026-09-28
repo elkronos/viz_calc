@@ -19,15 +19,17 @@ __all__ = ["network_map", "sankey"]
 
 
 def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10) -> dict:
-    """Brandes' betweenness centrality with tolerant tie detection.
+    """Brandes' betweenness centrality with ties anchored on the true shortest distance.
 
     ``distance[(u, v)]`` is the length of edge u→v (for undirected graphs, both
-    orientations are looked up). Path lengths that agree to within a relative
-    *rel_tol* count as equally short, so ties are not lost to floating-point
-    rounding (1/2 + 1/12 vs 1/3 + 1/4, weights like 0.3 or 73/9, float32
-    columns). The tolerance is also capped below half the shortest edge, so a
-    real extra hop is never mistaken for a tie. Normalized as in NetworkX: by
-    1/((n-1)(n-2)).
+    orientations are present); edges missing from it are not traversed. For
+    each source, Dijkstra first finds the shortest distances, which do not
+    depend on edge order. Then v is a predecessor of w on a shortest path when
+    ``dist[v] < dist[w]`` and ``dist[v] + len(v, w) <= dist[w] * (1 + rel_tol)``:
+    every path within *rel_tol* of the true shortest length counts as equally
+    short, so ties are not lost to floating-point rounding (1/2 + 1/12 vs
+    1/3 + 1/4, weights like 0.3 or 73/9, float32 columns), and the result does
+    not depend on row order. Normalized as in NetworkX: by 1/((n-1)(n-2)).
 
     References
     ----------
@@ -35,40 +37,35 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10) -> dict:
     *Journal of Mathematical Sociology*, 25(2), 163–177.
     """
     nodes = list(G)
+    out = {v: [(w, distance[(v, w)]) for w in G[v] if (v, w) in distance] for v in nodes}
     bc = dict.fromkeys(nodes, 0.0)
-    counter = count()
-    # The tolerance never reaches half the shortest edge, so an extra hop can never be absorbed as a "tie";
-    # a tied predecessor is then always settled first, which makes the result independent of row order.
-    cap = 0.5 * min(distance.values()) if distance else 0.0
-
-    def close(a: float, b: float) -> float:
-        return min(rel_tol * max(a, b), cap)
     for s in nodes:
-        dist, sigma, preds, done, order = {s: 0.0}, {s: 1.0}, {s: []}, set(), []
-        heap = [(0.0, next(counter), s)]
-        while heap:
+        dist, done, heap, counter = {s: 0.0}, set(), [(0.0, 0, s)], count(1)
+        while heap:  # 1. shortest distances
             d, _, v = heapq.heappop(heap)
-            if v in done or d > dist[v]:
+            if v in done:
                 continue
             done.add(v)
-            order.append(v)
-            for w in G[v]:
-                length = distance.get((v, w))
-                if length is None:
-                    continue  # zero-weight edge: no tie, not part of any path
-                nd = d + length
-                if w not in dist or nd < dist[w] - close(nd, dist[w]):
-                    if w in done:
-                        continue
-                    dist[w], sigma[w], preds[w] = nd, sigma[v], [v]
-                    heapq.heappush(heap, (nd, next(counter), w))
-                elif abs(nd - dist[w]) <= close(nd, dist[w]) and w not in done:
-                    sigma[w] += sigma[v]  # another equally short path
+            for w, length in out[v]:
+                if w not in dist or d + length < dist[w]:
+                    dist[w] = d + length
+                    heapq.heappush(heap, (dist[w], next(counter), w))
+        preds = {v: [] for v in dist}  # 2. predecessors on any path within tolerance of the shortest
+        for v in dist:
+            for w, length in out[v]:
+                if dist[v] < dist[w] and dist[v] + length <= dist[w] * (1 + rel_tol):
                     preds[w].append(v)
-        delta = dict.fromkeys(order, 0.0)
+        order = sorted(dist, key=dist.get)  # predecessors are always strictly closer, so this is topological
+        sigma = dict.fromkeys(order, 0.0)
+        sigma[s] = 1.0
+        for w in order:
+            if w != s:
+                sigma[w] = sum(sigma[v] for v in preds[w])
+        delta = dict.fromkeys(order, 0.0)  # 3. Brandes accumulation
         for w in reversed(order):
-            for v in preds[w]:
-                delta[v] += sigma[v] / sigma[w] * (1 + delta[w])
+            if sigma[w] > 0:
+                for v in preds[w]:
+                    delta[v] += sigma[v] / sigma[w] * (1 + delta[w])
             if w != s:
                 bc[w] += delta[w]
     n = len(nodes)
@@ -98,10 +95,10 @@ def network_map(
     The layout is seeded so it is reproducible. Repeated edges (including
     B→A after A→B in an undirected graph) are merged, summing their weights;
     missing weights raise an error. Weighted betweenness uses 1/weight as edge
-    length and counts path lengths equal to within a relative 1e-10 (4× the
-    machine precision for lower-precision columns: about 5e-7 for float32)
-    as ties, so equally short paths share credit despite rounding; the
-    tolerance always stays below half the shortest edge. For directed graphs, communities are found
+    length and counts every path within a relative 1e-10 of the shortest
+    length (2× the machine precision for lower-precision columns: about
+    2.4e-7 for float32) as equally short, so ties share credit despite
+    rounding and results do not depend on row order. For directed graphs, communities are found
     on the undirected graph with reciprocal weights summed.
 
     Set ``interactive=True`` for a Plotly figure with hover details.
@@ -159,13 +156,13 @@ def network_map(
                 distance[(u, v)] = 1.0 / d[weight]
                 if not directed:
                     distance[(v, u)] = 1.0 / d[weight]
-        # Ties are judged at the precision of the data: rounding moves each 1/weight by at most half an ulp of
-        # the column's dtype, so a few ulps of relative slack absorbs it (float32: ~5e-7) without merging real
-        # differences.
+        # Ties are judged at the precision of the data: rounding moves each 1/weight by about an ulp of the
+        # column's dtype, so two ulps of relative slack absorbs it (float32: ~2.4e-7) without merging real
+        # differences that the dtype can resolve.
         dtype = data[weight].dtype
         base = getattr(dtype, "numpy_dtype", None) or getattr(dtype, "subtype", None) or dtype
         precision = np.finfo(base).eps if np.issubdtype(np.dtype(base), np.floating) else np.finfo(float).eps
-        bc = _weighted_betweenness(G, distance, rel_tol=max(1e-10, 4 * float(precision)))
+        bc = _weighted_betweenness(G, distance, rel_tol=max(1e-10, 2 * float(precision)))
     else:
         bc = nx.betweenness_centrality(G)
     table["betweenness"] = [bc[n] for n in nodes]

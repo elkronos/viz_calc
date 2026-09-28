@@ -899,3 +899,50 @@ def test_weighted_betweenness_matches_exact_rational_ground_truth():
             res = vc.network_map(e.astype({"w": dtype}), "s", "t", weight="w", communities=False)
             plt.close(res.figure)
             assert all(r.betweenness == pytest.approx(exact[r.node], abs=1e-9) for r in res.table.itertuples())
+
+
+# --- tenth verification round ------------------------------------------------------------------------------------
+
+
+def _exact_betweenness(frame):
+    from fractions import Fraction
+
+    import networkx as nx
+
+    H = nx.Graph()
+    H.add_nodes_from(set(frame.s) | set(frame.t))
+    H.add_weighted_edges_from(((u, v, 1 / Fraction(str(w))) for u, v, w in frame.itertuples(index=False) if u != v),
+                              weight="d")
+    return {k: float(v) for k, v in nx.betweenness_centrality(H, weight="d").items()}
+
+
+@pytest.mark.parametrize("extra", [("D", "E", 1e6), ("X", "Y", 1e6), ("E", "E", 1e6)])
+def test_float32_tie_unaffected_by_a_strong_edge_elsewhere(extra):
+    rows = [("A", "B", 0.09), ("B", "D", 0.18), ("A", "C", 0.12), ("C", "D", 0.12), extra]
+    if extra[0] == "E":
+        rows.append(("D", "E", 1.0))
+    e = pd.DataFrame(rows, columns=["s", "t", "w"])
+    exact = _exact_betweenness(e)
+    got = vc.network_map(e.astype({"w": "float32"}), "s", "t", weight="w", communities=False).table
+    assert all(r.betweenness == pytest.approx(exact[r.node], abs=1e-9) for r in got.itertuples())
+
+
+def test_chains_of_near_ties_are_row_order_independent():
+    # three routes S-Pi-W whose lengths differ by 0.6e-10 and 1.2e-10 relative: only those within 1e-10 of the
+    # shortest count as ties, whatever the row order
+    a = [1.0, 1.0 + 1.2e-10, 1.0 + 2.4e-10]
+    rows = [("S", f"P{i}", 1 / x) for i, x in enumerate(a)] + [(f"P{i}", "W", 1.0) for i in range(3)]
+    e = pd.DataFrame(rows, columns=["s", "t", "w"])
+    results = set()
+    for seed in range(12):
+        t = vc.network_map(e.sample(frac=1, random_state=seed), "s", "t", weight="w", communities=False).table
+        results.add(tuple(t.set_index("node")["betweenness"].sort_index().round(12)))
+    assert len(results) == 1
+
+
+def test_float16_keeps_differences_it_can_resolve():
+    e = pd.DataFrame({"s": ["A", "B", "A", "C"], "t": ["B", "D", "C", "D"], "w": [1.0, 1.0, 1.0, 0.9941]})
+    stored = e.astype({"w": "float16"})
+    reference = vc.network_map(stored.astype({"w": "float64"}), "s", "t", weight="w", communities=False).table
+    got = vc.network_map(stored, "s", "t", weight="w", communities=False).table
+    pd.testing.assert_frame_equal(reference, got)
