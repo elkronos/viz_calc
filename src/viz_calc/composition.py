@@ -32,6 +32,7 @@ from ._core import (
     get_ax,
     level_label,
     palette,
+    select_columns,
     slot_colors,
     text_color,
 )
@@ -49,15 +50,9 @@ def _check_count(name: str, value: Any, minimum: int = 1) -> None:
         raise ValueError(f"{name} must be an integer >= {minimum}, got {value!r}")
 
 
-def _select(data: pd.DataFrame, columns: Sequence[Any]) -> pd.DataFrame:
-    """The *columns* of *data* by label: ``data[[False, True]]`` would read the labels as a row mask."""
-    positions = data.columns.get_indexer(list(columns)) if data.columns.is_unique else np.array([-1])
-    return data.iloc[:, positions] if (positions >= 0).all() else data[list(columns)]
-
-
 def _missing_rows(data: pd.DataFrame, columns: Sequence[str], label: str | None = None) -> list[Any]:
     """Labels (index labels, or the *label* column) of the rows with a missing value in *columns*."""
-    rows = _select(data, columns).isna().any(axis=1).to_numpy()
+    rows = select_columns(data, columns).isna().any(axis=1).to_numpy()
     return (data.index if label is None else data[label])[rows].tolist()
 
 
@@ -355,7 +350,7 @@ def donut_grid(
     if missing:
         raise ValueError(f"donut_grid needs a value in every cell of {columns}; row(s) {missing} have missing "
                          "values (fill them, e.g. with data.fillna(0), or drop those rows)")
-    values = _select(data, columns).to_numpy(dtype=float)  # nullable Int64/Float64 too
+    values = select_columns(data, columns).to_numpy(dtype=float)  # nullable Int64/Float64 too
     if (values < 0).any():
         raise ValueError("donut values must be non-negative")
     cols = palette(len(columns), colors)

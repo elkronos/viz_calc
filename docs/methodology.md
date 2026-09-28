@@ -106,8 +106,8 @@ bins span different numbers of values (a sawtooth). There the width is
 rounded to the nearest whole number (at least 1) and the edges sit on
 half-integers from $\min(x) - 0.5$; `info["bin_rule"]` then reads
 `fd (whole-number widths for integer data)`. The 100,000-bin limit is
-checked again after rounding, since a width rounded down (1.4 to 1) adds
-bins. Scott (1979) and
+checked on the bins built with the rounded width, since a width rounded
+down (1.4 to 1) adds bins. Scott (1979) and
 Sturges (1926) are also available and used as published. Bins are computed
 once on all data so groups and facets are directly comparable.
 

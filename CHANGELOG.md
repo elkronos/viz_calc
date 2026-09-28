@@ -140,6 +140,20 @@ versions.
   `period_bars` no longer wraps around when summing very large integers;
   `bullet` reads integer band labels as column names when they are columns;
   `sankey` rejects missing flow values; `network_map` accepts a NumPy seed.
+- `sankey` rejects rows with a missing source or target instead of silently
+  leaving their flow out; `upset` no longer counts missing values as members
+  when sets are given as a mapping.
+- Columns labelled `False`/`True` (as a pivot on a boolean column gives) are
+  selected as columns, not read as a row mask; `correlogram` and the other
+  column-list functions reject a repeated column; `likert` rejects response
+  levels named `item`, `n` or `net`.
+- `percent_grid` rounds dots half up (2.5% shows 3 dots) and accepts a
+  datetime `success` value on NumPy 1.x; `funnel` shows small conversions
+  such as 0.45% instead of "0%"; a missing `bullet` band limit no longer
+  hides the later bands; `waffle` integer sums no longer wrap around.
+- `network_map` rejects one column in two roles, raises when path lengths
+  overflow, and settles float ties from very heavy edges exactly without
+  slowing down.
 - Number labels beyond 999T use scientific notation; time-zone-aware
   midnight dates read `2024-01-01`; `quadrant_plot(standardize=True)` works
   at very large and very small magnitudes; `to_pptx` accepts a single title
