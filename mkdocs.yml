@@ -1,0 +1,68 @@
+site_name: viz_calc
+site_description: Visual calculators — statistically sound, citable charts for pandas data.
+site_author: elkronos
+site_url: https://elkronos.github.io/viz_calc/
+repo_url: https://github.com/elkronos/viz_calc
+repo_name: elkronos/viz_calc
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      toggle: { icon: material/brightness-7, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      toggle: { icon: material/brightness-4, name: Light mode }
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Walkthroughs:
+      - Comparing groups: walkthroughs/comparing-groups.md
+      - Correlations: walkthroughs/correlations.md
+      - Proportions and surveys: walkthroughs/proportions-and-surveys.md
+      - Exploring a new dataset: walkthroughs/exploring-a-dataset.md
+      - Time and projects: walkthroughs/time-and-projects.md
+      - Multivariate and networks: walkthroughs/multivariate-and-networks.md
+  - Gallery: gallery.md
+  - Methodology: methodology.md
+  - API reference: api.md
+  - Migrating from the old scripts: migration.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight: { anchor_linenums: true }
+  - pymdownx.arithmatex: { generic: true }
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: numpy
+            show_source: false
+            show_root_heading: true
+            heading_level: 3
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
