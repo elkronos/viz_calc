@@ -13,7 +13,18 @@ import pandas as pd
 from matplotlib.axes import Axes
 
 from . import stats as st
-from ._core import NEUTRAL, OKABE_ITO, VizResult, category_order, check_choice, check_dataframe, check_numeric, get_ax
+from ._core import (
+    NEUTRAL,
+    OKABE_ITO,
+    VizResult,
+    category_order,
+    check_choice,
+    check_dataframe,
+    check_numeric,
+    cleanup_on_error,
+    column_list,
+    get_ax,
+)
 
 __all__ = ["correlogram", "compare_correlations", "quadrant_plot"]
 
@@ -25,6 +36,7 @@ def _numeric_columns(data: pd.DataFrame, columns: Sequence[str] | None) -> list[
     if columns is None:
         columns = [c for c in data.columns if pd.api.types.is_numeric_dtype(data[c]) and not pd.api.types.is_bool_dtype(data[c])]
     else:
+        columns = column_list("columns", columns)
         check_dataframe(data, columns)
         check_numeric(data, *columns)
     if len(columns) < 2:
@@ -71,6 +83,7 @@ def _draw_matrix(ax: Axes, mat: np.ndarray, labels: list[str], triangle: str, vl
     ax.figure.colorbar(im, ax=ax, shrink=0.8, label=colorbar_label)
 
 
+@cleanup_on_error
 def correlogram(
     data: pd.DataFrame,
     columns: Sequence[str] | None = None,
@@ -97,6 +110,9 @@ def correlogram(
 
     A diverging, perceptually balanced colormap centred on zero is used so
     that sign and magnitude are both read correctly (Crameri et al., 2020).
+
+    *columns* (any sequence of labels, e.g. ``df.columns[:4]``) defaults to
+    every numeric, non-boolean column.
 
     Returns a long ``table`` with one row per pair: ``r``, Fisher-z CI,
     ``p``, ``p_adjusted``, ``n`` and ``significant``.
@@ -146,6 +162,7 @@ def correlogram(
     return VizResult(fig, ax, table, {"matrix": matrix, "method": method, "p_adjust": p_adjust, "alpha": alpha})
 
 
+@cleanup_on_error
 def compare_correlations(
     data: pd.DataFrame,
     group: str,
@@ -164,6 +181,8 @@ def compare_correlations(
     independent correlations is significant after adjusting across the
     variable pairs in that comparison. Spearman correlations use the
     ``1.06/(n−3)`` variance of Fieller, Hartley & Pearson (1957).
+    *columns* (any sequence of labels) defaults to every numeric,
+    non-boolean column other than *group*.
 
     The groups must contain different units (independent samples). The
     z-test is asymptotic, so read it with caution when a group has only a few
@@ -221,6 +240,7 @@ def compare_correlations(
                                         "group_correlations": per_group})
 
 
+@cleanup_on_error
 def quadrant_plot(
     data: pd.DataFrame,
     x: str,

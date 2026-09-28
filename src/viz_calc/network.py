@@ -14,7 +14,17 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
 
-from ._core import NEUTRAL, VizResult, check_dataframe, check_numeric, palette, require
+from ._core import (
+    NEUTRAL,
+    VizResult,
+    check_choice,
+    check_dataframe,
+    check_has_values,
+    check_numeric,
+    cleanup_on_error,
+    palette,
+    require,
+)
 
 __all__ = ["network_map", "sankey"]
 
@@ -196,6 +206,7 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
     return {v: b * scale for v, b in bc.items()}
 
 
+@cleanup_on_error
 def network_map(
     data: pd.DataFrame,
     source: str,
@@ -214,8 +225,10 @@ def network_map(
     Node metrics are computed from the graph itself: degree, strength
     (weighted degree), betweenness centrality and, if *communities* is on,
     Louvain communities (Blondel et al., 2008), using NetworkX's built-in
-    implementation. Node size encodes *size_by*; colour encodes community.
-    The layout is seeded so it is reproducible. Repeated edges (including
+    implementation. Node size encodes *size_by* (``"degree"``, ``"strength"``
+    or ``"betweenness"``); colour encodes community.
+    The layout is seeded so it is reproducible. Rows missing *source* or
+    *target* are left out. Repeated edges (including
     B→A after A→B in an undirected graph) are merged, summing their weights;
     missing weights raise an error. Weighted betweenness uses 1/weight as edge
     length. Weights that cannot have been rounded when stored (integers, or
@@ -244,15 +257,19 @@ def network_map(
     """
     nx = require("networkx", "network")
     check_dataframe(data, [source, target, weight])
+    check_choice("size_by", size_by, ["degree", "strength", "betweenness"])
     weighted = weight is not None  # a column may legitimately be labelled 0
     if weighted:
         check_numeric(data, weight)
-        if (data[weight] < 0).any():
-            raise ValueError("edge weights must be non-negative")
+    check_has_values(data, source, target, weight)
+    if weighted and (data[weight] < 0).any():
+        raise ValueError("edge weights must be non-negative")
     # Work on plain Python objects: categorical columns, non-string labels and nullable dtypes all behave the same.
     src = data[source].to_numpy(dtype=object)
     tgt = data[target].to_numpy(dtype=object)
     keep = ~(pd.isna(src) | pd.isna(tgt))
+    if not keep.any():
+        raise ValueError(f"no row has both a {source!r} and a {target!r} value, so there are no edges")
     wts = data[weight].to_numpy(dtype=float, na_value=np.nan) if weighted else np.ones(len(data))
     if weighted and np.isnan(wts[keep]).any():
         raise ValueError(f"edge weights in {weight!r} contain missing values; drop or fill them first")
@@ -408,6 +425,7 @@ def network_map(
     return VizResult(fig, ax, table, info)
 
 
+@cleanup_on_error
 def sankey(
     data: pd.DataFrame,
     source: str,
@@ -423,6 +441,7 @@ def sankey(
     go = require("plotly.graph_objects", "interactive")
     check_dataframe(data, [source, target, value])
     check_numeric(data, value)
+    check_has_values(data, source, target, value)
     if (data[value] < 0).any():
         raise ValueError("flows must be non-negative")
     flows = data.groupby([source, target], sort=False, observed=True)[value].sum().reset_index()

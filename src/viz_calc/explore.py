@@ -167,10 +167,15 @@ def profile_scatters(
     """Scatter plot for every pair of numeric columns, strongest first.
 
     Numeric columns with at least *min_levels* distinct values are used.
-    Pairs are ordered by absolute correlation, and each title shows *r* with a
-    multiplicity-adjusted p-value (*p_adjust*: ``"holm"``, ``"fdr_bh"``,
-    ``"bonferroni"`` or ``"none"``). Large data are subsampled to
-    *max_points* points per panel for drawing only (statistics use all rows).
+    Pairs are ordered by absolute correlation (*method*: ``"pearson"`` or
+    ``"spearman"``), and each title shows *r* with a multiplicity-adjusted
+    p-value (*p_adjust*: ``"holm"``, ``"fdr_bh"``, ``"bonferroni"`` or
+    ``"none"``). Spearman p-values for pairs with at most 9 complete
+    observations are exact permutation p-values (see
+    :func:`viz_calc.stats.correlation_test`), so a tiny pair does not get a
+    near-zero p-value from the large-sample approximation. Large data are
+    subsampled to *max_points* points per panel for drawing only (statistics
+    use all rows).
     """
     columns = None if columns is None else column_list("columns", columns)
     check_dataframe(data, columns or [])

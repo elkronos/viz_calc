@@ -75,6 +75,15 @@ def histogram(
     Sturges' rule is used instead; ``info["bin_rule"]`` says which rule was
     applied and why.
 
+    On whole-number data (counts, scores, integer dtypes) ``bins="fd"``
+    rounds the Freedman–Diaconis width to a whole number (at least 1) and
+    puts the edges on half-integers, starting at ``min(x) - 0.5``. Every
+    value then sits inside a bin, away from its edges, and every bin spans
+    the same number of possible values, so there is no comb of empty bars;
+    ``info["bin_rule"]`` reads ``"fd (whole-number widths for integer
+    data)"``. The other rules are used as published (see
+    :func:`viz_calc.stats.histogram_bins`).
+
     References
     ----------
     Freedman, D., & Diaconis, P. (1981). *Z. Wahrscheinlichkeitstheorie verw.

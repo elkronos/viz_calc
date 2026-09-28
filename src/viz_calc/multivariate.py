@@ -12,6 +12,7 @@ from matplotlib.axes import Axes
 from matplotlib.patches import Ellipse
 from scipy.stats import chi2
 
+from . import stats as st
 from ._core import (
     NEUTRAL,
     VizResult,
@@ -118,6 +119,9 @@ def pca_plot(
         group's points (radius ``sqrt(chi2_2(level))`` in the eigenbasis of the
         group covariance). ``"confidence"``: a *level* confidence region for the
         group **mean**. ``None``: no ellipse.
+    level
+        Coverage of the ellipses, strictly between 0 and 1 (``0.95``, not
+        ``95``); checked even when *ellipse* is ``None``.
     loadings
         Draw arrows for the *n* features with the largest loadings on the
         plotted components (``True`` = all features).
@@ -125,6 +129,7 @@ def pca_plot(
     features = column_list("features", features)
     check_dataframe(data, [*features, group])
     check_choice("ellipse", ellipse, ["data", "confidence", None])
+    st._check_level(level)
     res = pca(data, features, scale)
     ci, cj = components
     k = len(res["explained_variance_ratio"])

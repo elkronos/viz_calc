@@ -107,7 +107,8 @@ def estimation_plot(
     order
         Order of the groups on the axis.
     level
-        Confidence level for every interval.
+        Confidence level for every interval, strictly between 0 and 1
+        (``0.95``, not ``95``).
     n_resamples
         Bootstrap resamples for the difference CI.
     p_adjust
@@ -137,6 +138,7 @@ def estimation_plot(
     check_dataframe(data, [x, y])
     check_numeric(data, y)
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
+    st._check_level(level)
     groups = category_order(data[x], order)
     if len(groups) < 2:
         raise ValueError("estimation_plot needs at least two groups")
@@ -246,6 +248,9 @@ def benchmark_bar(
         ``"ci"`` colours by whether the CI excludes the threshold; ``"mean"``
         by which side the mean falls on (a mean equal to the threshold counts
         as *above*).
+    level
+        Confidence level of the CIs, strictly between 0 and 1 (``0.95``, not
+        ``95``).
     colors
         A tuple of three colours: ``(below, above, indistinguishable)``.
 
@@ -258,6 +263,7 @@ def benchmark_bar(
     check_numeric(data, y)
     check_choice("error", error, ["ci", "se", "sd"])
     check_choice("classify", classify, ["ci", "mean"])
+    st._check_level(level)
     colors = slot_colors(colors, ("below", "above", "indistinguishable"))
     thr, tol = _threshold(data, y, threshold)
 
@@ -535,11 +541,15 @@ def centered_bar(
         A number, or ``"mean"``/``"median"`` of all observations of *y*.
         ``"mean"`` is correctly rounded, and values that differ from it only
         by floating-point rounding count as on it (so at-or-above).
+    level
+        Confidence level of the Wilson intervals, strictly between 0 and 1
+        (``0.95``, not ``95``).
     colors
         A tuple of two colours: ``(at_or_above, below)``.
     """
     check_dataframe(data, [x, y])
     check_numeric(data, y)
+    st._check_level(level)
     colors = slot_colors(colors, ("at_or_above", "below"))
     thr, tol = _threshold(data, y, threshold)
     groups = category_order(data[x], order)
