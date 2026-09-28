@@ -17,26 +17,30 @@ __all__ = ["network_map", "sankey"]
 
 
 def _exact(value) -> Fraction:
-    """A weight as the simplest fraction within a relative error of 1e-12.
+    """A weight as an exact fraction, so sums of weights tie exactly.
 
-    Floats cannot hold 0.3 or 1/3 exactly, so sums of them do not tie exactly
-    (0.1 + 0.1 + 0.1 != 0.3, 3 x 0.333… != 1). Reading each weight as the
-    simplest nearby fraction (0.3 -> 3/10, 0.3333333333333333 -> 1/3) makes
-    decimal and rational weights sum, and tie, exactly. numpy float32 values
-    are read from their short decimal text first (float32 0.3 -> "0.3").
+    A weight whose shortest text has at most 15 significant digits is taken as
+    exactly that decimal (``0.4794598`` -> 2397299/5000000, float32 ``0.3`` ->
+    3/10), so ``0.1 + 0.1 + 0.1 == 0.3``. A 16–17 digit value is float noise
+    from a computation (``1/3`` -> ``0.3333333333333333``); it becomes the
+    simplest fraction that converts back to exactly the same float (1/3), so
+    ``3 × 1/3 == 1``. The float value of a weight is never changed.
     """
     if isinstance(value, (bool, np.bool_)):
         return Fraction(int(value))
+    text = str(value)
     try:
-        exact = Fraction(str(value))
+        exact = Fraction(text)
     except (ValueError, TypeError):
-        exact = Fraction(float(value))
-    if exact.denominator == 1:
+        text = repr(float(value))
+        exact = Fraction(text)
+    mantissa = text.lower().split("e")[0].lstrip("+-").replace(".", "").lstrip("0")
+    if len(mantissa) <= 15 or exact.denominator == 1:
         return exact
-    tolerance = abs(exact) * Fraction(1, 10**12)
-    for limit in (10**k for k in range(1, 13)):
+    target = float(value)
+    for limit in (10**k for k in range(1, 16)):
         simple = exact.limit_denominator(limit)
-        if abs(simple - exact) <= tolerance:
+        if float(simple) == target:
             return simple
     return exact
 
@@ -92,8 +96,9 @@ def network_map(
     # the orientation it was first seen with. Weights are summed as exact fractions (see _exact:
     # 0.1 + 0.1 + 0.1 == 3/10, 3 x 1/3 == 1) so equally short paths tie exactly in betweenness.
     # native dtype: iterating a float32 array yields float32 scalars, whose str() is the short decimal text
-    if weighted and pd.api.types.is_extension_array_dtype(data[weight]) and pd.api.types.is_float_dtype(data[weight]):
-        raw = data[weight].to_numpy(dtype=data[weight].dtype.numpy_dtype, na_value=np.nan)  # Float32 -> float32
+    numpy_dtype = getattr(data[weight].dtype, "numpy_dtype", None) if weighted else None
+    if numpy_dtype is not None and pd.api.types.is_float_dtype(numpy_dtype):  # nullable Float32 -> float32 scalars
+        raw = data[weight].to_numpy(dtype=numpy_dtype, na_value=np.nan)
     else:
         raw = data[weight].to_numpy() if weighted else np.ones(len(data), dtype=np.int64)
     merged: dict = {}

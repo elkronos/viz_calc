@@ -793,3 +793,23 @@ def test_date_column_with_a_stray_number_raises():
     df = pd.DataFrame({"date": [dt.datetime(2024, 1, 5), dt.datetime(2024, 2, 9), 45332], "v": [1.0, 2.0, 3.0]})
     with pytest.raises(ValueError, match="numbers"):
         vc.period_bars(df, date="date", value="v")
+
+
+# --- seventh verification round ----------------------------------------------------------------------------------
+
+
+def test_long_decimal_weights_keep_ties_and_values():
+    e = pd.DataFrame({"s": ["A", "A", "C"], "t": ["B", "C", "B"], "w": [0.4794598, 0.9589196, 0.9589196]})
+    res = vc.network_map(e, "s", "t", weight="w")
+    t = res.table.set_index("node")
+    assert t.loc["C", "betweenness"] == pytest.approx(0.5)
+    assert t.loc["A", "strength"] == 0.4794598 + 0.9589196
+    pi = pd.DataFrame({"s": ["A"], "t": ["B"], "w": [3.141592653589793]})
+    assert vc.network_map(pi, "s", "t", weight="w").info["graph"]["A"]["B"]["w"] == 3.141592653589793
+
+
+def test_sparse_weight_column():
+    e = pd.DataFrame({"s": ["A", "B", "A"], "t": ["B", "C", "C"],
+                      "w": pd.arrays.SparseArray([0.3, 0.6, 0.2], dtype="Sparse[float64]")})
+    bc = vc.network_map(e, "s", "t", weight="w").table.set_index("node")["betweenness"]
+    assert bc["B"] == pytest.approx(0.5)

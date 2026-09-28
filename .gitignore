@@ -9,3 +9,9 @@ site/
 .venv/
 .ipynb_checkpoints/
 *.pptx
+
+# stray outputs at the repository root (saved figures, reports)
+/*.html
+/*.png
+/*.svg
+/*.pdf
