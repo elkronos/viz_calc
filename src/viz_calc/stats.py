@@ -166,9 +166,10 @@ def mean_ci(x: Sequence[float], level: float = 0.95) -> tuple[float, float, floa
     m = _mean(x) * s
     if n < 2:
         return (m, np.nan, np.nan)
-    se = np.sqrt(_var(x)) / np.sqrt(n) * s
     t = _st.t.ppf(1 - (1 - level) / 2, n - 1)
-    return (m, m - t * se, m + t * se)
+    half = t * np.sqrt(_var(x)) / np.sqrt(n)
+    with np.errstate(over="ignore"):  # a limit beyond the largest float is honestly infinite
+        return (m, (_mean(x) - half) * s, (_mean(x) + half) * s)
 
 
 def welch_test(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> dict[str, float]:

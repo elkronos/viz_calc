@@ -155,6 +155,18 @@ versions.
 - `network_map` rejects one column in two roles, raises when path lengths
   overflow, and settles float ties from very heavy edges exactly without
   slowing down.
+- Confidence levels in titles keep their digits (`97.5% CI`, not `98% CI`);
+  a group or category column named like a table column (`n`, `status`,
+  `percent`, `value`, ...) raises instead of being overwritten; SDs, SEs and
+  densities are computed without overflow at extreme magnitudes;
+  `profile_boxes` skips empty columns; `pca_plot` works with a MultiIndex;
+  `histogram(bins=...)` is validated; `largest_remainder` sums exactly to
+  large totals; `upset` accepts sets named `False`/`True`; `circular_bar` and
+  `gantt` draw an all-missing group column as "(missing)".
+- `network_map`: with inexact float weights, paths through an edge too short
+  for float64 to add to a path length are no longer dropped; weights above
+  2**256 no longer overflow Louvain or the layout, and node strengths past
+  the largest float raise a clear error.
 - Number labels beyond 999T use scientific notation; time-zone-aware
   midnight dates read `2024-01-01`; `quadrant_plot(standardize=True)` works
   at very large and very small magnitudes; `to_pptx` accepts a single title

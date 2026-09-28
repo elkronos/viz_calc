@@ -26,11 +26,13 @@ from ._core import (
     check_choice,
     check_dataframe,
     check_has_values,
+    check_not_reserved,
     check_numeric,
     cleanup_on_error,
     column_list,
     get_ax,
     level_label,
+    level_percent,
     palette,
     select_columns,
     slot_colors,
@@ -104,6 +106,7 @@ def waffle(
     size) must be positive integers.
     """
     check_dataframe(data, [category, value])
+    check_not_reserved(["value", "percent", "tiles"], category=category)
     _check_count("rows", rows)
     _check_count("columns", columns)
     check_has_values(data, category, value)
@@ -227,7 +230,7 @@ def percent_grid(
         ax.set_aspect("equal")
         ax.axis("off")
         head = f"{level_label(f)}: " if f is not None else ""
-        stat = f"{p:.1%}\n{level * 100:.10g}% CI {float(lo):.1%}–{float(hi):.1%}, n={n}" if n else "no data (n=0)"
+        stat = f"{p:.1%}\n{level_percent(level)} CI {float(lo):.1%}–{float(hi):.1%}, n={n}" if n else "no data (n=0)"
         ax.set_title(f"{head}{stat}", fontsize="medium")
         rows.append({"facet": f, "n": n, "successes": k, "percent": 100 * p,
                      "ci_low": 100 * float(lo), "ci_high": 100 * float(hi)})
