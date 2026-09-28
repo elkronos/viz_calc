@@ -813,3 +813,46 @@ def test_sparse_weight_column():
                       "w": pd.arrays.SparseArray([0.3, 0.6, 0.2], dtype="Sparse[float64]")})
     bc = vc.network_map(e, "s", "t", weight="w").table.set_index("node")["betweenness"]
     assert bc["B"] == pytest.approx(0.5)
+
+
+# --- eighth verification round -----------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("directed,expected", [(False, 0.5), (True, 0.25)])
+def test_computed_rational_weights_tie(directed, expected):
+    e = pd.DataFrame({"s": ["A", "A", "B"], "t": ["D", "B", "D"], "w": [73 / 9, 146 / 9, 146 / 9]})
+    bc = vc.network_map(e, "s", "t", weight="w", directed=directed).table.set_index("node")["betweenness"]
+    assert bc["B"] == pytest.approx(expected)
+
+
+def test_betweenness_is_invariant_to_rescaling_weights():
+    e = pd.DataFrame({"s": list("BADCBACC"), "t": list("EEEECDFD"), "n": [3, 4, 6, 30, 12, 12, 8, 6]})
+    e["per_day"] = e["n"] / 94
+    a = vc.network_map(e, "s", "t", weight="n").table.set_index("node")["betweenness"]
+    b = vc.network_map(e, "s", "t", weight="per_day").table.set_index("node")["betweenness"]
+    pd.testing.assert_series_equal(a, b)
+
+
+def test_repeated_rows_sum_is_correctly_rounded():
+    e = pd.DataFrame({"s": ["A"] * 9, "t": ["B"] * 9, "w": [73 / 9] * 9})
+    assert vc.network_map(e, "s", "t", weight="w").info["graph"]["A"]["B"]["w"] == 73.0
+
+
+@pytest.mark.parametrize("directed", [False, True])
+def test_weighted_betweenness_matches_networkx_without_ties(directed):
+    import networkx as nx
+
+    rng = np.random.default_rng(7)
+    for _ in range(20):
+        n = 12
+        pairs = [(f"n{i}", f"n{j}") for i in range(n) for j in range(n) if i != j and rng.random() < 0.25]
+        e = pd.DataFrame(pairs, columns=["s", "t"]).assign(w=rng.uniform(0.1, 5, len(pairs)))
+        if not directed:
+            e = e[e.s < e.t]
+        res = vc.network_map(e, "s", "t", weight="w", directed=directed, communities=False)
+        H = nx.DiGraph() if directed else nx.Graph()
+        H.add_nodes_from(res.info["graph"])
+        H.add_weighted_edges_from(((u, v, 1 / d["w"]) for u, v, d in res.info["graph"].edges(data=True)), weight="d")
+        ref = nx.betweenness_centrality(H, weight="d")
+        got = res.table.set_index("node")["betweenness"]
+        assert all(got[k] == pytest.approx(ref[k], abs=1e-12) for k in ref)

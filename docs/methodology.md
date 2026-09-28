@@ -93,9 +93,11 @@ uses the covariance of the mean (divided by *n*).
 ### Networks
 Repeated edges are merged by summing their weights. Louvain community
 detection (Blondel et al., 2008) via NetworkX, seeded, on the undirected graph
-(reciprocal directed weights are summed). Betweenness centrality uses
+(reciprocal directed weights are summed). Betweenness centrality (Brandes, 2001) uses
 1/weight as edge length, so strong ties are short paths; zero-weight edges
-are left out.
+are left out. Path lengths equal to within a relative 1e-10 count as ties, so
+floating-point rounding cannot hand one of two equally short paths all the
+credit.
 
 ## Visual design decisions
 
@@ -118,6 +120,7 @@ are left out.
 * Balinski, M. L., & Young, H. P. (1982). *Fair Representation: Meeting the Ideal of One Man, One Vote*. Yale University Press.
 * Benjamini, Y., & Hochberg, Y. (1995). Controlling the false discovery rate: a practical and powerful approach to multiple testing. *Journal of the Royal Statistical Society B*, 57(1), 289–300.
 * Blondel, V. D., Guillaume, J.-L., Lambiotte, R., & Lefebvre, E. (2008). Fast unfolding of communities in large networks. *Journal of Statistical Mechanics*, P10008.
+* Brandes, U. (2001). A faster algorithm for betweenness centrality. *Journal of Mathematical Sociology*, 25(2), 163–177.
 * Brown, L. D., Cai, T. T., & DasGupta, A. (2001). Interval estimation for a binomial proportion. *Statistical Science*, 16(2), 101–133.
 * Cleveland, W. S., & McGill, R. (1984). Graphical perception: theory, experimentation, and application to the development of graphical methods. *Journal of the American Statistical Association*, 79(387), 531–554.
 * Cohen, J., Cohen, P., West, S. G., & Aiken, L. S. (2003). *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences* (3rd ed.). Erlbaum.

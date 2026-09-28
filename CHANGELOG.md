@@ -34,9 +34,11 @@ dependency versions.
   extreme enough to hit that safety limit.
 - `network_map`: repeated edges are summed instead of the last row winning;
   categorical node columns, non-string column labels and node order work;
-  directed communities use summed reciprocal weights; weighted betweenness
-  uses exact fractions so equally short paths share credit; directed graphs
-  draw arrowheads (Matplotlib and Plotly).
+  directed communities use summed reciprocal weights; repeated rows are
+  summed with correct rounding; weighted betweenness (Brandes' algorithm)
+  treats path lengths equal to within a relative 1e-10 (or the precision of
+  a float32 column) as ties, so equally short paths share credit; directed
+  graphs draw arrowheads (Matplotlib and Plotly).
 - Dates: calendar views (`calendar_heatmap`, `period_bars`) place
   timezone-aware values by their local day, including mixed UTC offsets
   across DST; `gantt`, `duration_plot` and `timeseries_fill` keep time zones,
