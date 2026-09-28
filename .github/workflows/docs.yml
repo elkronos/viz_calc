@@ -1,21 +1,23 @@
 name: Docs
 
+# Builds the documentation site and publishes it to the `gh-pages` branch.
+# One-time setup: Settings -> Pages -> Build and deployment -> Source:
+# "Deploy from a branch", Branch: gh-pages, folder: / (root).
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: docs
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,18 +28,10 @@ jobs:
         run: pip install -e ".[docs]"
       - name: Render gallery images and page
         run: python examples/gallery.py
-      - name: Build site
-        run: mkdocs build --strict
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish to gh-pages
+        run: |
+          git config user.name "elkronos"
+          git config user.email "130187349+elkronos@users.noreply.github.com"
+          mkdocs gh-deploy --strict --force --no-history \
+            --remote-branch gh-pages \
+            --message "Publish docs for {sha}"

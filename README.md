@@ -77,6 +77,10 @@ ruff check src tests
 python examples/gallery.py && mkdocs serve    # rebuild images and preview the docs (needs ".[docs]")
 ```
 
+The documentation site is published to the `gh-pages` branch by
+`.github/workflows/docs.yml` on every push to `main`. GitHub Pages serves it
+from that branch (Settings → Pages → Deploy from a branch → `gh-pages`, `/ (root)`).
+
 ## License
 
 MIT © elkronos
