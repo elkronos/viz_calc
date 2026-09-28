@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numbers
 from collections.abc import Sequence
 from typing import Any, Literal
 
@@ -60,8 +61,10 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False) -> pd.Series:
         return pd.Series(pd.NaT, index=s.index, dtype="datetime64[ns]")
     values = s.cat.categories if isinstance(s.dtype, pd.CategoricalDtype) else s
     numeric = pd.api.types.is_numeric_dtype(values) and not pd.api.types.is_bool_dtype(values)
-    if numeric or pd.api.types.infer_dtype(values, skipna=True) in ("integer", "floating", "mixed-integer-float",
-                                                                     "decimal"):
+    if not numeric and values.dtype == object:  # any number among dates, e.g. an Excel serial in one cell
+        numeric = pd.Series(values).dropna().map(
+            lambda v: isinstance(v, numbers.Number) and not isinstance(v, (bool, np.bool_))).any()
+    if numeric:
         raise ValueError(f"column {name!r} holds numbers, which are ambiguous as dates (years? epoch seconds?); "
                          "convert it first, e.g. pd.to_datetime(values, unit='s') or format='%Y'")
     out = s if pd.api.types.is_datetime64_any_dtype(s) else attempt()

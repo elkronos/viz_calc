@@ -758,3 +758,38 @@ def test_centered_bar_all_above_or_all_below(values):
 
 def test_wilson_exact_at_the_boundaries():
     assert st.wilson_ci(0, 7) [0] == 0.0 and st.wilson_ci(7, 7)[1] == 1.0
+
+
+# --- sixth verification round ------------------------------------------------------------------------------------
+
+
+def test_plotly_save_to_text_mode_tempfile(tmp_path):
+    pytest.importorskip("plotly")
+    import tempfile
+
+    res = vc.sankey(pd.DataFrame({"a": ["x"], "b": ["y"], "v": [1]}), source="a", target="b", value="v")
+    with tempfile.NamedTemporaryFile("w", suffix=".html", dir=tmp_path, delete=False, encoding="utf-8") as f:
+        res.save(f)
+    assert "<html" in open(f.name, encoding="utf-8").read().lower()
+
+
+def test_rational_weights_summed_from_rows_keep_ties():
+    # three rows of 1/3 make a weight of exactly 1, tying A-B (distance 1) with A-C-B (1/2 + 1/2)
+    e = pd.DataFrame({"s": ["A", "A", "A", "A", "C"], "t": ["B", "B", "B", "C", "B"],
+                      "w": [1 / 3, 1 / 3, 1 / 3, 2.0, 2.0]})
+    bc = vc.network_map(e, "s", "t", weight="w").table.set_index("node")["betweenness"]
+    assert bc["C"] == pytest.approx(0.5)
+
+
+def test_nullable_float32_weights_keep_ties():
+    e = pd.DataFrame({"s": ["A", "B", "A"], "t": ["B", "C", "C"], "w": pd.array([0.3, 0.6, 0.2], dtype="Float32")})
+    bc = vc.network_map(e, "s", "t", weight="w").table.set_index("node")["betweenness"]
+    assert bc["B"] == pytest.approx(0.5)
+
+
+def test_date_column_with_a_stray_number_raises():
+    import datetime as dt
+
+    df = pd.DataFrame({"date": [dt.datetime(2024, 1, 5), dt.datetime(2024, 2, 9), 45332], "v": [1.0, 2.0, 3.0]})
+    with pytest.raises(ValueError, match="numbers"):
+        vc.period_bars(df, date="date", value="v")

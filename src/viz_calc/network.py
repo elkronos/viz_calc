@@ -17,13 +17,28 @@ __all__ = ["network_map", "sankey"]
 
 
 def _exact(value) -> Fraction:
-    """A number as an exact fraction of its shortest decimal text (numpy float32 0.3 -> 3/10)."""
+    """A weight as the simplest fraction within a relative error of 1e-12.
+
+    Floats cannot hold 0.3 or 1/3 exactly, so sums of them do not tie exactly
+    (0.1 + 0.1 + 0.1 != 0.3, 3 x 0.333… != 1). Reading each weight as the
+    simplest nearby fraction (0.3 -> 3/10, 0.3333333333333333 -> 1/3) makes
+    decimal and rational weights sum, and tie, exactly. numpy float32 values
+    are read from their short decimal text first (float32 0.3 -> "0.3").
+    """
     if isinstance(value, (bool, np.bool_)):
         return Fraction(int(value))
     try:
-        return Fraction(str(value))
+        exact = Fraction(str(value))
     except (ValueError, TypeError):
-        return Fraction(float(value))
+        exact = Fraction(float(value))
+    if exact.denominator == 1:
+        return exact
+    tolerance = abs(exact) * Fraction(1, 10**12)
+    for limit in (10**k for k in range(1, 13)):
+        simple = exact.limit_denominator(limit)
+        if abs(simple - exact) <= tolerance:
+            return simple
+    return exact
 
 
 def network_map(
@@ -74,10 +89,13 @@ def network_map(
     if weighted and np.isinf(wts[keep]).any():
         raise ValueError(f"edge weights in {weight!r} must be finite")
     # Repeated edges are combined (weights summed) instead of letting the last row win; each edge keeps
-    # the orientation it was first seen with. Weights are summed as exact fractions of their decimal text
-    # (float32 0.3 -> 3/10, 0.1 + 0.1 + 0.1 -> 3/10) so equally short paths tie exactly in betweenness.
+    # the orientation it was first seen with. Weights are summed as exact fractions (see _exact:
+    # 0.1 + 0.1 + 0.1 == 3/10, 3 x 1/3 == 1) so equally short paths tie exactly in betweenness.
     # native dtype: iterating a float32 array yields float32 scalars, whose str() is the short decimal text
-    raw = data[weight].to_numpy() if weighted else np.ones(len(data), dtype=np.int64)
+    if weighted and pd.api.types.is_extension_array_dtype(data[weight]) and pd.api.types.is_float_dtype(data[weight]):
+        raw = data[weight].to_numpy(dtype=data[weight].dtype.numpy_dtype, na_value=np.nan)  # Float32 -> float32
+    else:
+        raw = data[weight].to_numpy() if weighted else np.ones(len(data), dtype=np.int64)
     merged: dict = {}
     for u, v, w in zip(src[keep], tgt[keep], (_exact(x) for x in raw[keep])):
         key = (u, v) if directed else frozenset((u, v))

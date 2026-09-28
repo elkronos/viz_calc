@@ -16,7 +16,9 @@ dependency versions.
   one-sided quadrant splits, missing or infinite edge weights, ambiguous date
   strings (e.g. day-first mixed with month-first), numbers passed as dates
   (years? epoch seconds?), columns mixing values with and without a UTC
-  offset, and non-positive
+  offset in the charts that keep time zones (`gantt`, `duration_plot`,
+  `timeseries_fill`; calendar views place every value on its written local
+  day), and non-positive
   `upset(max_intersections=...)` now raise clear errors.
 - Number labels keep significant digits below 1 (`0.034`, not `0`); axes that
   reach 10,000 use K/M/B/T with the fewest decimals that show every tick
