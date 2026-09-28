@@ -90,7 +90,10 @@ def correlogram(
     raw p-values below 0.05 produces false positives. Here p-values are
     adjusted across the unique pairs (Holm by default; ``"fdr_bh"`` suits
     exploratory screening). Missing values are dropped pairwise, and each
-    pair's ``n`` is reported.
+    pair's ``n`` is reported. Spearman p-values for pairs with at most 9
+    complete observations are exact permutation p-values (see
+    :func:`viz_calc.stats.correlation_test`), so a tiny pair cannot be starred
+    on the strength of the large-sample approximation.
 
     A diverging, perceptually balanced colormap centred on zero is used so
     that sign and magnitude are both read correctly (Crameri et al., 2020).
@@ -107,6 +110,7 @@ def correlogram(
     """
     check_dataframe(data)
     check_choice("method", method, ["pearson", "spearman"])
+    check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     check_choice("triangle", triangle, ["lower", "upper", "full"])
     cols = _numeric_columns(data, columns)
     table = _pairwise(data, cols, method)
@@ -161,7 +165,9 @@ def compare_correlations(
     variable pairs in that comparison. Spearman correlations use the
     ``1.06/(n−3)`` variance of Fieller, Hartley & Pearson (1957).
 
-    The groups must contain different units (independent samples).
+    The groups must contain different units (independent samples). The
+    z-test is asymptotic, so read it with caution when a group has only a few
+    rows.
 
     References
     ----------
@@ -171,6 +177,7 @@ def compare_correlations(
     """
     check_dataframe(data, [group])
     check_choice("method", method, ["pearson", "spearman"])
+    check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     cols = _numeric_columns(data.drop(columns=[group]), columns)
     groups = category_order(data[group], order)
     if len(groups) < 2:

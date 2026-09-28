@@ -7,6 +7,11 @@ worked examples.
 
 ## Statistical methods
 
+`pd.NA` in nullable `Int64`/`Float64` columns is treated exactly like `NaN`:
+missing values are dropped (pairwise for correlations). Every `level=` is a
+proportion strictly between 0 and 1 (`0.95`, not `95`); anything else raises
+a `ValueError` instead of producing `NaN` intervals.
+
 ### Confidence interval for a mean
 Student-*t* interval: $\bar x \pm t_{n-1,\,1-\alpha/2}\, s/\sqrt{n}$.
 Used by `estimation_plot`, `benchmark_bar`.
@@ -16,12 +21,21 @@ $t = (\bar x_B - \bar x_A)/\sqrt{s_A^2/n_A + s_B^2/n_B}$ with
 Welch–Satterthwaite degrees of freedom. The default because it keeps the
 nominal error rate when variances or group sizes differ and costs almost no
 power when they are equal (Welch, 1947; Delacre, Lakens & Leys, 2017).
-Used by `estimation_plot`.
+If both groups are constant the standard error is zero and $t = \pm\infty$
+with the sign of the difference. Used by `estimation_plot`.
 
 ### Hedges' *g*
 Cohen's *d* with pooled SD, times the small-sample correction
 $J = 1 - 3/(4\,df - 1)$ (Hedges, 1981). CI from the large-sample variance
 $\frac{n_A+n_B}{n_A n_B} + \frac{g^2}{2(n_A+n_B)}$ (Hedges & Olkin, 1985).
+Undefined (`NaN`) when both groups are constant.
+
+A group counts as constant when all its values are identical, so `[0.1] * 3`
+behaves like `[1.0] * 3` even though its floating-point mean is off by an ulp.
+The mean CI, Welch's test and *g* rescale the data by a power of two before
+squaring deviations; the rescaling is exact, so ordinary results are
+unchanged and magnitudes beyond about $10^{\pm 154}$ no longer overflow or
+underflow (which used to give $g = 0$).
 
 ### Bootstrap confidence intervals
 Bias-corrected and accelerated (BCa) intervals (Efron, 1987) from
@@ -50,13 +64,27 @@ Used by `estimation_plot` (across comparisons with the reference),
 Pearson's *r* or Spearman's ρ with pairwise deletion of missing values.
 The CI uses Fisher's $z = \operatorname{atanh}(r)$ with standard error
 $1/\sqrt{n-3}$ (Fisher, 1921). For Spearman the standard error is
-$\sqrt{1.06/(n-3)}$ (Fieller, Hartley & Pearson, 1957).
+$\sqrt{1.06/(n-3)}$ (Fieller, Hartley & Pearson, 1957). The CI is `NaN` for
+$n \le 3$ or $|r| = 1$ (up to rounding).
+
+The Pearson p-value is the usual *t* test. For Spearman with $n \le 9$
+complete pairs the p-value is exact: under independence all $n!$ pairings
+of the ranks are equally likely, and p is the share of them whose $|\rho|$
+is at least the observed one (tied values keep their midranks, so the test is
+conditional on the ties). The *t* approximation is badly anti-conservative
+there: it gives $p = 0$ for any perfect rank agreement, whereas the exact
+two-sided p for $|\rho| = 1$ is $2/n!$, i.e. 0.33 at $n = 3$ and 0.083 at
+$n = 4$, so no rank correlation of three or four pairs can reach $p < 0.05$.
+From $n = 10$ the *t* approximation is used. `correlogram`,
+`profile_scatters` and `quadrant_plot` inherit this.
 
 ### Difference between two independent correlations
 $z = \dfrac{\operatorname{atanh} r_B - \operatorname{atanh} r_A}{\sqrt{SE_A^2 + SE_B^2}}$,
 two-sided normal p-value (Fisher, 1921; Cohen, Cohen, West & Aiken, 2003).
 Valid only when the groups contain different units; dependent correlations
-need Steiger's (1980) test. Used by `compare_correlations`.
+need Steiger's (1980) test. The test is asymptotic, so read it with caution
+for groups of only a few units; correlations of ±1 are clipped to ±0.999999.
+Used by `compare_correlations`.
 
 ### Histogram bin width
 Freedman–Diaconis by default: width $= 2\,\mathrm{IQR}\,n^{-1/3}$, which is
@@ -65,8 +93,14 @@ zero-inflated data the IQR can be zero (or zero up to floating-point noise),
 which would give one bin or billions; then, or if FD would need more than
 100,000 bins, Sturges' rule is used instead and `info["bin_rule"]` records
 why. Outliers keep FD unless they are extreme enough to hit that safety
-limit. Scott (1979) and Sturges (1926) are also available. Bins are computed once on all data so groups and
-facets are directly comparable.
+limit. On whole-number data (counts, scores) an FD width below 1 leaves bins
+that can hold no value (a comb of empty bars), and a fractional width makes
+bins span different numbers of values (a sawtooth). There the width is
+rounded to the nearest whole number (at least 1) and the edges sit on
+half-integers from $\min(x) - 0.5$; `info["bin_rule"]` then reads
+`fd (whole-number widths for integer data)`. Scott (1979) and
+Sturges (1926) are also available and used as published. Bins are computed
+once on all data so groups and facets are directly comparable.
 
 ### Kernel density estimates
 Gaussian KDE with Scott's bandwidth rule (SciPy's default), adjustable with
