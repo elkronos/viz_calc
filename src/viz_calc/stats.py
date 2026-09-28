@@ -472,8 +472,9 @@ def histogram_bins(x: Sequence[float], rule: Literal["fd", "sturges", "scott", "
     sawtooth). There ``"fd"`` rounds the width to the nearest whole number
     (at least 1) and puts the edges on half-integers, starting at
     ``min(x) - 0.5``, so every value sits inside a bin and every bin spans
-    the same number of possible values. The 100,000-bin limit applies to
-    the rounded width too. The other rules are used as published.
+    the same number of possible values. For such data the 100,000-bin limit
+    is checked on the bins built with the rounded width, so a width below 1
+    that rounds up to 1 does not trigger it. The other rules are used as published.
 
     References
     ----------
@@ -501,21 +502,22 @@ def _bin_edges(x: Sequence[float], rule: str) -> tuple[np.ndarray, str]:
         if iqr <= 4 * np.spacing(max(abs(q1), abs(q3))):  # zero, or ties differing by rounding only (a few ulps)
             return np.histogram_bin_edges(x, bins="sturges"), "sturges (IQR is 0, so FD is undefined)"
         width = 2 * iqr * x.size ** (-1 / 3)
-        n_bins = span / width
-        if n_bins > 100_000:
-            return np.histogram_bin_edges(x, bins="sturges"), f"sturges (FD would need {n_bins:,.0f} bins)"
         # Whole numbers (below 2**50, where half-integers are still exact): whole-number widths, half-integer edges.
+        # The limit is checked on the rounded count only, since that is what is built (a width below 1 rounds up).
         if rule == "fd" and np.max(np.abs(x)) < 2**50 and np.all(x == np.round(x)):
             width = max(1.0, float(np.floor(width + 0.5)))
             count = int(np.ceil((span + 1) / width))
-            if count > 100_000:  # rounding a width in [1, 1.5) down to 1 adds bins
+            if count > 100_000:
                 return np.histogram_bin_edges(x, bins="sturges"), f"sturges (FD would need {count:,} bins)"
             return x.min() - 0.5 + width * np.arange(count + 1), "fd (whole-number widths for integer data)"
+        n_bins = span / width
+        if n_bins > 100_000:
+            return np.histogram_bin_edges(x, bins="sturges"), f"sturges (FD would need {n_bins:,.0f} bins)"
     return np.histogram_bin_edges(x, bins=rule), rule
 
 
 def largest_remainder(values: Sequence[float], total: int) -> np.ndarray:
-    """Apportion the integer *total* in proportion to *values*.
+    """Apportion the integer *total* (0 or more) in proportion to *values*.
 
     Hamilton's largest-remainder method: take the floor of each exact quota,
     then give the leftover units to the largest fractional remainders. The
@@ -528,6 +530,9 @@ def largest_remainder(values: Sequence[float], total: int) -> np.ndarray:
     Balinski, M. L., & Young, H. P. (1982). *Fair Representation*. Yale
     University Press.
     """
+    # A fractional total cannot be met by whole counts, and a negative one would give negative counts.
+    if isinstance(total, bool) or not isinstance(total, numbers.Integral) or total < 0:
+        raise ValueError(f"total must be a non-negative integer, got {total!r}")
     v = _as_float(values)
     if not np.all(np.isfinite(v)) or np.any(v < 0):
         raise ValueError("values must be finite, non-negative and not missing")

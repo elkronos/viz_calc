@@ -25,6 +25,7 @@ from ._core import (
     get_ax,
     level_label,
     palette,
+    select_columns,
 )
 
 __all__ = ["pca", "pca_plot", "radar"]
@@ -49,10 +50,10 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     Jolliffe, I. T., & Cadima, J. (2016). Principal component analysis: a
     review and recent developments. *Phil. Trans. R. Soc. A*, 374, 20150202.
     """
-    features = column_list("features", features)
+    features = column_list("features", features, distinct=True)
     check_dataframe(data, features)
     check_numeric(data, *features)
-    X = data[features].dropna()
+    X = select_columns(data, features).dropna()
     if len(X) < 3:
         raise ValueError("need at least three complete rows")
     Z = X - X.mean()
@@ -128,7 +129,7 @@ def pca_plot(
         Draw arrows for the *n* features with the largest loadings on the
         plotted components (``True`` = all features).
     """
-    features = column_list("features", features)
+    features = column_list("features", features, distinct=True)
     check_dataframe(data, [*features, group])
     check_choice("ellipse", ellipse, ["data", "confidence", None])
     st._check_level(level)
@@ -141,7 +142,7 @@ def pca_plot(
     scores = res["scores"][[pc_x, pc_y]].copy()
     groups = [None]
     if group is not None:
-        complete = data[features].notna().all(axis=1)  # the rows pca() kept, matched by position
+        complete = select_columns(data, features).notna().all(axis=1)  # the rows pca() kept, matched by position
         scores[group] = data.loc[complete, group].array  # positional, and keeps a Categorical's order
         groups = category_order(scores[group], order)
     cols = palette(len(groups), colors)
@@ -159,11 +160,11 @@ def pca_plot(
     if loadings:
         L = res["loadings"][[pc_x, pc_y]]
         n = len(L) if loadings is True else int(loadings)
-        top = L.pow(2).sum(axis=1).sort_values(ascending=False).index[:n]
+        # By position: .loc reads a list of feature labels False/True as a mask.
+        top = L.iloc[L.pow(2).sum(axis=1).reset_index(drop=True).sort_values(ascending=False).index[:n]]
         span = np.abs(scores[[pc_x, pc_y]].to_numpy()).max()
-        mult = 0.8 * span / np.abs(L.loc[top].to_numpy()).max()
-        for f in top:
-            lx, ly = L.loc[f] * mult
+        mult = 0.8 * span / np.abs(top.to_numpy()).max()
+        for f, (lx, ly) in zip(top.index, top.to_numpy() * mult):
             ax.annotate("", (lx, ly), (0, 0), arrowprops={"arrowstyle": "->", "color": NEUTRAL, "lw": 1.2})
             ax.text(lx * 1.08, ly * 1.08, f, color="black", fontsize=8, ha="center", va="center")
     evr = res["explained_variance_ratio"]
@@ -215,7 +216,7 @@ def radar(
     ``fig.add_subplot(projection="polar")``; any other Axes raises
     ``ValueError`` before anything is drawn.
     """
-    metrics = column_list("metrics", metrics)
+    metrics = column_list("metrics", metrics, distinct=True)
     check_dataframe(data, [*metrics, group])
     check_numeric(data, *metrics)
     check_choice("normalize", normalize, ["data", "groups", "none"])

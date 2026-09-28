@@ -26,6 +26,7 @@ from ._core import (
     exact_mean,
     get_ax,
     level_label,
+    select_columns,
 )
 
 __all__ = ["correlogram", "compare_correlations", "quadrant_plot"]
@@ -38,7 +39,7 @@ def _numeric_columns(data: pd.DataFrame, columns: Sequence[str] | None) -> list[
     if columns is None:
         columns = [c for c in data.columns if pd.api.types.is_numeric_dtype(data[c]) and not pd.api.types.is_bool_dtype(data[c])]
     else:
-        columns = column_list("columns", columns)
+        columns = column_list("columns", columns, distinct=True)
         check_dataframe(data, columns)
         check_numeric(data, *columns)
     if len(columns) < 2:
@@ -211,7 +212,7 @@ def compare_correlations(
     check_choice("method", method, ["pearson", "spearman"])
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     if columns is not None:
-        columns = column_list("columns", columns)
+        columns = column_list("columns", columns, distinct=True)
         if group in columns:
             raise ValueError(f"group column {group!r} cannot also be one of columns")
     cols = _numeric_columns(data.drop(columns=[group]), columns)
@@ -303,7 +304,7 @@ def quadrant_plot(
     check_numeric(data, x, y)
     check_choice("center", center, ["mean", "median"])
     check_choice("method", method, ["pearson", "spearman"])
-    d = data[[c for c in dict.fromkeys([x, y, label]) if c is not None]].dropna(subset=[x, y])
+    d = select_columns(data, [c for c in dict.fromkeys([x, y, label]) if c is not None]).dropna(subset=[x, y])
     if len(d) < 3:
         raise ValueError("need at least three complete observations")
     constant = [c for c in (x, y) if d[c].nunique() < 2]

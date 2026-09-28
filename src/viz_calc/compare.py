@@ -32,6 +32,7 @@ from ._core import (
     get_ax,
     level_label,
     palette,
+    select_columns,
     slot_colors,
     text_color,
 )
@@ -103,10 +104,11 @@ def estimation_plot(
     y
         Numeric outcome column.
     reference
-        Group the others are compared with. Defaults to the first group in
-        *order*.
+        Group the others are compared with. Defaults to the first group on
+        the axis.
     order
-        Order of the groups on the axis.
+        Order of the groups on the axis. Defaults to the categories of a
+        ``Categorical`` column, and to sorted order otherwise.
     level
         Confidence level for every interval, strictly between 0 and 1
         (``0.95``, not ``95``).
@@ -146,6 +148,8 @@ def estimation_plot(
     reference = groups[0] if reference is None else reference
     if reference not in groups:
         raise ValueError(f"reference {reference!r} is not one of the groups {groups}")
+    # The matching group itself: on NumPy 1.x a numpy.datetime64 and the equal Timestamp hash differently.
+    reference = groups[groups.index(reference)]
     samples = {g: data.loc[data[x] == g, y].dropna().to_numpy(float) for g in groups}
     small = [g for g, s in samples.items() if s.size < 2]
     if small:
@@ -186,7 +190,7 @@ def estimation_plot(
                       "welch_t": w["t"], "df": w["df"], "p": w["p"]})
     comps_df = pd.DataFrame(comps)
     comps_df["p_adjusted"] = st.adjust_pvalues(comps_df["p"], p_adjust)
-    ax_diff.set_ylabel(f"Difference from\n{reference}")
+    ax_diff.set_ylabel(f"Difference from\n{level_label(reference)}")
     ax_diff.set_xticks(range(len(groups)), [level_label(g) for g in groups])
     ax_diff.set_xlabel(x)
     ax_diff.set_title(f"Mean difference with bootstrap {level:.0%} CI (BCa)", loc="left", fontsize="medium")
@@ -503,10 +507,11 @@ def divergent_bar(
     check_numeric(data, left, right)
     check_has_values(data, category)
     colors = slot_colors(colors, ("left", "right"))
-    if (data[[left, right]] < 0).any().any():
+    values = select_columns(data, [category, left, right])
+    if (values[left] < 0).any() or (values[right] < 0).any():
         raise ValueError("divergent_bar expects non-negative values in both columns")
     by_levels = isinstance(data[category].dtype, pd.CategoricalDtype)  # grouping sorts a Categorical by its categories
-    table = data.groupby(category, sort=by_levels, observed=True)[[left, right]].sum().reset_index()
+    table = values.groupby(category, sort=by_levels, observed=True).sum().reset_index()
     if sort:
         table["total"] = table[left] + table[right]
         table = table.sort_values("total", ignore_index=True).drop(columns="total")
@@ -616,7 +621,9 @@ def likert(
     items
         Columns to plot, each holding responses from *levels*.
     levels
-        Response options ordered from most negative to most positive.
+        Response options ordered from most negative to most positive. The
+        names ``"item"``, ``"n"`` and ``"net"`` are taken by the table's own
+        columns, so levels with those names must be renamed.
     colors
         A diverging colormap name or a list of exactly one colour per level.
 
@@ -626,13 +633,16 @@ def likert(
     scales. *Proceedings of the 2011 Joint Statistical Meeting*, Section on
     Survey Research Methods, 1058–1066.
     """
-    items = column_list("items", items)
+    items = column_list("items", items, distinct=True)
     check_dataframe(data, items)
     if isinstance(levels, str):
         raise TypeError("levels must be a list of response options, not a str")
     levels = list(levels)
     if len(levels) < 2:
         raise ValueError("levels needs at least two response options")
+    reserved = [lv for lv in levels if isinstance(lv, str) and lv in ("item", "n", "net")]
+    if reserved:
+        raise ValueError(f"rename level(s) {reserved}: 'item', 'n' and 'net' are the names of the table's own columns")
     if colors is not None and not isinstance(colors, str):
         colors = list(colors)
         if len(colors) != len(levels):
@@ -644,14 +654,14 @@ def likert(
     k = len(levels)
     half = k // 2
     neutral = levels[half] if k % 2 else None
-    neg, pos_levels = levels[:half], levels[k - half:]
+    neg = levels[:half]
 
     rows = []
     for item in items:
         s = data[item].dropna()
         shares = s.value_counts(normalize=True).reindex(levels, fill_value=0.0) * 100
         rows.append({"item": item, "n": int(s.size), **shares.to_dict(),
-                     "net": shares[pos_levels].sum() - shares[neg].sum()})
+                     "net": shares.iloc[k - half:].sum() - shares.iloc[:half].sum()})
     table = pd.DataFrame(rows)
     if sort:
         table = table.sort_values("net", ignore_index=True)
@@ -659,7 +669,7 @@ def likert(
     cols = palette(k, colors)
     fig, ax = get_ax(ax, figsize=(9, max(3, 0.5 * len(table) + 1.5)))
     ypos = np.arange(len(table))
-    start = -(table[neg].sum(axis=1) + (table[neutral] / 2 if neutral is not None else 0))
+    start = -(select_columns(table, neg).sum(axis=1) + (table[neutral] / 2 if neutral is not None else 0))
     left = start.to_numpy(dtype=float).copy()
     for lvl, col in zip(levels, cols):
         width = table[lvl].to_numpy(float)

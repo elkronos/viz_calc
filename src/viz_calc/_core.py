@@ -152,8 +152,15 @@ def check_choice(name: str, value: Any, choices: Sequence[Any]) -> None:
 
 
 def check_count(name: str, value: Any, minimum: int = 1) -> None:
-    """Raise unless *value* is a whole number of at least *minimum* (a layout count such as ``ncols``)."""
+    """Raise unless *value* is an ``int`` of at least *minimum* (a layout count such as ``ncols``).
+
+    A whole-number float such as ``2.0`` is rejected too, with a message that
+    asks for the ``int``.
+    """
     if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < minimum:
+        if isinstance(value, (float, np.floating)) and float(value).is_integer() and value >= minimum:
+            raise ValueError(f"{name} must be a whole number of at least {minimum} given as an int, "
+                             f"got the float {value!r}; use {int(value)}")
         raise ValueError(f"{name} must be a whole number of at least {minimum}, got {value!r}")
 
 
@@ -178,18 +185,38 @@ def check_distinct(**roles: str | None) -> None:
         seen[column] = role
 
 
-def column_list(name: str, columns: Any) -> list[Any]:
+def column_list(name: str, columns: Any, distinct: bool = False) -> list[Any]:
     """*columns* (any iterable of column names) as a list.
 
     A lone string is rejected rather than split into its characters, which
-    could silently pick single-letter columns.
+    could silently pick single-letter columns. With ``distinct=True`` a
+    repeated column is rejected too, rather than used twice.
     """
     if isinstance(columns, str):
         raise TypeError(f"{name} must be a list of column names, not a str; use [{columns!r}] for one column")
     try:
-        return list(columns)
+        columns = list(columns)
     except TypeError:
         raise TypeError(f"{name} must be a list of column names, got {type(columns).__name__}") from None
+    repeated = [c for i, c in enumerate(columns) if c in columns[:i]] if distinct else []
+    if repeated:
+        raise ValueError(f"{name} repeats column(s): {list(dict.fromkeys(repeated))}")
+    return columns
+
+
+def select_columns(data: pd.DataFrame, columns: Iterable[Any]) -> pd.DataFrame:
+    """The *columns* of *data*, in the order given.
+
+    ``data[columns]`` and ``data.loc[:, columns]`` read a list of booleans as
+    a mask, so columns labelled ``False`` and ``True`` (as a pivot on a
+    boolean column gives) would not be selected; this looks them up by label.
+    """
+    columns = list(columns)
+    if data.columns.is_unique:
+        positions = data.columns.get_indexer(columns)
+        if (positions >= 0).all():
+            return data.iloc[:, positions]
+    return data[columns]
 
 
 def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:

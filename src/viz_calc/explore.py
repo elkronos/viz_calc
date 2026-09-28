@@ -25,6 +25,7 @@ from ._core import (
     column_list,
     level_label,
     require,
+    select_columns,
 )
 
 __all__ = ["profile_bars", "profile_boxes", "profile_scatters", "to_pptx"]
@@ -71,7 +72,7 @@ def profile_bars(
     Charts are laid out *per_page* to a figure; ``figure`` is the list of
     figures and ``table`` has the counts.
     """
-    cols = None if columns is None else column_list("columns", columns)
+    cols = None if columns is None else column_list("columns", columns, distinct=True)
     check_dataframe(data, cols or [])
     check_count("per_page", per_page)
     check_count("ncols", ncols)
@@ -122,8 +123,8 @@ def profile_boxes(
     check_count("per_page", per_page)
     check_count("ncols", ncols)
     cat, num = _split(data, max_levels)
-    cat = column_list("categorical", categorical) if categorical is not None else cat
-    num = column_list("numeric", numeric) if numeric is not None else num
+    cat = column_list("categorical", categorical, distinct=True) if categorical is not None else cat
+    num = column_list("numeric", numeric, distinct=True) if numeric is not None else num
     check_dataframe(data, [*cat, *num])
     check_numeric(data, *num)
     pairs = [(c, n) for c in cat for n in num if c != n]
@@ -131,7 +132,7 @@ def profile_boxes(
         raise ValueError("no (categorical, numeric) column pairs found; adjust max_levels")
     rows = []
     for c, n in pairs:
-        d = data[[c, n]].dropna()
+        d = select_columns(data, [c, n]).dropna()
         grand = d[n].mean()
         ss_tot = ((d[n] - grand) ** 2).sum()
         g = d.groupby(c, observed=True)[n]
@@ -141,7 +142,7 @@ def profile_boxes(
     figs = []
     for start, fig, axes in _pages(len(table), per_page, ncols):
         for ax, r in zip(axes, table.iloc[start:].itertuples()):
-            d = data[[r.categorical, r.numeric]].dropna()
+            d = select_columns(data, [r.categorical, r.numeric]).dropna()
             levels = category_order(d[r.categorical])
             ax.boxplot([d.loc[d[r.categorical] == lv, r.numeric] for lv in levels], showfliers=True,
                        flierprops={"markersize": 2, "markeredgecolor": NEUTRAL}, medianprops={"color": OKABE_ITO[5]})
@@ -178,7 +179,7 @@ def profile_scatters(
     subsampled to *max_points* points per panel for drawing only (statistics
     use all rows).
     """
-    columns = None if columns is None else column_list("columns", columns)
+    columns = None if columns is None else column_list("columns", columns, distinct=True)
     check_dataframe(data, columns or [])
     check_choice("method", method, ["pearson", "spearman"])
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
@@ -201,7 +202,7 @@ def profile_scatters(
     figs = []
     for start, fig, axes in _pages(len(table), per_page, ncols):
         for ax, r in zip(axes, table.iloc[start:].itertuples()):
-            d = data[[r.x, r.y]].dropna()
+            d = select_columns(data, [r.x, r.y]).dropna()
             if len(d) > max_points:
                 d = d.sample(max_points, random_state=0)
             xs, ys = d[r.x].to_numpy(dtype=float), d[r.y].to_numpy(dtype=float)
