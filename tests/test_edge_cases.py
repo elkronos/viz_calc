@@ -856,3 +856,44 @@ def test_weighted_betweenness_matches_networkx_without_ties(directed):
         ref = nx.betweenness_centrality(H, weight="d")
         got = res.table.set_index("node")["betweenness"]
         assert all(got[k] == pytest.approx(ref[k], abs=1e-12) for k in ref)
+
+
+# --- ninth verification round ------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("dtype", ["float32", "int64", "float64"])
+def test_betweenness_independent_of_row_order_with_a_very_strong_edge(dtype):
+    e = pd.DataFrame({"s": ["A", "B", "A"], "t": ["B", "C", "C"], "w": [1, 100_000, 1]}).astype({"w": dtype})
+    a = vc.network_map(e, "s", "t", weight="w", communities=False).table.set_index("node")["betweenness"].sort_index()
+    b = vc.network_map(e.iloc[[2, 0, 1]], "s", "t", weight="w", communities=False).table.set_index("node")[
+        "betweenness"].sort_index()
+    pd.testing.assert_series_equal(a, b)
+    assert (a == 0).all()  # every pair is adjacent: nobody lies between
+
+
+def test_low_precision_columns_do_not_merge_real_differences():
+    e = pd.DataFrame({"s": ["A", "B", "A", "C"], "t": ["B", "D", "C", "D"], "w": [10, 10, 10, 9]})
+    ref = vc.network_map(e, "s", "t", weight="w", communities=False).table.set_index("node")["betweenness"]
+    for dt in ("float16", "float32"):
+        got = vc.network_map(e.astype({"w": dt}), "s", "t", weight="w", communities=False).table.set_index("node")[
+            "betweenness"]
+        pd.testing.assert_series_equal(ref, got)
+
+
+def test_weighted_betweenness_matches_exact_rational_ground_truth():
+    # integer count weights: 1/w distances are exact rationals, so Fraction arithmetic gives the true ties
+    from fractions import Fraction
+
+    import networkx as nx
+
+    rng = np.random.default_rng(3)
+    for _ in range(30):
+        pairs = [(f"n{i}", f"n{j}") for i in range(15) for j in range(i + 1, 15) if rng.random() < 0.25]
+        e = pd.DataFrame(pairs, columns=["s", "t"]).assign(w=np.minimum(rng.zipf(1.6, len(pairs)), 10**6))
+        H = nx.Graph()
+        H.add_nodes_from(set(e.s) | set(e.t))
+        H.add_weighted_edges_from(((u, v, Fraction(1, int(w))) for u, v, w in e.itertuples(index=False)), weight="d")
+        exact = {k: float(v) for k, v in nx.betweenness_centrality(H, weight="d").items()}
+        for dtype in ("float32", "float64", "int64"):
+            got = vc.network_map(e.astype({"w": dtype}), "s", "t", weight="w", communities=False).table
+            assert all(r.betweenness == pytest.approx(exact[r.node], abs=1e-9) for r in got.itertuples())

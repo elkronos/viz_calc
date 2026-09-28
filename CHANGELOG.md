@@ -36,8 +36,9 @@ dependency versions.
   categorical node columns, non-string column labels and node order work;
   directed communities use summed reciprocal weights; repeated rows are
   summed with correct rounding; weighted betweenness (Brandes' algorithm)
-  treats path lengths equal to within a relative 1e-10 (or the precision of
-  a float32 column) as ties, so equally short paths share credit; directed
+  treats path lengths equal to within a relative 1e-10 (4× the machine
+  precision for float32/float16 columns, and always below half the shortest
+  edge) as ties, so equally short paths share credit; directed
   graphs draw arrowheads (Matplotlib and Plotly).
 - Dates: calendar views (`calendar_heatmap`, `period_bars`) place
   timezone-aware values by their local day, including mixed UTC offsets

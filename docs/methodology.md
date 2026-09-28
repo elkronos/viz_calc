@@ -95,9 +95,10 @@ Repeated edges are merged by summing their weights. Louvain community
 detection (Blondel et al., 2008) via NetworkX, seeded, on the undirected graph
 (reciprocal directed weights are summed). Betweenness centrality (Brandes, 2001) uses
 1/weight as edge length, so strong ties are short paths; zero-weight edges
-are left out. Path lengths equal to within a relative 1e-10 count as ties, so
-floating-point rounding cannot hand one of two equally short paths all the
-credit.
+are left out. Path lengths equal to within a relative 1e-10 (4× the machine
+precision for float32/float16 weight columns, and always less than half the
+shortest edge) count as ties, so floating-point rounding cannot hand one of
+two equally short paths all the credit.
 
 ## Visual design decisions
 
