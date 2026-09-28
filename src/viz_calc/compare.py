@@ -22,6 +22,7 @@ from ._core import (
     abbreviate,
     category_order,
     check_choice,
+    check_count,
     check_dataframe,
     check_distinct,
     check_has_values,
@@ -34,6 +35,7 @@ from ._core import (
     level_label,
     level_percent,
     palette,
+    safe_sum,
     select_columns,
     slot_colors,
     text_color,
@@ -68,6 +70,30 @@ def _threshold(data: pd.DataFrame, y: str, threshold: Any) -> tuple[float, float
     if isinstance(threshold, Real) and not isinstance(threshold, bool) and np.isfinite(float(threshold)):
         return float(threshold), 0.0
     raise ValueError(f"threshold must be a finite number, 'mean' or 'median', got {threshold!r}")
+
+
+def _threshold_text(thr: float, tol: float, compared: Any) -> str:
+    """*thr* as a label that cannot contradict how the *compared* values were classified against it.
+
+    A threshold with at most 6 significant digits (such as a number the
+    caller gave) is shown exactly. A longer one (such as a mean) is rounded
+    to 6 significant digits, or more if a *compared* value lies between the
+    rounded and the exact threshold (so ``0.9999995`` is not shown as ``1``
+    when a value between the two is classified). Numbers from 1e-4 to 1e16
+    are written out in full, with thousands separators (``1,234.5``, not
+    ``1.23e+03``).
+    """
+    compared = np.asarray(compared, dtype=float)
+    compared = compared[np.isfinite(compared)]
+    for digits in range(1, 18):
+        shown = float(f"{thr:.{digits}g}")
+        if shown == thr:
+            break
+        low, high = min(shown, thr - tol), max(shown, thr + tol)
+        if digits >= 6 and not ((compared >= low) & (compared <= high)).any():
+            break
+    text = f"{shown:,}"
+    return text[:-2] if text.endswith(".0") else text
 
 
 @cleanup_on_error
@@ -145,6 +171,7 @@ def estimation_plot(
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     check_not_reserved(["n", "mean", "sd", "ci_low", "ci_high"], x=x)
     st._check_level(level)
+    check_count("n_resamples", n_resamples)
     check_has_values(data, y)
     groups = category_order(data[x], order)
     if len(groups) < 2:
@@ -154,7 +181,7 @@ def estimation_plot(
         raise ValueError(f"reference {reference!r} is not one of the groups {groups}")
     # The matching group itself: on NumPy 1.x a numpy.datetime64 and the equal Timestamp hash differently.
     reference = groups[groups.index(reference)]
-    samples = {g: data.loc[data[x] == g, y].dropna().to_numpy(float) for g in groups}
+    samples = {g: data[y][data[x] == g].dropna().to_numpy(float) for g in groups}
     small = [g for g, s in samples.items() if s.size < 2]
     if small:
         raise ValueError(f"groups need at least two observations: {small}")
@@ -283,7 +310,7 @@ def benchmark_bar(
     groups = category_order(data[x], order)
     rows = []
     for g in groups:
-        s = data.loc[data[x] == g, y].dropna().to_numpy(float)
+        s = data[y][data[x] == g].dropna().to_numpy(float)
         m, lo, hi = st.mean_ci(s, level)
         sd = st._sd(s)
         if s.size == 0:
@@ -317,13 +344,14 @@ def benchmark_bar(
     if show_points:
         rng = np.random.default_rng(0)
         for p, g in zip(pos, table[x]):
-            s = data.loc[data[x] == g, y].dropna().to_numpy(float)
+            s = data[y][data[x] == g].dropna().to_numpy(float)
             ax.scatter(p + _jitter(s.size, 0.18, rng), s, s=8, color="black", alpha=0.35, lw=0, zorder=4)
     ax.axhline(thr, color="black", ls="--", lw=1, zorder=5)
     ax.set_xticks(pos, [level_label(g) for g in table[x]])
     ax.set_xlabel(x)
     ax.set_ylabel(f"Mean {y}")
-    ax.set_title(f"Mean {y} by {x} vs benchmark {thr:.3g} (bars: {err_text})", loc="left")
+    shown = _threshold_text(thr, tol, table[["mean", "ci_low", "ci_high"]].to_numpy())
+    ax.set_title(f"Mean {y} by {x} vs benchmark {shown} (bars: {err_text})", loc="left")
     present = [s for s in ("above", "below", "indistinguishable") if s in set(table["status"])]  # "no data" draws nothing
     ax.legend(handles=[Patch(color=color_for[s], label=s) for s in present], frameon=False, loc="upper left",
               bbox_to_anchor=(1.01, 1))
@@ -370,7 +398,10 @@ def lollipop(
         if y is None:
             raise ValueError(f"stat={stat!r} needs a y column")
         check_numeric(data, y)
-        agg = data.groupby(x, observed=True)[y].agg(stat)
+        if stat == "sum":  # in float where an int64 sum could wrap around
+            agg = safe_sum(data[y], data[x], sort=True)
+        else:
+            agg = data.groupby(x, observed=True)[y].agg(stat)
     elif y is not None:
         agg = data.groupby(x, observed=True)[y].count()
     else:
@@ -438,7 +469,9 @@ def dumbbell(
     """Before/after (or A/B) values per item, connected to show the change.
 
     Rows are sorted by the change so the largest movers are easy to find. The
-    table reports absolute and percentage change.
+    table reports absolute and percentage change. Integer columns give an
+    exact int64 change, unless a change could leave the int64 range; then the
+    change is a float.
 
     Parameters
     ----------
@@ -466,8 +499,13 @@ def dumbbell(
         elif s.dtype != np.float64:
             table[c] = s.to_numpy(dtype=float, na_value=np.nan)
     table["change"] = table[end] - table[start]
+    first, last = (table[c].to_numpy(dtype=float) for c in (start, end))
+    if (table["change"].dtype == np.int64 and len(table)
+            and np.max(np.abs(last - first)) >= 2.0**62):  # an int64 change past 2**63 would wrap around
+        table["change"] = last - first
     with np.errstate(divide="ignore", invalid="ignore"):
-        table["pct_change"] = np.where(table[start] != 0, table["change"] / table[start].abs() * 100, np.nan)
+        # In float: abs() of the smallest int64 wraps around to itself.
+        table["pct_change"] = np.where(first != 0, table["change"].to_numpy(dtype=float) / np.abs(first) * 100, np.nan)
     if sort:
         table = table.sort_values("change", ignore_index=True)
     else:
@@ -531,7 +569,9 @@ def divergent_bar(
     if (values[left] < 0).any() or (values[right] < 0).any():
         raise ValueError("divergent_bar expects non-negative values in both columns")
     by_levels = isinstance(data[category].dtype, pd.CategoricalDtype)  # grouping sorts a Categorical by its categories
-    table = values.groupby(category, sort=by_levels, observed=True).sum(min_count=1).reset_index()
+    # By position; safe_sum sums in float where int64 could wrap, and gives NaN (not pd.NA) for an all-missing category.
+    sums = [safe_sum(values.iloc[:, i], values.iloc[:, 0], sort=by_levels, min_count=1) for i in (1, 2)]
+    table = pd.concat(sums, axis=1, keys=[left, right]).rename_axis(category).reset_index()
     if sort:  # by a separate key, so a column named "total" cannot be overwritten
         total = table[left].fillna(0) + table[right].fillna(0)
         table = table.iloc[np.argsort(total.to_numpy(), kind="stable")].reset_index(drop=True)
@@ -602,17 +642,18 @@ def centered_bar(
     groups = category_order(data[x], order)
     rows = []
     for g in groups:
-        s = data.loc[data[x] == g, y].dropna().to_numpy(float)
+        s = data[y][data[x] == g].dropna().to_numpy(float)
         n, k = int(s.size), int((s >= thr - tol).sum())
         lo, hi = st.wilson_ci(k, n, level)
         rows.append({x: g, "n": n, "n_above": k, "p_above": k / n if n else np.nan,
                      "ci_low": float(lo), "ci_high": float(hi), "p_below": (n - k) / n if n else np.nan})
     table = pd.DataFrame(rows)
 
+    shown = _threshold_text(thr, tol, data[y].to_numpy(dtype=float, na_value=np.nan))
     fig, ax = get_ax(ax)
     pos = np.arange(len(table))
-    up = ax.bar(pos, table["p_above"], color=colors[0], label=f"≥ {thr:.3g}")
-    down = ax.bar(pos, -table["p_below"], color=colors[1], label=f"< {thr:.3g}")
+    up = ax.bar(pos, table["p_above"], color=colors[0], label=f"≥ {shown}")
+    down = ax.bar(pos, -table["p_below"], color=colors[1], label=f"< {shown}")
     ax.errorbar(pos, table["p_above"], yerr=[np.clip(table["p_above"] - table["ci_low"], 0, None),
                                              np.clip(table["ci_high"] - table["p_above"], 0, None)],
                 fmt="none", ecolor="black", capsize=3, lw=1)
@@ -625,7 +666,7 @@ def centered_bar(
     ax.set_xticks(pos, [level_label(g) for g in table[x]])
     ax.set_xlabel(x)
     ax.set_ylabel(f"Share of {y}")
-    ax.set_title(f"Share of {y} above/below {thr:.3g} (error bars: {level_percent(level)} Wilson CI)", loc="left")
+    ax.set_title(f"Share of {y} above/below {shown} (error bars: {level_percent(level)} Wilson CI)", loc="left")
     ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1, 1))
     ax.spines[["top", "right"]].set_visible(False)
     return VizResult(fig, ax, table, {"threshold": thr, "level": level})
@@ -655,7 +696,8 @@ def likert(
     items
         Columns to plot, each holding responses from *levels*.
     levels
-        Response options ordered from most negative to most positive. The
+        Response options ordered from most negative to most positive, each
+        listed once. The
         names ``"item"``, ``"n"`` and ``"net"`` are taken by the table's own
         columns, so levels with those names must be renamed.
     colors
@@ -675,6 +717,9 @@ def likert(
     levels = list(levels)
     if len(levels) < 2:
         raise ValueError("levels needs at least two response options")
+    repeated = [lv for i, lv in enumerate(levels) if lv in levels[:i]]
+    if repeated:
+        raise ValueError(f"levels repeats response option(s): {list(dict.fromkeys(repeated))}")
     reserved = [lv for lv in levels if isinstance(lv, str) and lv in ("item", "n", "net")]
     if reserved:
         raise ValueError(f"rename level(s) {reserved}: 'item', 'n' and 'net' are the names of the table's own columns")

@@ -21,6 +21,7 @@ from ._core import (
     check_count,
     check_dataframe,
     check_numeric,
+    check_range,
     cleanup_on_error,
     column_list,
     level_label,
@@ -76,6 +77,7 @@ def profile_bars(
     """
     cols = None if columns is None else column_list("columns", columns, distinct=True)
     check_dataframe(data, cols or [])
+    check_count("max_levels", max_levels)
     check_count("per_page", per_page)
     check_count("ncols", ncols)
     if cols is None:
@@ -124,6 +126,7 @@ def profile_boxes(
     missing eta-squared and an empty panel.
     """
     check_dataframe(data)
+    check_count("max_levels", max_levels)
     check_count("per_page", per_page)
     check_count("ncols", ncols)
     cat, num = _split(data, max_levels)
@@ -137,9 +140,12 @@ def profile_boxes(
     rows = []
     for c, n in pairs:
         d = select_columns(data, [c, n]).dropna()
-        grand = d[n].mean()
-        ss_tot = ((d[n] - grand) ** 2).sum()
-        g = d.groupby(c, observed=True)[n]
+        # By position, since .loc and groupby(...)[n] misread columns labelled False or True.
+        v = d.iloc[:, 1].to_numpy(dtype=float)
+        v = pd.Series(v / st._unit_scale(v))  # a power of two: the sums of squares neither overflow nor underflow
+        grand = v.mean()
+        ss_tot = ((v - grand) ** 2).sum()
+        g = v.groupby(d.iloc[:, 0].to_numpy(), observed=True)
         ss_between = (g.size() * (g.mean() - grand) ** 2).sum()
         rows.append({"categorical": c, "numeric": n, "n": len(d), "eta_squared": ss_between / ss_tot if ss_tot else np.nan})
     table = pd.DataFrame(rows).sort_values("eta_squared", ascending=False, ignore_index=True)
@@ -152,8 +158,8 @@ def profile_boxes(
                 ax.text(0.5, 0.5, "no complete rows", transform=ax.transAxes, ha="center", va="center", color=NEUTRAL)
                 ax.set_title(f"{r.numeric} by {r.categorical}  (n=0)", fontsize="small", loc="left")
                 continue
-            levels = category_order(d[r.categorical])
-            ax.boxplot([d.loc[d[r.categorical] == lv, r.numeric] for lv in levels], showfliers=True,
+            levels = category_order(d.iloc[:, 0])
+            ax.boxplot([d.iloc[:, 1][d.iloc[:, 0] == lv] for lv in levels], showfliers=True,
                        flierprops={"markersize": 2, "markeredgecolor": NEUTRAL}, medianprops={"color": OKABE_ITO[5]})
             ax.set_xticks(range(1, len(levels) + 1), [level_label(lv) for lv in levels], rotation=45, ha="right")
             ax.set_title(f"{r.numeric} by {r.categorical}  (η²={r.eta_squared:.2f})", fontsize="small", loc="left")
@@ -193,6 +199,7 @@ def profile_scatters(
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     for name, value in (("per_page", per_page), ("ncols", ncols), ("max_points", max_points)):
         check_count(name, value)
+    check_count("min_levels", min_levels, minimum=0)
     if columns is None:
         columns = [c for c in data.columns if pd.api.types.is_numeric_dtype(data[c])
                    and not pd.api.types.is_bool_dtype(data[c]) and data[c].nunique() >= min_levels]
@@ -243,6 +250,7 @@ def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: i
     Only Matplotlib figures are supported; save Plotly figures with
     ``figure.write_image`` or ``VizResult.save``.
     """
+    check_range("dpi", dpi, 1, np.inf, include_high=False)
     pptx = require("pptx", "pptx")
     from PIL import Image
     from pptx.util import Inches, Pt

@@ -52,11 +52,12 @@ def _clean(x: Sequence[float] | np.ndarray | pd.Series) -> np.ndarray:
     return arr[~np.isnan(arr)]
 
 
-def _check_level(level: Any) -> float:
+def _check_level(level: Any, name: str = "level", example: str = "0.95 for a 95% interval") -> float:
     """*level* as a float, after checking it is a confidence level strictly between 0 and 1 (``0.95``, not ``95``).
 
     Any real number is accepted, including a ``Fraction``, a ``Decimal`` and a
-    0-d array; text and booleans are not.
+    0-d array; text and booleans are not. *name* and *example* word the error
+    for another proportion, such as a significance level ``alpha``.
     """
     value = np.nan  # anything that is not a real number fails the range check below
     if not isinstance(level, (bool, np.bool_, str, bytes, complex)) and np.ndim(level) == 0:
@@ -65,7 +66,7 @@ def _check_level(level: Any) -> float:
         except (TypeError, ValueError):
             pass
     if not 0 < value < 1:
-        raise ValueError(f"level must be strictly between 0 and 1 (e.g. 0.95 for a 95% interval), got {level!r}")
+        raise ValueError(f"{name} must be strictly between 0 and 1 (e.g. {example}), got {level!r}")
     return value
 
 
@@ -429,7 +430,8 @@ def correlation_test(x: Sequence[float], y: Sequence[float], method: Literal["pe
     keep = ~(np.isnan(x) | np.isnan(y))
     x, y = x[keep], y[keep]
     n = x.size
-    if n < 3 or np.ptp(x) == 0 or np.ptp(y) == 0:
+    # Not np.ptp: for a column that is all +inf it is inf - inf = nan, and the constant column would get a p-value.
+    if n < 3 or (x == x[0]).all() or (y == y[0]).all():
         return {"r": np.nan, "ci_low": np.nan, "ci_high": np.nan, "p": np.nan, "n": n}
     res = _st.spearmanr(x, y) if method == "spearman" else _st.pearsonr(x, y)
     r, p = float(res[0]), float(res[1])
@@ -499,7 +501,11 @@ def histogram_bins(x: Sequence[float], rule: Literal["fd", "sturges", "scott", "
     ``min(x) - 0.5``, so every value sits inside a bin and every bin spans
     the same number of possible values. For such data the 100,000-bin limit
     is checked on the bins built with the rounded width, so a width below 1
-    that rounds up to 1 does not trigger it. The other rules are used as published.
+    that rounds up to 1 does not trigger it. This rounding applies to the FD
+    width only: when ``"fd"`` falls back to Sturges (a zero IQR, as on
+    zero-inflated counts, or the bin limit), the Sturges bins are used as
+    published and can have a fractional width, with values on their edges.
+    The other rules are used as published.
 
     References
     ----------

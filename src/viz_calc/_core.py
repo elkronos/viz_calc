@@ -165,6 +165,23 @@ def check_count(name: str, value: Any, minimum: int = 1) -> None:
         raise ValueError(f"{name} must be a whole number of at least {minimum}, got {value!r}")
 
 
+def check_range(name: str, value: Any, low: float, high: float, include_high: bool = True) -> float:
+    """*value* as a float, after checking it is a real number from *low* to *high* (inclusive unless told otherwise).
+
+    Text, booleans and missing values are rejected.
+    """
+    number = math.nan
+    if not isinstance(value, (bool, np.bool_, str, bytes, complex)) and np.ndim(value) == 0:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            pass
+    if not (low <= number <= high) or (number == high and not include_high):
+        interval = f"[{low:g}, {high:g}{']' if include_high else ')'}"
+        raise ValueError(f"{name} must be a number in {interval}, got {value!r}")
+    return number
+
+
 def check_has_values(data: pd.DataFrame, *columns: str | None) -> None:
     """Raise unless every column in *columns* has at least one non-missing value."""
     for c in columns:
@@ -458,6 +475,34 @@ def exact_mean(values: Any) -> float:
     if not math.isfinite(parts[0]):
         return parts[0]
     return float(sum(map(Fraction, parts)) / len(v))
+
+
+def safe_sum(values: pd.Series, by: pd.Series | None = None, sort: bool = False, min_count: int = 0) -> Any:
+    """Sum of *values* (per group of *by*) that cannot wrap around, with ``NaN`` rather than ``pd.NA`` for missing.
+
+    Integer sums in int64 wrap around silently, so where an integer sum
+    reaches 2**62 (a margin for float rounding) it is taken in float instead.
+    Otherwise integer sums stay exact. A result in a nullable dtype (``Int64``,
+    ``Float64``) comes back as a NumPy one: int64 when nothing is missing,
+    float64 with ``NaN`` otherwise, which Matplotlib can draw. *sort* and
+    *min_count* are passed on to the pandas ``groupby`` and ``sum``.
+    """
+    def total(v: pd.Series) -> Any:
+        if by is None:
+            return v.sum(min_count=min_count)
+        return v.groupby(by, sort=sort, observed=True).sum(min_count=min_count)
+
+    if pd.api.types.is_integer_dtype(values) and not pd.api.types.is_bool_dtype(values):
+        floats = total(pd.Series(values.to_numpy(dtype=float, na_value=np.nan), index=values.index))
+        if np.any(np.abs(floats) >= 2.0**62):
+            return floats
+    result = total(values)
+    if by is None:
+        return np.nan if pd.isna(result) else result
+    if isinstance(result.dtype, pd.api.extensions.ExtensionDtype) and pd.api.types.is_numeric_dtype(result):
+        dtype = float if result.isna().any() else result.dtype.numpy_dtype
+        result = pd.Series(result.to_numpy(dtype=dtype, na_value=np.nan), index=result.index, name=result.name)
+    return result
 
 
 class AbbrevFormatter(ScalarFormatter):

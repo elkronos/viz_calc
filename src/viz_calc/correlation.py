@@ -18,6 +18,7 @@ from ._core import (
     VizResult,
     category_order,
     check_choice,
+    check_count,
     check_dataframe,
     check_distinct,
     check_has_values,
@@ -128,7 +129,9 @@ def correlogram(
     that sign and magnitude are both read correctly (Crameri et al., 2020).
 
     *columns* (any sequence of labels, e.g. ``df.columns[:4]``) defaults to
-    every numeric, non-boolean column.
+    every numeric, non-boolean column. *alpha*, the significance level for
+    the stars, must be strictly between 0 and 1 (``0.05``, not ``5``), and
+    *decimals* a whole number of 0 or more.
 
     Returns a long ``table`` with one row per pair: ``r``, Fisher-z CI,
     ``p``, ``p_adjusted``, ``n`` and ``significant``.
@@ -144,6 +147,8 @@ def correlogram(
     check_choice("method", method, ["pearson", "spearman"])
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     check_choice("triangle", triangle, ["lower", "upper", "full"])
+    st._check_level(alpha, "alpha", "0.05, not 5")
+    check_count("decimals", decimals, minimum=0)
     cols = _numeric_columns(data, columns)
     table = _pairwise(data, cols, method)
     table["p_adjusted"] = st.adjust_pvalues(table["p"], p_adjust)
@@ -198,7 +203,8 @@ def compare_correlations(
     variable pairs in that comparison. Spearman correlations use the
     ``1.06/(n−3)`` variance of Fieller, Hartley & Pearson (1957).
     *columns* (any sequence of labels) defaults to every numeric,
-    non-boolean column other than *group*.
+    non-boolean column other than *group*. *alpha* must be strictly between
+    0 and 1 (``0.05``, not ``5``), and *decimals* a whole number of 0 or more.
 
     The groups must contain different units (independent samples). The
     z-test is asymptotic, so read it with caution when a group has only a few
@@ -213,6 +219,8 @@ def compare_correlations(
     check_dataframe(data, [group])
     check_choice("method", method, ["pearson", "spearman"])
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
+    st._check_level(alpha, "alpha", "0.05, not 5")
+    check_count("decimals", decimals, minimum=0)
     if columns is not None:
         columns = column_list("columns", columns, distinct=True)
         if group in columns:
@@ -240,7 +248,9 @@ def compare_correlations(
     ncols = min(3, len(pairs))
     nrows = int(np.ceil(len(pairs) / ncols))
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * (0.9 * k + 3), nrows * (0.9 * k + 2)), squeeze=False)
-    vlim = max(float(np.nanmax(np.abs(table["difference"]))), 0.1)
+    finite = np.abs(table["difference"].to_numpy(dtype=float))
+    finite = finite[np.isfinite(finite)]  # every difference is undefined when, say, each group has a constant column
+    vlim = max(float(finite.max()), 0.1) if finite.size else 0.1
     idx = {c: i for i, c in enumerate(cols)}
     for ax, (ga, gb) in zip(axes.flat, pairs):
         sub = table[(table.group_a == ga) & (table.group_b == gb)]

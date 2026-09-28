@@ -22,6 +22,7 @@ from ._core import (
     check_has_values,
     check_not_reserved,
     check_numeric,
+    check_range,
     cleanup_on_error,
     get_ax,
     level_label,
@@ -81,6 +82,9 @@ def histogram(
     ``stat="percent"`` and ``"density"`` are computed over the values inside
     the edges, ``info["outside_bins"]`` counts the values left out, and the
     title says how many there are. The table's summaries use every value.
+    The *density_curve* is fitted to every value and scaled to the bars, so
+    for ``"density"`` and ``"percent"`` it too is relative to the values
+    inside the edges.
 
     If the Freedman–Diaconis width is unusable (the IQR is zero, e.g. heavily
     tied or zero-inflated data, or FD would need more than 100,000 bins)
@@ -93,7 +97,9 @@ def histogram(
     value then sits inside a bin, away from its edges, and every bin spans
     the same number of possible values, so there is no comb of empty bars;
     ``info["bin_rule"]`` reads ``"fd (whole-number widths for integer
-    data)"``. The other rules are used as published (see
+    data)"``. The Sturges bins that replace unusable FD bins are not
+    rounded, so on zero-inflated counts they can have a fractional width.
+    The other rules are used as published (see
     :func:`viz_calc.stats.histogram_bins`).
 
     References
@@ -125,6 +131,7 @@ def histogram(
     elif ref_line is not None and (isinstance(ref_line, bool) or not isinstance(ref_line, Real)):
         raise ValueError(f"ref_line must be 'mean', 'median', a number or None, got {ref_line!r}")
     check_count("col_wrap", col_wrap)
+    check_range("alpha", alpha, 0, 1)
     values = data[x].dropna().to_numpy(float)
     if isinstance(bins, str):
         edges, rule = st._bin_edges(values, bins)
@@ -144,7 +151,7 @@ def histogram(
     for ax, f in zip(axes.flat, facets):
         fdata = data if f is None else data[data[facet] == f]
         for h, col in zip(hues, cols):
-            s = fdata[x] if h is None else fdata.loc[fdata[hue] == h, x]
+            s = fdata[x] if h is None else fdata[x][fdata[hue] == h]
             s = s.dropna().to_numpy(float)
             counts, _ = np.histogram(s, bins=edges)
             if stat == "density":
@@ -159,10 +166,13 @@ def histogram(
             else:  # outlined steps keep overlapping groups readable
                 ax.stairs(heights, edges, fill=True, color=col, alpha=alpha * 0.4)
                 ax.stairs(heights, edges, color=col, lw=1.8, label=level_label(h))
-            if density_curve:
+            if density_curve and counts.sum():
                 dens = _kde(s, grid)
                 if dens is not None:
-                    scale = {"density": 1.0, "percent": 100 * np.mean(width), "count": s.size * np.mean(width)}[stat]
+                    # The KDE spreads over every value; density and percent bars count only those inside the edges.
+                    ratio = s.size / counts.sum()
+                    scale = {"density": ratio, "percent": 100 * np.mean(width) * ratio,
+                             "count": s.size * np.mean(width)}[stat]
                     ax.plot(grid, dens * scale, color=col, lw=1.5)
             if ref_line is not None and s.size:
                 v = {"mean": np.mean, "median": np.median}[ref_line](s) if isinstance(ref_line, str) else float(ref_line)
@@ -203,16 +213,23 @@ def ridgeplot(
     Useful when there are too many groups for overlaid histograms. All
     curves share one x-axis and a common height scale, so peak heights are
     comparable. The median of each group is marked.
+
+    Parameters
+    ----------
+    overlap
+        How far each curve reaches into the row above, as a share of the
+        tallest peak: from 0 (no overlap) up to, but not including, 1.
     """
     check_dataframe(data, [x, group])
     check_not_reserved(_SUMMARY, group=group)
     check_numeric(data, x)
+    check_range("overlap", overlap, 0, 1, include_high=False)
     check_has_values(data, x)
     groups = category_order(data[group], order)
     values = data[x].dropna().to_numpy(float)
     pad = 0.05 * np.ptp(values) if np.ptp(values) else 1.0
     grid = np.linspace(values.min() - pad, values.max() + pad, 400)
-    dens = {g: _kde(data.loc[data[group] == g, x].dropna().to_numpy(float), grid, bw_method) for g in groups}
+    dens = {g: _kde(data[x][data[group] == g].dropna().to_numpy(float), grid, bw_method) for g in groups}
     peak = max((d.max() for d in dens.values() if d is not None), default=1.0)
     cols = palette(len(groups), colors)
     fig, ax = get_ax(ax, figsize=(8, 0.7 * len(groups) + 2))
@@ -221,7 +238,7 @@ def ridgeplot(
     for i, g in enumerate(groups):
         base = (len(groups) - 1 - i) * step
         d = dens[g]
-        s = data.loc[data[group] == g, x]
+        s = data[x][data[group] == g]
         if d is not None:
             y = base + d / peak
             ax.fill_between(grid, base, y, color=cols[i], alpha=0.8, zorder=2 * i + 1, lw=0)
@@ -271,7 +288,7 @@ def raincloud(
     fig, ax = get_ax(ax, figsize=(8, 1.4 * len(groups) + 1.5))
     rows = []
     for i, g in enumerate(groups):
-        s = data.loc[data[x] == g, y].dropna().to_numpy(float)
+        s = data[y][data[x] == g].dropna().to_numpy(float)
         pos = len(groups) - 1 - i
         if s.size:
             # Each group gets its own grid over its own range, so the density never suggests unseen values

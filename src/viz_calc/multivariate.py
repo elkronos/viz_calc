@@ -18,6 +18,7 @@ from ._core import (
     VizResult,
     category_order,
     check_choice,
+    check_count,
     check_dataframe,
     check_not_reserved,
     check_numeric,
@@ -133,24 +134,34 @@ def pca_plot(
         ``95``); checked even when *ellipse* is ``None``.
     loadings
         Draw arrows for the *n* features with the largest loadings on the
-        plotted components (``True`` = all features).
+        plotted components: a whole number of 0 or more, or ``True`` for
+        all features.
     """
     features = column_list("features", features, distinct=True)
     check_dataframe(data, [*features, group])
     check_choice("ellipse", ellipse, ["data", "confidence", None])
     coverage = st._check_level(level)
+    if isinstance(loadings, np.bool_):
+        loadings = bool(loadings)
+    if not isinstance(loadings, bool):
+        check_count("loadings", loadings, minimum=0)
+    try:
+        ci, cj = components
+    except (TypeError, ValueError):
+        raise ValueError(f"components must be a pair of component numbers such as (1, 2), got {components!r}") from None
+    for c in (ci, cj):
+        check_count("each of components", c)
     res = pca(data, features, scale)
-    ci, cj = components
     k = len(res["explained_variance_ratio"])
-    if not (1 <= ci <= k and 1 <= cj <= k) or ci == cj:
-        raise ValueError(f"components must be two different numbers between 1 and {k}")
+    if not (ci <= k and cj <= k) or ci == cj:
+        raise ValueError(f"components must be two different numbers between 1 and {k}, got {components!r}")
     pc_x, pc_y = f"PC{ci}", f"PC{cj}"
     check_not_reserved([pc_x, pc_y], group=group)
     scores = res["scores"][[pc_x, pc_y]].copy()
     groups = [None]
     if group is not None:
         complete = select_columns(data, features).notna().all(axis=1)  # the rows pca() kept, matched by position
-        scores[group] = data.loc[complete, group].array  # positional, and keeps a Categorical's order
+        scores[group] = data[group][complete].array  # positional, and keeps a Categorical's order
         groups = category_order(scores[group], order)
     cols = palette(len(groups), colors)
 
