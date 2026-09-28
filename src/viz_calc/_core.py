@@ -7,6 +7,7 @@ import math
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from fractions import Fraction
 from typing import Any, ParamSpec, TypeVar
 
@@ -169,6 +170,18 @@ def check_has_values(data: pd.DataFrame, *columns: str | None) -> None:
     for c in columns:
         if c is not None and not data[c].notna().any():
             raise ValueError(f"column {c!r} has no non-missing values")
+
+
+def check_not_reserved(reserved: Sequence[str], **roles: Any) -> None:
+    """Raise if a column given for one of *roles* is named like one of the table's own columns, *reserved*.
+
+    The output column would otherwise overwrite that column's values in the
+    returned table. Roles given as ``None`` are ignored.
+    """
+    for role, column in roles.items():
+        if isinstance(column, str) and column in reserved:
+            raise ValueError(f"rename the {role} column {column!r}: the table uses {list(reserved)} "
+                             "for its own columns")
 
 
 def check_distinct(**roles: str | None) -> None:
@@ -366,6 +379,17 @@ def level_label(value: Any) -> str:
         if wall == wall.normalize():
             return value.strftime("%Y-%m-%d")
     return str(value)
+
+
+def level_percent(level: Any) -> str:
+    """A confidence or coverage *level* as a percentage with every digit it has: ``0.975`` reads ``97.5%``.
+
+    Rounding to whole percent would label a 97.5% interval as 98% and a
+    99.9% one as an impossible 100%.
+    """
+    # The shortest text that reads back as the level; a NumPy float gives it for its own precision (float32 0.95).
+    text = str(level) if isinstance(level, np.floating) else repr(float(level))
+    return f"{(Decimal(text) * 100).normalize():f}%"
 
 
 _SUFFIXES = ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K"))

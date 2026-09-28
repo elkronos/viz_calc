@@ -25,12 +25,14 @@ from ._core import (
     check_dataframe,
     check_distinct,
     check_has_values,
+    check_not_reserved,
     check_numeric,
     cleanup_on_error,
     column_list,
     exact_mean,
     get_ax,
     level_label,
+    level_percent,
     palette,
     select_columns,
     slot_colors,
@@ -141,7 +143,9 @@ def estimation_plot(
     check_dataframe(data, [x, y])
     check_numeric(data, y)
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
+    check_not_reserved(["n", "mean", "sd", "ci_low", "ci_high"], x=x)
     st._check_level(level)
+    check_has_values(data, y)
     groups = category_order(data[x], order)
     if len(groups) < 2:
         raise ValueError("estimation_plot needs at least two groups")
@@ -165,9 +169,9 @@ def estimation_plot(
         ax_raw.scatter(i - 0.08 + _jitter(s.size, 0.12, rng), s, s=14, color=cols[i], alpha=0.6, linewidths=0)
         m, lo, hi = st.mean_ci(s, level)
         ax_raw.errorbar(i + 0.22, m, yerr=[[m - lo], [hi - m]], fmt="o", color="black", ms=5, capsize=0, lw=1.5)
-        rows.append({x: g, "n": s.size, "mean": m, "sd": np.sqrt(st._var(s)) if s.size > 1 else np.nan, "ci_low": lo, "ci_high": hi})
+        rows.append({x: g, "n": s.size, "mean": m, "sd": st._sd(s), "ci_low": lo, "ci_high": hi})
     ax_raw.set_ylabel(y)
-    ax_raw.set_title(f"{y} by {x}: raw data with mean and {level:.0%} CI", loc="left")
+    ax_raw.set_title(f"{y} by {x}: raw data with mean and {level_percent(level)} CI", loc="left")
 
     comps = []
     ref = samples[reference]
@@ -176,8 +180,11 @@ def estimation_plot(
         if g == reference:
             ax_diff.plot(i, 0, marker="_", color="black", ms=14)
             continue
-        est, lo, hi, dist = st._bootstrap((ref, samples[g]), lambda a, b: st._mean(b) - st._mean(a),
+        # Resample the data divided by a power of two (exact), so BCa's sums of powers neither overflow nor underflow.
+        s = st._unit_scale(ref, samples[g])
+        est, lo, hi, dist = st._bootstrap((ref / s, samples[g] / s), lambda a, b: st._mean(b) - st._mean(a),
                                           level, n_resamples, "BCa", seed)
+        est, lo, hi, dist = est * s, lo * s, hi * s, dist * s
         dens = _half_violin(dist)
         if dens is not None:
             grid, width = dens
@@ -193,7 +200,7 @@ def estimation_plot(
     ax_diff.set_ylabel(f"Difference from\n{level_label(reference)}")
     ax_diff.set_xticks(range(len(groups)), [level_label(g) for g in groups])
     ax_diff.set_xlabel(x)
-    ax_diff.set_title(f"Mean difference with bootstrap {level:.0%} CI (BCa)", loc="left", fontsize="medium")
+    ax_diff.set_title(f"Mean difference with bootstrap {level_percent(level)} CI (BCa)", loc="left", fontsize="medium")
     for ax in (ax_raw, ax_diff):
         ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
@@ -207,9 +214,9 @@ def _half_violin(values: np.ndarray, points: int = 200):
     values = values[np.isfinite(values)]
     if values.size < 3 or np.ptp(values) == 0:
         return None
-    kde = gaussian_kde(values)
+    s = st._unit_scale(values)  # an exact power of two, so the KDE's covariance neither overflows nor underflows
     grid = np.linspace(values.min(), values.max(), points)
-    dens = kde(grid)
+    dens = gaussian_kde(values / s)(grid / s)
     return grid, dens / dens.max()
 
 
@@ -268,6 +275,7 @@ def benchmark_bar(
     check_numeric(data, y)
     check_choice("error", error, ["ci", "se", "sd"])
     check_choice("classify", classify, ["ci", "mean"])
+    check_not_reserved(["n", "mean", "sd", "se", "ci_low", "ci_high", "status"], x=x)
     st._check_level(level)
     colors = slot_colors(colors, ("below", "above", "indistinguishable"))
     thr, tol = _threshold(data, y, threshold)
@@ -277,7 +285,7 @@ def benchmark_bar(
     for g in groups:
         s = data.loc[data[x] == g, y].dropna().to_numpy(float)
         m, lo, hi = st.mean_ci(s, level)
-        sd = np.sqrt(st._var(s)) if s.size > 1 else np.nan
+        sd = st._sd(s)
         if s.size == 0:
             status = "no data"
         else:
@@ -296,7 +304,7 @@ def benchmark_bar(
 
     if error == "ci":
         err = np.vstack([table["mean"] - table["ci_low"], table["ci_high"] - table["mean"]])
-        err_text = f"{level:.0%} CI"
+        err_text = f"{level_percent(level)} CI"
     else:
         err = table[error].to_numpy()
         err_text = "±1 SE" if error == "se" else "±1 SD"
@@ -344,6 +352,10 @@ def lollipop(
     *threshold* are faded. *sort* is ``"descending"``, ``"ascending"`` or
     ``None`` (keep the order of the categories).
 
+    ``stat="count"`` counts the non-missing values of *y* in each category,
+    or the rows when *y* is not given. The aggregated values are in the
+    table's ``value`` column, so *x* cannot be named ``"value"``.
+
     References
     ----------
     Cleveland, W. S., & McGill, R. (1984). Graphical perception. *JASA*,
@@ -352,13 +364,15 @@ def lollipop(
     check_dataframe(data, [x, y])
     check_choice("stat", stat, ["mean", "median", "sum", "count"])
     check_choice("sort", sort, ["descending", "ascending", None])
-    check_has_values(data, x)
+    check_not_reserved(["value"], x=x)
+    check_has_values(data, x, y)
     if stat != "count":
         if y is None:
             raise ValueError(f"stat={stat!r} needs a y column")
         check_numeric(data, y)
-        check_has_values(data, y)
         agg = data.groupby(x, observed=True)[y].agg(stat)
+    elif y is not None:
+        agg = data.groupby(x, observed=True)[y].count()
     else:
         agg = data.groupby(x, observed=True).size()
     table = agg.rename("value").reset_index()
@@ -429,13 +443,17 @@ def dumbbell(
     Parameters
     ----------
     label
-        Column naming each item. It may be *start* or *end* itself.
+        Column naming each item. It may be *start* or *end* itself. The
+        names ``"change"`` and ``"pct_change"`` are taken by the table's own
+        columns.
     colors
         A tuple of two colours: ``(start, end)``.
     """
     check_dataframe(data, [label, start, end])
     check_distinct(start=start, end=end)
+    check_not_reserved(["change", "pct_change"], label=label, start=start, end=end)
     check_numeric(data, start, end)
+    check_has_values(data, start, end)
     colors = slot_colors(colors, ("start", "end"))
     table = data[list(dict.fromkeys([label, start, end]))].copy()
     for c in dict.fromkeys((start, end)):
@@ -493,7 +511,9 @@ def divergent_bar(
 
     *left* values are drawn to the left of zero, *right* values to the right.
     Axis labels show absolute values, so nothing reads as negative.
-    Rows with a repeated category are summed. Categories are drawn bottom to
+    Rows with a repeated category are summed; a category whose values in a
+    column are all missing keeps a missing value there (and no bar), rather
+    than a 0. Categories are drawn bottom to
     top in the order of a ``Categorical`` column, and in the order they
     first appear otherwise.
 
@@ -505,16 +525,16 @@ def divergent_bar(
     check_dataframe(data, [category, left, right])
     check_distinct(category=category, left=left, right=right)
     check_numeric(data, left, right)
-    check_has_values(data, category)
+    check_has_values(data, category, left, right)
     colors = slot_colors(colors, ("left", "right"))
     values = select_columns(data, [category, left, right])
     if (values[left] < 0).any() or (values[right] < 0).any():
         raise ValueError("divergent_bar expects non-negative values in both columns")
     by_levels = isinstance(data[category].dtype, pd.CategoricalDtype)  # grouping sorts a Categorical by its categories
-    table = values.groupby(category, sort=by_levels, observed=True).sum().reset_index()
-    if sort:
-        table["total"] = table[left] + table[right]
-        table = table.sort_values("total", ignore_index=True).drop(columns="total")
+    table = values.groupby(category, sort=by_levels, observed=True).sum(min_count=1).reset_index()
+    if sort:  # by a separate key, so a column named "total" cannot be overwritten
+        total = table[left].fillna(0) + table[right].fillna(0)
+        table = table.iloc[np.argsort(total.to_numpy(), kind="stable")].reset_index(drop=True)
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)))
     pos = np.arange(len(table))
     ax.barh(pos, -table[left], color=colors[0], label=left_label or left)
@@ -528,6 +548,19 @@ def divergent_bar(
     ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=2)
     ax.spines[["top", "right"]].set_visible(False)
     return VizResult(fig, ax, table)
+
+
+def _share_label(p: float) -> str:
+    """A share (0 to 1) as a percentage that never reads 0% unless it is 0, nor 100% unless it is 1."""
+    if np.isnan(p):
+        return ""
+    x = 100 * p
+    if 0 < x < 1:
+        return f"{abbreviate(x)}%"
+    digits = 0  # whole percent, but a share just short of 100% never reads 100%
+    while x != 100 and float(f"{x:.{digits}f}") == 100:
+        digits += 1
+    return f"{x:.{digits}f}%"
 
 
 @cleanup_on_error
@@ -562,6 +595,7 @@ def centered_bar(
     """
     check_dataframe(data, [x, y])
     check_numeric(data, y)
+    check_not_reserved(["n", "n_above", "p_above", "ci_low", "ci_high", "p_below"], x=x)
     st._check_level(level)
     colors = slot_colors(colors, ("at_or_above", "below"))
     thr, tol = _threshold(data, y, threshold)
@@ -583,15 +617,15 @@ def centered_bar(
                                              np.clip(table["ci_high"] - table["p_above"], 0, None)],
                 fmt="none", ecolor="black", capsize=3, lw=1)
     if labels:
-        ax.bar_label(up, labels=[f"{v:.0%}" for v in table["p_above"]], padding=2, fontsize=8, label_type="center", color="white")
-        ax.bar_label(down, labels=[f"{v:.0%}" for v in table["p_below"]], padding=2, fontsize=8, label_type="center", color="black")
+        ax.bar_label(up, labels=[_share_label(v) for v in table["p_above"]], padding=2, fontsize=8, label_type="center", color="white")
+        ax.bar_label(down, labels=[_share_label(v) for v in table["p_below"]], padding=2, fontsize=8, label_type="center", color="black")
     ax.axhline(0, color="black", lw=0.8)
     ax.set_ylim(-1.05, 1.05)
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{abs(v):.0%}"))
     ax.set_xticks(pos, [level_label(g) for g in table[x]])
     ax.set_xlabel(x)
     ax.set_ylabel(f"Share of {y}")
-    ax.set_title(f"Share of {y} above/below {thr:.3g} (error bars: {level:.0%} Wilson CI)", loc="left")
+    ax.set_title(f"Share of {y} above/below {thr:.3g} (error bars: {level_percent(level)} Wilson CI)", loc="left")
     ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1, 1))
     ax.spines[["top", "right"]].set_visible(False)
     return VizResult(fig, ax, table, {"threshold": thr, "level": level})
@@ -635,6 +669,7 @@ def likert(
     """
     items = column_list("items", items, distinct=True)
     check_dataframe(data, items)
+    check_has_values(data, *items)
     if isinstance(levels, str):
         raise TypeError("levels must be a list of response options, not a str")
     levels = list(levels)

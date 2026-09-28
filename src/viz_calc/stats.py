@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import numbers
 from collections.abc import Callable, Sequence
+from fractions import Fraction
 from functools import lru_cache
 from itertools import permutations
 from typing import Any, Literal
@@ -51,10 +52,21 @@ def _clean(x: Sequence[float] | np.ndarray | pd.Series) -> np.ndarray:
     return arr[~np.isnan(arr)]
 
 
-def _check_level(level: float) -> None:
-    """Raise unless *level* is a confidence level strictly between 0 and 1 (``0.95``, not ``95``)."""
-    if not (isinstance(level, numbers.Real) and 0 < level < 1):
+def _check_level(level: Any) -> float:
+    """*level* as a float, after checking it is a confidence level strictly between 0 and 1 (``0.95``, not ``95``).
+
+    Any real number is accepted, including a ``Fraction``, a ``Decimal`` and a
+    0-d array; text and booleans are not.
+    """
+    value = np.nan  # anything that is not a real number fails the range check below
+    if not isinstance(level, (bool, np.bool_, str, bytes, complex)) and np.ndim(level) == 0:
+        try:
+            value = float(level)
+        except (TypeError, ValueError):
+            pass
+    if not 0 < value < 1:
         raise ValueError(f"level must be strictly between 0 and 1 (e.g. 0.95 for a 95% interval), got {level!r}")
+    return value
 
 
 def _unit_scale(*samples: np.ndarray) -> float:
@@ -79,6 +91,18 @@ def _var(x: np.ndarray) -> float:
     1e-34 and turn a zero-variance case into an astronomically large *t* or *g*.
     """
     return 0.0 if np.ptp(x) == 0 else float(x.var(ddof=1))
+
+
+def _sd(x: np.ndarray) -> float:
+    """Sample standard deviation (``ddof=1``) at any magnitude; ``nan`` for fewer than two values.
+
+    The values are rescaled by a power of two first (see :func:`_unit_scale`),
+    so the squared deviations neither overflow nor underflow.
+    """
+    if x.size < 2:
+        return np.nan
+    s = _unit_scale(x)
+    return float(np.sqrt(_var(x / s)) * s)
 
 
 def _mean(x: np.ndarray) -> float:
@@ -107,7 +131,7 @@ def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0
     Brown, L. D., Cai, T. T., & DasGupta, A. (2001). Interval estimation for a
     binomial proportion. *Statistical Science*, 16(2), 101–133.
     """
-    _check_level(level)
+    level = _check_level(level)
     k = _as_float(successes)
     n = _as_float(n)
     z = _st.norm.ppf(1 - (1 - level) / 2)
@@ -132,7 +156,7 @@ def mean_ci(x: Sequence[float], level: float = 0.95) -> tuple[float, float, floa
     fewer than two observations the interval is ``nan``. *level* must be
     strictly between 0 and 1 (``0.95``, not ``95``), else ``ValueError``.
     """
-    _check_level(level)
+    level = _check_level(level)
     x = _clean(x)
     n = x.size
     if n == 0:
@@ -169,7 +193,7 @@ def welch_test(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> d
     default use Welch's t-test instead of Student's t-test. *International
     Review of Social Psychology*, 30(1), 92–101.
     """
-    _check_level(level)
+    level = _check_level(level)
     a, b = _clean(a), _clean(b)
     if a.size < 2 or b.size < 2:
         raise ValueError("each group needs at least two non-missing values")
@@ -206,7 +230,7 @@ def hedges_g(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> dic
     Hedges, L. V., & Olkin, I. (1985). *Statistical Methods for
     Meta-Analysis*. Academic Press.
     """
-    _check_level(level)
+    level = _check_level(level)
     a, b = _clean(a), _clean(b)
     n1, n2 = a.size, b.size
     if n1 < 2 or n2 < 2:
@@ -254,7 +278,7 @@ def bootstrap_ci(
 
 def _bootstrap(samples, statistic, level, n_resamples, method, seed):
     """Like :func:`bootstrap_ci` but also returns the bootstrap distribution."""
-    _check_level(level)
+    level = _check_level(level)
     data = tuple(_clean(s) for s in samples)
     if any(d.size < 2 for d in data):
         raise ValueError("each sample needs at least two non-missing values")
@@ -398,7 +422,7 @@ def correlation_test(x: Sequence[float], y: Sequence[float], method: Literal["pe
     correlation coefficients. I. *Biometrika*, 44(3/4), 470–481.
     """
     _check_method(method)
-    _check_level(level)
+    level = _check_level(level)
     x = _as_float(x)
     y = _as_float(y)
     keep = ~(np.isnan(x) | np.isnan(y))
@@ -536,13 +560,17 @@ def largest_remainder(values: Sequence[float], total: int) -> np.ndarray:
     v = _as_float(values)
     if not np.all(np.isfinite(v)) or np.any(v < 0):
         raise ValueError("values must be finite, non-negative and not missing")
-    if v.size:  # rescale by a power of two (exact) so the sum cannot overflow, e.g. for values near 1e308
-        v = np.ldexp(v, -int(np.frexp(v.max())[1]))
-    if v.sum() == 0:
-        return np.zeros(v.size, dtype=int)
-    quotas = v / v.sum() * total
-    base = np.floor(quotas).astype(int)
-    short = int(total - base.sum())
-    if short > 0:
-        base[np.argsort(-(quotas - base), kind="stable")[:short]] += 1
-    return base
+    # Exact rational quotas: in floating point a large total (1e15 and up) can round a quota across an integer,
+    # and the floors would then over- or under-fill the total. Fractions of floats cannot overflow either.
+    total = int(total)
+    parts = [Fraction(x) for x in v.ravel().tolist()]
+    whole = sum(parts)
+    dtype = int if total < 2**63 else object  # a count beyond int64 stays a Python int
+    if whole == 0:
+        return np.zeros(len(parts), dtype=dtype)
+    quotas = [p * total / whole for p in parts]
+    base = [q.numerator // q.denominator for q in quotas]
+    short = total - sum(base)  # fewer than len(parts), since each remainder is below 1
+    for i in sorted(range(len(parts)), key=lambda i: base[i] - quotas[i])[:short]:  # sorted() is stable
+        base[i] += 1
+    return np.array(base, dtype=dtype)

@@ -32,10 +32,12 @@ __all__ = ["profile_bars", "profile_boxes", "profile_scatters", "to_pptx"]
 
 
 def _split(data: pd.DataFrame, max_levels: int) -> tuple[list[str], list[str]]:
-    """Columns treated as categorical (few levels) and as continuous numeric."""
+    """Columns treated as categorical (few levels) and as continuous numeric; empty columns are neither."""
     cat, num = [], []
     for c in data.columns:
         s = data[c]
+        if not s.notna().any():
+            continue
         is_num = pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s)
         if is_num and s.nunique() > max_levels:
             num.append(c)
@@ -117,7 +119,9 @@ def profile_boxes(
     Categorical columns have at most *max_levels* distinct values; numeric
     columns have more. The table ranks pairs by eta-squared (the share of the
     numeric column's variance explained by the grouping), so the strongest
-    associations can be looked at first.
+    associations can be looked at first. Columns with no values are left
+    out; a pair given explicitly that has no complete rows gets ``n=0``, a
+    missing eta-squared and an empty panel.
     """
     check_dataframe(data)
     check_count("per_page", per_page)
@@ -143,12 +147,16 @@ def profile_boxes(
     for start, fig, axes in _pages(len(table), per_page, ncols):
         for ax, r in zip(axes, table.iloc[start:].itertuples()):
             d = select_columns(data, [r.categorical, r.numeric]).dropna()
+            ax.spines[["top", "right"]].set_visible(False)
+            if d.empty:
+                ax.text(0.5, 0.5, "no complete rows", transform=ax.transAxes, ha="center", va="center", color=NEUTRAL)
+                ax.set_title(f"{r.numeric} by {r.categorical}  (n=0)", fontsize="small", loc="left")
+                continue
             levels = category_order(d[r.categorical])
             ax.boxplot([d.loc[d[r.categorical] == lv, r.numeric] for lv in levels], showfliers=True,
                        flierprops={"markersize": 2, "markeredgecolor": NEUTRAL}, medianprops={"color": OKABE_ITO[5]})
             ax.set_xticks(range(1, len(levels) + 1), [level_label(lv) for lv in levels], rotation=45, ha="right")
             ax.set_title(f"{r.numeric} by {r.categorical}  (η²={r.eta_squared:.2f})", fontsize="small", loc="left")
-            ax.spines[["top", "right"]].set_visible(False)
         fig.tight_layout()
         figs.append(fig)
     return VizResult(figs, None, table)

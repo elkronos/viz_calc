@@ -19,11 +19,13 @@ from ._core import (
     category_order,
     check_choice,
     check_dataframe,
+    check_not_reserved,
     check_numeric,
     cleanup_on_error,
     column_list,
     get_ax,
     level_label,
+    level_percent,
     palette,
     select_columns,
 )
@@ -113,6 +115,10 @@ def pca_plot(
     whose *group* is missing are still scored and drawn, in grey as
     ``(missing)`` and without an ellipse.
 
+    The table has one row per scored row: ``row`` (its index label in
+    *data*, a tuple for a ``MultiIndex``; named ``index`` when *group* is
+    itself called ``row``), the two plotted scores and the *group*.
+
     Parameters
     ----------
     components
@@ -132,13 +138,14 @@ def pca_plot(
     features = column_list("features", features, distinct=True)
     check_dataframe(data, [*features, group])
     check_choice("ellipse", ellipse, ["data", "confidence", None])
-    st._check_level(level)
+    coverage = st._check_level(level)
     res = pca(data, features, scale)
     ci, cj = components
     k = len(res["explained_variance_ratio"])
     if not (1 <= ci <= k and 1 <= cj <= k) or ci == cj:
         raise ValueError(f"components must be two different numbers between 1 and {k}")
     pc_x, pc_y = f"PC{ci}", f"PC{cj}"
+    check_not_reserved([pc_x, pc_y], group=group)
     scores = res["scores"][[pc_x, pc_y]].copy()
     groups = [None]
     if group is not None:
@@ -153,7 +160,7 @@ def pca_plot(
         sub = scores if g is None else scores[scores[group] == g]
         ax.scatter(sub[pc_x], sub[pc_y], s=22, color=c, alpha=0.75, lw=0, label=None if g is None else level_label(g))
         if ellipse:
-            ellipses[g] = _ellipse(ax, sub[[pc_x, pc_y]].to_numpy(float), level, ellipse, c)
+            ellipses[g] = _ellipse(ax, sub[[pc_x, pc_y]].to_numpy(float), coverage, ellipse, c)
     if group is not None and scores[group].isna().any():
         sub = scores[scores[group].isna()]
         ax.scatter(sub[pc_x], sub[pc_y], s=22, color=NEUTRAL, alpha=0.75, lw=0, label="(missing)")
@@ -177,11 +184,12 @@ def pca_plot(
         ax.legend(title=str(group), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
     title = "standardized features" if scale else "unscaled features"
     if ellipse:
-        title += f"; ellipses: {level:.0%} {'of data' if ellipse == 'data' else 'CI of mean'}"
+        title += f"; ellipses: {level_percent(level)} {'of data' if ellipse == 'data' else 'CI of mean'}"
     ax.set_title(f"PCA ({title})", loc="left", fontsize="medium")
     ax.spines[["top", "right"]].set_visible(False)
-    return VizResult(fig, ax, scores.reset_index(names="row"),
-                     {**res, "ellipses": ellipses, "components": (pc_x, pc_y)})
+    table = scores.reset_index(drop=True)
+    table.insert(0, "index" if group == "row" else "row", scores.index.to_flat_index())  # labels, tuples for a MultiIndex
+    return VizResult(fig, ax, table, {**res, "ellipses": ellipses, "components": (pc_x, pc_y)})
 
 
 @cleanup_on_error
@@ -226,6 +234,7 @@ def radar(
     if ax is not None and ax.name != "polar":
         raise ValueError(f"radar needs a polar Axes, got a {ax.name!r} one; create it with "
                          "plt.subplots(subplot_kw={'projection': 'polar'}) or fig.add_subplot(projection='polar')")
+    check_not_reserved([f"{m}_{suffix}" for suffix in (stat, "scaled") for m in metrics], group=group)
     groups = category_order(data[group], order)
     raw = data.groupby(group, observed=True)[metrics].agg(stat).reindex(groups)
     raw = pd.DataFrame(raw.to_numpy(dtype=float, na_value=np.nan), index=raw.index, columns=raw.columns)

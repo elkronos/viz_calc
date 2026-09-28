@@ -20,6 +20,7 @@ from ._core import (
     check_count,
     check_dataframe,
     check_has_values,
+    check_not_reserved,
     check_numeric,
     cleanup_on_error,
     get_ax,
@@ -30,10 +31,12 @@ from ._core import (
 __all__ = ["histogram", "ridgeplot", "raincloud"]
 
 
+_SUMMARY = ["n", "mean", "median", "sd", "q1", "q3"]  # the columns _describe adds to a table
+
+
 def _describe(s: pd.Series) -> dict[str, float]:
     s = s.dropna()
-    sd = np.sqrt(st._var(s.to_numpy(float))) if s.size > 1 else np.nan
-    return {"n": int(s.size), "mean": s.mean(), "median": s.median(), "sd": sd,
+    return {"n": int(s.size), "mean": s.mean(), "median": s.median(), "sd": st._sd(s.to_numpy(float)),
             "q1": s.quantile(0.25), "q3": s.quantile(0.75)}
 
 
@@ -41,7 +44,8 @@ def _kde(values: np.ndarray, grid: np.ndarray, bw_method: Any = None) -> np.ndar
     values = values[np.isfinite(values)]
     if values.size < 2 or np.ptp(values) == 0:
         return None
-    return gaussian_kde(values, bw_method=bw_method)(grid)
+    s = st._unit_scale(values)  # an exact power of two, so the KDE's covariance neither overflows nor underflows
+    return gaussian_kde(values / s, bw_method=bw_method)(grid / s) / s
 
 
 @cleanup_on_error
@@ -71,6 +75,13 @@ def histogram(
     group within it), not a single global value; a number draws a fixed line
     at that value.
 
+    *bins* is one of the rules ``"fd"``, ``"scott"``, ``"sturges"`` and
+    ``"auto"``, a number of equal-width bins (an ``int``), or a sequence of
+    increasing bin edges. Values outside given edges are not drawn:
+    ``stat="percent"`` and ``"density"`` are computed over the values inside
+    the edges, ``info["outside_bins"]`` counts the values left out, and the
+    title says how many there are. The table's summaries use every value.
+
     If the Freedman–Diaconis width is unusable (the IQR is zero, e.g. heavily
     tied or zero-inflated data, or FD would need more than 100,000 bins)
     Sturges' rule is used instead; ``info["bin_rule"]`` says which rule was
@@ -94,8 +105,21 @@ def histogram(
     check_numeric(data, x)
     check_has_values(data, x)
     check_choice("stat", stat, ["count", "density", "percent"])
+    rules = ["fd", "scott", "sturges", "auto"]
     if isinstance(bins, str):
-        check_choice("bins", bins, ["fd", "scott", "sturges", "auto"])
+        check_choice("bins", bins, rules)
+    elif np.ndim(bins) == 0:
+        if isinstance(bins, (bool, np.bool_)) or not isinstance(bins, (int, np.integer)) or bins < 1:
+            raise ValueError(f"bins must be one of {rules}, a positive int or a sequence of increasing edges, "
+                             f"got {bins!r}")
+    else:
+        try:
+            given = st._as_float(bins)
+        except (TypeError, ValueError):
+            given = np.array([np.nan])
+        if given.ndim != 1 or given.size < 2 or not np.isfinite(given).all() or (np.diff(given) <= 0).any():
+            raise ValueError(f"bins must be one of {rules}, a positive int or a sequence of at least two finite, "
+                             f"increasing edges, got {bins!r}")
     if isinstance(ref_line, str):
         check_choice("ref_line", ref_line, ["mean", "median"])
     elif ref_line is not None and (isinstance(ref_line, bool) or not isinstance(ref_line, Real)):
@@ -106,6 +130,7 @@ def histogram(
         edges, rule = st._bin_edges(values, bins)
     else:
         edges, rule = np.histogram_bin_edges(values, bins=bins), "user"
+    outside = int(((values < edges[0]) | (values > edges[-1])).sum())  # only given edges can leave values out
 
     facets = category_order(data[facet], facet_order) if facet is not None else [None]
     hues = category_order(data[hue], hue_order) if hue is not None else [None]
@@ -154,10 +179,11 @@ def histogram(
         ax.set_ylabel({"count": "Count", "density": "Density", "percent": "Percent"}[stat])
     if hue is not None:
         axes.flat[0].legend(title=str(hue), frameon=False)
-    fig.suptitle(f"Distribution of {x}  (bins: {rule}, width ≈ {np.mean(width):.3g})", x=0.01, ha="left")
+    note = f"; {outside} value{'s' if outside > 1 else ''} outside the bins not shown" if outside else ""
+    fig.suptitle(f"Distribution of {x}  (bins: {rule}, width ≈ {np.mean(width):.3g}{note})", x=0.01, ha="left")
     fig.tight_layout()
     table = pd.DataFrame(rows).drop(columns=[c for c, used in (("facet", facet), ("hue", hue)) if used is None])
-    return VizResult(fig, axes, table, {"bin_edges": edges, "bin_rule": rule, "stat": stat})
+    return VizResult(fig, axes, table, {"bin_edges": edges, "bin_rule": rule, "stat": stat, "outside_bins": outside})
 
 
 @cleanup_on_error
@@ -179,6 +205,7 @@ def ridgeplot(
     comparable. The median of each group is marked.
     """
     check_dataframe(data, [x, group])
+    check_not_reserved(_SUMMARY, group=group)
     check_numeric(data, x)
     check_has_values(data, x)
     groups = category_order(data[group], order)
@@ -235,6 +262,7 @@ def raincloud(
     visualization. *Wellcome Open Research*, 4, 63.
     """
     check_dataframe(data, [x, y])
+    check_not_reserved(_SUMMARY, x=x)
     check_numeric(data, y)
     check_has_values(data, y)
     groups = category_order(data[x], order)

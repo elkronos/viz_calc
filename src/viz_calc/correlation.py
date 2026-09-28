@@ -20,6 +20,7 @@ from ._core import (
     check_choice,
     check_dataframe,
     check_distinct,
+    check_has_values,
     check_numeric,
     cleanup_on_error,
     column_list,
@@ -44,6 +45,7 @@ def _numeric_columns(data: pd.DataFrame, columns: Sequence[str] | None) -> list[
         check_numeric(data, *columns)
     if len(columns) < 2:
         raise ValueError("need at least two numeric columns")
+    check_has_values(data, *columns)
     return list(columns)
 
 
