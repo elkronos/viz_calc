@@ -35,12 +35,14 @@ dependency versions.
 - `network_map`: repeated edges are summed instead of the last row winning;
   categorical node columns, non-string column labels and node order work;
   directed communities use summed reciprocal weights; repeated rows are
-  summed exactly; weighted betweenness is computed in exact rational
-  arithmetic on the values the weights stand for (float32 `0.3` as 3/10,
-  `73/9` as 73/9), so equally short paths always share credit, paths that
-  differ are never merged and results do not depend on row order (graphs
-  over 2,000 edges fall back to NetworkX floats); directed
-  graphs draw arrowheads (Matplotlib and Plotly).
+  summed exactly (or correctly rounded); weighted betweenness no longer
+  lets rounding hand one of two equally short paths all the credit: exactly
+  stored weights (integers, 0.125) are compared in rational arithmetic and
+  other floats within igraph's relative tolerance of 1e-10 (four machine
+  epsilons for float32/float16), never merging a real extra hop, and results
+  do not depend on row order (`info["betweenness_arithmetic"]`,
+  `info["betweenness_tolerance"]`); directed graphs draw arrowheads
+  (Matplotlib and Plotly).
 - Dates: calendar views (`calendar_heatmap`, `period_bars`) place
   timezone-aware values by their local day, including mixed UTC offsets
   across DST; `gantt`, `duration_plot` and `timeseries_fill` keep time zones,

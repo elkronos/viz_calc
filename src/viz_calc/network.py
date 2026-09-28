@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import decimal
+import heapq
+import math
 from fractions import Fraction
+from itertools import count
 from typing import Literal
 
 import matplotlib.pyplot as plt
@@ -17,40 +20,107 @@ from ._core import NEUTRAL, VizResult, check_dataframe, check_numeric, palette, 
 __all__ = ["network_map", "sankey"]
 
 
-EXACT_EDGE_LIMIT = 2000  # above this, exact rational betweenness gets slow; NetworkX floats are used instead
+EXACT_EDGE_LIMIT = 2000  # above this, exact rational betweenness gets slow; the tolerant float version is used
 
 
-def _intended(value) -> Fraction:
-    """The exact value a stored weight stands for, as a fraction.
+def _exact_weights(values: np.ndarray) -> list[Fraction] | None:
+    """Exact values for weights that are exactly what they display, else ``None``.
 
-    * integers (and booleans) are exact as they are;
-    * float32/float16 values are read as the shortest decimal that round-trips
-      at their own precision (float32 ``0.09`` -> 9/100);
-    * float64 values are read as their shortest decimal (``0.4794598`` ->
-      2397299/5000000); a 15–17 digit value such as ``8.11111111111111`` is
-      read as the small-denominator fraction that gives exactly the same float
-      (73/9), because it is almost certainly a computed ratio.
-
-    A float64 weight keeps its float value; float32/float16 weights are
-    reported as the decimals they display (float32 ``0.3`` as ``0.3``, not
-    ``0.30000001192092896``).
+    Integers, booleans, ``Decimal`` and ``Fraction`` objects qualify, and so do
+    floats whose stored binary value equals the shortest decimal that prints
+    it (``2.0``, ``0.125``, ``1001.5``). Any other float (``0.3``, ``73/9``,
+    ``count/438``) stands for a value its type cannot hold, and which one was
+    meant is ambiguous, so such columns use the tolerant comparison instead.
     """
-    if isinstance(value, (bool, np.bool_, int, np.integer)):
-        return Fraction(int(value))
-    if isinstance(value, (Fraction, decimal.Decimal)):
-        return Fraction(value)
-    if isinstance(value, (np.float32, np.float16)):
-        return Fraction(np.format_float_positional(value, unique=True, trim="-"))
-    x = float(value)
-    text = repr(x)
-    exact = Fraction(text)
-    digits = text.lower().split("e")[0].lstrip("+-").replace(".", "").lstrip("0")
-    if len(digits) >= 15 and exact.denominator != 1:
-        for k in range(1, 7):
-            simple = exact.limit_denominator(10**k)
-            if float(simple) == x:
-                return simple
-    return exact
+    out = []
+    for v in values:
+        if isinstance(v, (bool, np.bool_, int, np.integer)):
+            out.append(Fraction(int(v)))
+        elif isinstance(v, (Fraction, decimal.Decimal)):
+            out.append(Fraction(v))
+        elif isinstance(v, (float, np.floating)):
+            stored = Fraction(*v.as_integer_ratio())
+            if stored != Fraction(np.format_float_positional(v, unique=True, trim="-")):
+                return None
+            out.append(stored)
+        else:
+            return None
+    return out
+
+
+def _rounding_tolerance(values: np.ndarray) -> float:
+    """Relative rounding error of path lengths built from these weights: 4 machine epsilons of their float type.
+
+    float32 and float16 hold only ~7 and ~3 significant digits, so a value
+    entered and then rescaled can be off by a whole epsilon; four absorb it.
+    The floor of 64 float64 epsilons covers the additions along a path.
+    """
+    if values.dtype == object:
+        eps = [np.finfo(t).eps for t in {type(v) for v in values if isinstance(v, np.floating)}]
+    else:
+        eps = [np.finfo(values.dtype).eps] if values.dtype.kind == "f" else []
+    return max([64 * float(np.finfo(np.float64).eps)] + [4 * float(e) for e in eps])
+
+
+def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: float = 0.0) -> dict:
+    """Brandes' betweenness centrality with ties anchored on the true shortest distance.
+
+    ``distance[(u, v)]`` is the length of edge u→v (for undirected graphs, both
+    orientations are present); edges missing from it are not traversed. For
+    each source, Dijkstra first finds the shortest distances, which do not
+    depend on edge order. Then v is a predecessor of w on a shortest path when
+    ``dist[v] < dist[w]`` and ``dist[v] + len(v, w)`` exceeds ``dist[w]`` by at
+    most ``max(rounding, min(rel_tol, len(v, w) / (4 * dist[w]))) * dist[w]``.
+    Paths equal up to a relative *rel_tol* (1e-10, as in igraph) count as
+    equally short (1/2 + 1/12 vs 1/3 + 1/4, 0.3, 73/9, count/total shares),
+    but that slack never exceeds a quarter of the edge being tested, so a real
+    extra hop is not a tie. Only differences within the weights' own
+    *rounding* error, which low-precision floats cannot resolve, always tie.
+    The result does not depend on row order or on edges elsewhere.
+    Normalized as in NetworkX: by 1/((n-1)(n-2)).
+
+    References
+    ----------
+    Brandes, U. (2001). A faster algorithm for betweenness centrality.
+    *Journal of Mathematical Sociology*, 25(2), 163–177.
+    """
+    nodes = list(G)
+    out = {v: [(w, distance[(v, w)]) for w in G[v] if (v, w) in distance] for v in nodes}
+    bc = dict.fromkeys(nodes, 0.0)
+    for s in nodes:
+        dist, done, heap, counter = {s: 0.0}, set(), [(0.0, 0, s)], count(1)
+        while heap:  # 1. shortest distances
+            d, _, v = heapq.heappop(heap)
+            if v in done:
+                continue
+            done.add(v)
+            for w, length in out[v]:
+                if w not in dist or d + length < dist[w]:
+                    dist[w] = d + length
+                    heapq.heappush(heap, (dist[w], next(counter), w))
+        preds = {v: [] for v in dist}  # 2. predecessors on any path within tolerance of the shortest
+        for v in dist:
+            for w, length in out[v]:
+                # beyond the data's own rounding, the slack never exceeds a quarter of the edge being tested
+                slack = max(rounding * dist[w], min(rel_tol * dist[w], 0.25 * length))
+                if dist[v] < dist[w] and dist[v] + length <= dist[w] + slack:
+                    preds[w].append(v)
+        order = sorted(dist, key=dist.get)  # predecessors are always strictly closer, so this is topological
+        sigma = dict.fromkeys(order, 0.0)
+        sigma[s] = 1.0
+        for w in order:
+            if w != s:
+                sigma[w] = sum(sigma[v] for v in preds[w])
+        delta = dict.fromkeys(order, 0.0)  # 3. Brandes accumulation
+        for w in reversed(order):
+            if sigma[w] > 0:
+                for v in preds[w]:
+                    delta[v] += sigma[v] / sigma[w] * (1 + delta[w])
+            if w != s:
+                bc[w] += delta[w]
+    n = len(nodes)
+    scale = 1 / ((n - 1) * (n - 2)) if n > 2 else 0.0
+    return {v: b * scale for v, b in bc.items()}
 
 
 def network_map(
@@ -75,13 +145,20 @@ def network_map(
     The layout is seeded so it is reproducible. Repeated edges (including
     B→A after A→B in an undirected graph) are merged, summing their weights;
     missing weights raise an error. Weighted betweenness uses 1/weight as edge
-    length and is computed in exact rational arithmetic on the values the
-    weights stand for (``0.09`` as 9/100, a float32 ``0.3`` as 3/10, ``73/9``
-    as 73/9), so equally short paths always share credit and paths that
-    differ are never merged. Graphs with more than 2,000 edges use NetworkX's
-    floating-point betweenness instead; ``info["betweenness_arithmetic"]``
-    says which was used. For directed graphs, communities are found
-    on the undirected graph with reciprocal weights summed.
+    length. Weights that are exactly what they display (integers, or floats
+    such as 0.5 or 1001.25) are compared in exact rational arithmetic. Other
+    floats (0.3, 73/9, shares such as count/438) cannot be stored exactly, so
+    path lengths within a relative 1e-10 of each other count as equal, as in
+    igraph, unless the difference is more than a quarter of a path's last
+    edge (a real extra hop). float32 and float16 columns hold only ~7 and ~3
+    digits, so there any difference within four machine epsilons (4.8e-7 and
+    0.4%) counts as equal. Either way equally short paths share credit and
+    the result does not depend on row order.
+    ``info["betweenness_arithmetic"]`` says which was used, and
+    ``info["betweenness_tolerance"]`` gives the tolerance (graphs over 2,000
+    edges always use the tolerant version, for speed). For directed graphs,
+    communities are found on the undirected graph with reciprocal weights
+    summed.
 
     Set ``interactive=True`` for a Plotly figure with hover details.
 
@@ -108,47 +185,60 @@ def network_map(
         raise ValueError(f"edge weights in {weight!r} contain missing values; drop or fill them first")
     if weighted and np.isinf(wts[keep]).any():
         raise ValueError(f"edge weights in {weight!r} must be finite")
-    # Repeated edges are combined (weights summed exactly) instead of letting the last row win; each edge keeps
-    # the orientation it was first seen with.
+    # Repeated edges are combined (weights summed) instead of letting the last row win; each edge keeps the
+    # orientation it was first seen with. Sums are exact when the weights are (see _exact_weights), otherwise
+    # correctly rounded (math.fsum, so 9 x 73/9 == 73).
     numpy_dtype = getattr(data[weight].dtype, "numpy_dtype", None) if weighted else None
     if numpy_dtype is not None and pd.api.types.is_float_dtype(numpy_dtype):  # nullable Float32 -> float32 scalars
         raw = data[weight].to_numpy(dtype=numpy_dtype, na_value=np.nan)
     else:
         raw = data[weight].to_numpy() if weighted else np.ones(len(data), dtype=np.int64)
+    exact_values = _exact_weights(raw[keep]) if weighted else None
+    values = exact_values if exact_values is not None else [float(x) for x in wts[keep]]
     merged: dict = {}
-    for u, v, w in zip(src[keep], tgt[keep], raw[keep]):
+    for u, v, w in zip(src[keep], tgt[keep], values):
         key = (u, v) if directed else frozenset((u, v))
         if key in merged:
-            merged[key][2] += _intended(w)
+            merged[key][2].append(w)
         else:
-            merged[key] = [u, v, _intended(w)]
+            merged[key] = [u, v, [w]]
     G = nx.DiGraph() if directed else nx.Graph()
     G.add_nodes_from(pd.unique(np.column_stack([src[keep], tgt[keep]]).ravel()))  # first-appearance order
-    exact_weight = {}
-    for u, v, w in merged.values():
+    edge_weight = {}
+    for u, v, ws in merged.values():
         G.add_edge(u, v)
         if weighted:
-            G[u][v][weight] = float(w)
-            exact_weight[(u, v)] = w
+            total = sum(ws, Fraction(0)) if exact_values is not None else math.fsum(ws)
+            G[u][v][weight] = float(total)
+            edge_weight[(u, v)] = total
     wkey = weight if weighted else None
     nodes = list(G.nodes())
     table = pd.DataFrame({"node": nodes})
     table["degree"] = [G.degree(n) for n in nodes]
     table["strength"] = [G.degree(n, weight=wkey) for n in nodes]
     # Betweenness treats weights as distances; stronger ties should be shorter, so use 1/weight; zero-weight
-    # edges carry no tie and are left out. Distances are exact fractions of the intended weights (see _intended),
-    # so equally short paths tie exactly (1/0.09 + 1/0.18 == 2/0.12, 3 x 1/3 == 1) and floating-point rounding
-    # cannot hand one of them all the credit or merge paths that really differ.
-    method = None
+    # edges carry no tie and are left out. Weights stored exactly are compared exactly (Fraction distances in
+    # NetworkX), so equally short paths always tie; other floats, whose intended exact value cannot be known, use
+    # Brandes with a tolerance that absorbs rounding but never a real extra hop.
+    method = tolerance = None
     if weighted:
-        exact = G.number_of_edges() <= EXACT_EDGE_LIMIT
-        method = "exact" if exact else "floating-point"
-        H = G.__class__()
-        H.add_nodes_from(G)
-        for (u, v), w in exact_weight.items():
-            if w > 0 and u != v:
-                H.add_edge(u, v, distance=(1 / w) if exact else 1.0 / float(w))
-        bc = {n: float(b) for n, b in nx.betweenness_centrality(H, weight="distance").items()}
+        positive = {(u, v): w for (u, v), w in edge_weight.items() if w > 0 and u != v}
+        if exact_values is not None and G.number_of_edges() <= EXACT_EDGE_LIMIT:
+            method = "exact"
+            H = G.__class__()
+            H.add_nodes_from(G)
+            H.add_edges_from((u, v, {"distance": 1 / w}) for (u, v), w in positive.items())
+            bc = {n: float(b) for n, b in nx.betweenness_centrality(H, weight="distance").items()}
+        else:
+            method = "tolerant floating-point"
+            rounding = _rounding_tolerance(raw[keep] if exact_values is None else np.array([]))
+            tolerance = max(1e-10, rounding)
+            distance = {}
+            for (u, v), w in positive.items():
+                distance[(u, v)] = 1.0 / float(w)
+                if not directed:
+                    distance[(v, u)] = 1.0 / float(w)
+            bc = _weighted_betweenness(G, distance, rounding=rounding)
     else:
         bc = nx.betweenness_centrality(G)
     table["betweenness"] = [bc[n] for n in nodes]
@@ -181,7 +271,7 @@ def network_map(
         w = np.array([d[weight] for _, _, d in G.edges(data=True)], float)
         widths = 0.5 + 3.5 * (w - w.min()) / (np.ptp(w) or 1)
     info = {"graph": G, "positions": pos, "n_communities": ncomm, "betweenness_arithmetic": method,
-            "duplicate_rows_merged": int(keep.sum()) - len(merged)}
+            "betweenness_tolerance": tolerance, "duplicate_rows_merged": int(keep.sum()) - len(merged)}
 
     if interactive:
         go = require("plotly.graph_objects", "interactive")

@@ -95,14 +95,29 @@ Repeated edges are merged by summing their weights. Louvain community
 detection (Blondel et al., 2008) via NetworkX, seeded, on the undirected graph
 (reciprocal directed weights are summed). Betweenness centrality (Brandes, 2001) uses
 1/weight as edge length, so strong ties are short paths; zero-weight edges
-are left out. Path lengths are computed in exact rational arithmetic on the
-values the weights stand for: integers as they are, float32/float16 values
-as the decimals they display, float64 values as their shortest decimal (or,
-for 15–17 digit values such as 73/9, the simple fraction that gives the same
-float). Floating-point rounding therefore cannot hand one of two equally
-short paths all the credit or merge paths that differ, and the result does
-not depend on row order. Graphs with more than 2,000 edges use NetworkX's
-floating-point betweenness for speed (`info["betweenness_arithmetic"]`).
+are left out. Two paths of equal length must share the credit, but
+floating-point rounding can make one of them look shorter, so how path
+lengths are compared depends on whether the weights are stored exactly:
+
+* **Exact weights.** Integers, `Decimal`/`Fraction` values and floats that
+  equal the decimal they display (`2.0`, `0.125`, `1001.5`) are compared in
+  exact rational arithmetic.
+* **Other floats** (`0.3`, `73/9`, shares such as count/438) stand for a
+  value the type cannot hold, and which value was meant cannot be known
+  (`0.98989898989899` may be a typed decimal or 98/99). Brandes' algorithm
+  then treats path lengths within a relative 1e-10 of the shortest as equal,
+  the tolerance igraph uses (Csárdi & Nepusz, 2006), except that the slack
+  never exceeds a quarter of the edge being added, so a real extra hop is
+  never a tie. float32 and float16 hold only about 7 and 3 significant
+  digits; for them the tolerance is four machine epsilons (4.8 × 10⁻⁷ and
+  0.4%); smaller differences cannot be resolved at that precision. In
+  simulations, the largest gap between truly equal float32 paths (entered
+  decimals, ratios and rescaled shares) was half an epsilon.
+
+Either way the result does not depend on row order.
+`info["betweenness_arithmetic"]` and `info["betweenness_tolerance"]`
+record which comparison was used; graphs with more than 2,000 edges always
+use the tolerant one, for speed.
 
 ## Visual design decisions
 
@@ -130,6 +145,7 @@ floating-point betweenness for speed (`info["betweenness_arithmetic"]`).
 * Cleveland, W. S., & McGill, R. (1984). Graphical perception: theory, experimentation, and application to the development of graphical methods. *Journal of the American Statistical Association*, 79(387), 531–554.
 * Cohen, J., Cohen, P., West, S. G., & Aiken, L. S. (2003). *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences* (3rd ed.). Erlbaum.
 * Crameri, F., Shephard, G. E., & Heron, P. J. (2020). The misuse of colour in science communication. *Nature Communications*, 11, 5444.
+* Csárdi, G., & Nepusz, T. (2006). The igraph software package for complex network research. *InterJournal, Complex Systems*, 1695.
 * Cumming, G. (2014). The new statistics: why and how. *Psychological Science*, 25(1), 7–29.
 * Cumming, G., & Finch, S. (2005). Inference by eye: confidence intervals and how to read pictures of data. *American Psychologist*, 60(2), 170–180.
 * Delacre, M., Lakens, D., & Leys, C. (2017). Why psychologists should by default use Welch's t-test instead of Student's t-test. *International Review of Social Psychology*, 30(1), 92–101.

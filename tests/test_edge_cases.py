@@ -904,12 +904,12 @@ def test_weighted_betweenness_matches_exact_rational_ground_truth():
 # --- tenth verification round ------------------------------------------------------------------------------------
 
 
-def _exact_betweenness(frame):
+def _exact_betweenness(frame, directed=False):
     from fractions import Fraction
 
     import networkx as nx
 
-    H = nx.Graph()
+    H = nx.DiGraph() if directed else nx.Graph()
     H.add_nodes_from(set(frame.s) | set(frame.t))
     H.add_weighted_edges_from(((u, v, 1 / Fraction(str(w))) for u, v, w in frame.itertuples(index=False) if u != v),
                               weight="d")
@@ -941,19 +941,20 @@ def test_chains_of_near_ties_are_row_order_independent():
 
 
 def test_float16_keeps_differences_it_can_resolve():
-    e = pd.DataFrame({"s": ["A", "B", "A", "C"], "t": ["B", "D", "C", "D"], "w": [1.0, 1.0, 1.0, 0.9941]})
+    # a 1% longer route is well outside float16's tolerance (4 machine epsilons, 0.4%)
+    e = pd.DataFrame({"s": ["A", "B", "A", "C"], "t": ["B", "D", "C", "D"], "w": [1.0, 1.0, 1.0, 0.98]})
     stored = e.astype({"w": "float16"})
     reference = vc.network_map(stored.astype({"w": "float64"}), "s", "t", weight="w", communities=False).table
     got = vc.network_map(stored, "s", "t", weight="w", communities=False).table
     pd.testing.assert_series_equal(reference["betweenness"], got["betweenness"])
-    assert got.set_index("node").loc["C", "strength"] == pytest.approx(1.994)  # float16 0.9941 displays as 0.994
+    assert got.set_index("node").loc["C", "strength"] == 1 + float(np.float16(0.98))  # the stored value is used
 
 
 # --- eleventh verification round ---------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("rows,dtype", [
-    ([(f"P{i}", f"P{i+1}", "0.001") for i in range(5)] + [("P5", "W", "1000"), ("P5", "Y", "2000"), ("Y", "W", "1000")],
+    ([(f"P{i}", f"P{i+1}", "0.01") for i in range(5)] + [("P5", "W", "1000"), ("P5", "Y", "2000"), ("Y", "W", "1000")],
      "float32"),
     ([("S", "X", "0.000001"), ("X", "W", "1000000"), ("X", "Y", "2000000"), ("Y", "W", "1000000")], "float64"),
     ([("S", "X", "1"), ("X", "W", "1000"), ("X", "Y", "2000"), ("Y", "W", "1000")], "float16"),
@@ -965,14 +966,28 @@ def test_a_detour_with_an_extra_hop_is_never_a_tie(rows, dtype):
     assert vc.network_map(e, "s", "t", weight="w", communities=False).table.set_index("node").loc["Y", "betweenness"] == 0
 
 
-@pytest.mark.parametrize("dtype,strong", [("float32", 1e6), ("float16", 500.0)])
+@pytest.mark.parametrize("dtype,strong", [("float32", 5e5), ("float16", 100.0)])
 def test_exact_ties_before_a_strong_last_edge(dtype, strong):
+    # the rounding of 0.09, 0.18 and 0.12 exceeds a quarter of the last edge's length; the two routes to W still tie
     rows = [("A", "B", 0.09), ("B", "D", 0.18), ("A", "C", 0.12), ("C", "E", 0.12), ("D", "W", strong),
             ("E", "W", strong)]
     e = pd.DataFrame(rows, columns=["s", "t", "w"])
-    exact = _exact_betweenness(e)
-    got = vc.network_map(e.astype({"w": dtype}), "s", "t", weight="w", communities=False).table
+    exact = _exact_betweenness(e, directed=True)
+    got = vc.network_map(e.astype({"w": dtype}), "s", "t", weight="w", directed=True, communities=False).table
     assert all(r.betweenness == pytest.approx(exact[r.node], abs=1e-9) for r in got.itertuples())
+
+
+def test_float32_cannot_resolve_differences_below_its_precision():
+    # the detour via Y is 1e-7 of the path length: float64 resolves it, float32 (tolerance 4.8e-7) cannot
+    rows = [(f"P{i}", f"P{i+1}", 0.001) for i in range(5)] + [("P5", "W", 1000.0), ("P5", "Y", 2000.0),
+                                                            ("Y", "W", 1000.0)]
+    e = pd.DataFrame(rows, columns=["s", "t", "w"])
+
+    def y(frame):
+        return vc.network_map(frame, "s", "t", weight="w", communities=False).table.set_index("node").loc[
+            "Y", "betweenness"]
+
+    assert y(e) == 0 and y(e.astype({"w": "float32"})) > 0
 
 
 def test_exactly_stored_float32_differences_are_kept():
@@ -983,15 +998,69 @@ def test_exactly_stored_float32_differences_are_kept():
     assert all(r.betweenness == pytest.approx(exact[r.node], abs=1e-9) for r in got.itertuples())
 
 
-def test_large_graphs_fall_back_to_floating_point_betweenness():
+def test_betweenness_arithmetic_choice():
     from viz_calc.network import EXACT_EDGE_LIMIT
 
     rng = np.random.default_rng(0)
-    m = EXACT_EDGE_LIMIT + 50
-    e = pd.DataFrame({"s": rng.integers(0, 400, m), "t": rng.integers(400, 800, m), "w": rng.uniform(0.1, 5, m)})
-    e = e.drop_duplicates(["s", "t"])
-    res = vc.network_map(e, "s", "t", weight="w", communities=False, labels=False)
-    expected = "exact" if res.info["graph"].number_of_edges() <= EXACT_EDGE_LIMIT else "floating-point"
-    assert res.info["betweenness_arithmetic"] == expected
-    small = vc.network_map(e.head(50), "s", "t", weight="w", communities=False)
-    assert small.info["betweenness_arithmetic"] == "exact"
+    m = EXACT_EDGE_LIMIT + 200
+    big = pd.DataFrame({"s": rng.integers(0, 400, m), "t": rng.integers(400, 800, m), "w": rng.integers(1, 9, m)})
+    big = big.drop_duplicates(["s", "t"]).head(EXACT_EDGE_LIMIT + 50)
+    res = vc.network_map(big, "s", "t", weight="w", communities=False, labels=False)
+    assert res.info["betweenness_arithmetic"] == "tolerant floating-point"  # integers, but too many edges
+    small = big.head(50)
+    assert vc.network_map(small, "s", "t", weight="w", communities=False).info["betweenness_arithmetic"] == "exact"
+    floats = small.assign(w=small["w"] / 7)
+    info = vc.network_map(floats, "s", "t", weight="w", communities=False).info
+    assert info["betweenness_arithmetic"] == "tolerant floating-point" and info["betweenness_tolerance"] == 1e-10
+    info = vc.network_map(floats.astype({"w": "float32"}), "s", "t", weight="w", communities=False).info
+    assert info["betweenness_tolerance"] == 4 * float(np.finfo(np.float32).eps)
+    eighths = small.assign(w=small["w"] / 8)  # 0.125, 0.375, ... are stored exactly
+    for dtype in ("float64", "float32"):
+        info = vc.network_map(eighths.astype({"w": dtype}), "s", "t", weight="w", communities=False).info
+        assert info["betweenness_arithmetic"] == "exact" and info["betweenness_tolerance"] is None
+
+
+# --- twelfth verification round ----------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("total", [99, 365, 438, 1234567])
+def test_betweenness_is_invariant_when_counts_become_shares(total):
+    rng = np.random.default_rng(2)
+    pairs = [(f"n{i}", f"n{j}") for i in range(25) for j in range(i + 1, 25) if rng.random() < 0.2]
+    counts = pd.DataFrame(pairs, columns=["s", "t"]).assign(w=rng.integers(1, 7, len(pairs)))
+    a = vc.network_map(counts, "s", "t", weight="w", communities=False).table.set_index("node")["betweenness"]
+    b = vc.network_map(counts.assign(w=counts["w"] / total), "s", "t", weight="w", communities=False).table.set_index(
+        "node")["betweenness"]
+    pd.testing.assert_series_equal(a, b, atol=1e-12, rtol=0)
+
+
+@pytest.mark.parametrize("c", ["82.975752746229", "51234.567890123", "0.98989898989899"])
+def test_long_decimals_tie_with_their_doubles(c):
+    from fractions import Fraction
+
+    e = pd.DataFrame([("A", "B", float(Fraction(c) * 2)), ("B", "C", float(Fraction(c) * 2)), ("A", "C", float(c))],
+                     columns=["s", "t", "w"])
+    bc = vc.network_map(e, "s", "t", weight="w", communities=False).table.set_index("node")["betweenness"]
+    assert bc["B"] == pytest.approx(0.5)
+
+
+
+# --- thirteenth verification round -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_rescaled_decimal_weights_keep_their_ties(dtype):
+    # decimals and the same decimals as shares of 438: neither is stored exactly, both must match the exact answer
+    import matplotlib.pyplot as plt
+
+    rng = np.random.default_rng(5)
+    for _ in range(15):
+        pairs = [(f"n{i}", f"n{j}") for i in range(14) for j in range(i + 1, 14) if rng.random() < 0.25]
+        e = pd.DataFrame(pairs, columns=["s", "t"]).assign(w=rng.choice([0.06, 0.09, 0.12, 0.18, 0.24, 0.36],
+                                                                         len(pairs)))
+        exact = _exact_betweenness(e)
+        stored = e.astype({"w": dtype})
+        for frame in (stored, stored.assign(w=stored["w"] / 438)):
+            res = vc.network_map(frame, "s", "t", weight="w", communities=False)
+            plt.close(res.figure)
+            assert all(r.betweenness == pytest.approx(exact[r.node], abs=1e-9) for r in res.table.itertuples())
