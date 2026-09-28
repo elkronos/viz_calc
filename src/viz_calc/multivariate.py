@@ -12,7 +12,19 @@ from matplotlib.axes import Axes
 from matplotlib.patches import Ellipse
 from scipy.stats import chi2
 
-from ._core import NEUTRAL, VizResult, category_order, check_choice, check_dataframe, check_numeric, get_ax, palette
+from ._core import (
+    NEUTRAL,
+    VizResult,
+    category_order,
+    check_choice,
+    check_dataframe,
+    check_numeric,
+    cleanup_on_error,
+    column_list,
+    get_ax,
+    level_label,
+    palette,
+)
 
 __all__ = ["pca", "pca_plot", "radar"]
 
@@ -36,9 +48,10 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     Jolliffe, I. T., & Cadima, J. (2016). Principal component analysis: a
     review and recent developments. *Phil. Trans. R. Soc. A*, 374, 20150202.
     """
+    features = column_list("features", features)
     check_dataframe(data, features)
     check_numeric(data, *features)
-    X = data[list(features)].dropna()
+    X = data[features].dropna()
     if len(X) < 3:
         raise ValueError("need at least three complete rows")
     Z = X - X.mean()
@@ -55,7 +68,7 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     names = [f"PC{i + 1}" for i in range(len(S))]
     return {
         "scores": pd.DataFrame(U * S, index=X.index, columns=names),
-        "loadings": pd.DataFrame(Vt.T, index=list(features), columns=names),
+        "loadings": pd.DataFrame(Vt.T, index=features, columns=names),
         "explained_variance_ratio": pd.Series(eig / eig.sum(), index=names),
         "eigenvalues": pd.Series(eig, index=names),
     }
@@ -78,6 +91,7 @@ def _ellipse(ax: Axes, pts: np.ndarray, level: float, kind: str, color: str) -> 
     return {"cx": centre[0], "cy": centre[1], "width": width, "height": height, "angle": angle}
 
 
+@cleanup_on_error
 def pca_plot(
     data: pd.DataFrame,
     features: Sequence[str],
@@ -108,6 +122,7 @@ def pca_plot(
         Draw arrows for the *n* features with the largest loadings on the
         plotted components (``True`` = all features).
     """
+    features = column_list("features", features)
     check_dataframe(data, [*features, group])
     check_choice("ellipse", ellipse, ["data", "confidence", None])
     res = pca(data, features, scale)
@@ -119,7 +134,7 @@ def pca_plot(
     scores = res["scores"][[pc_x, pc_y]].copy()
     groups = [None]
     if group is not None:
-        complete = data[list(features)].notna().all(axis=1)  # the rows pca() kept, matched by position
+        complete = data[features].notna().all(axis=1)  # the rows pca() kept, matched by position
         scores[group] = data.loc[complete, group].array  # positional, and keeps a Categorical's order
         groups = category_order(scores[group], order)
     cols = palette(len(groups), colors)
@@ -128,7 +143,7 @@ def pca_plot(
     ellipses = {}
     for g, c in zip(groups, cols):
         sub = scores if g is None else scores[scores[group] == g]
-        ax.scatter(sub[pc_x], sub[pc_y], s=22, color=c, alpha=0.75, lw=0, label=None if g is None else str(g))
+        ax.scatter(sub[pc_x], sub[pc_y], s=22, color=c, alpha=0.75, lw=0, label=None if g is None else level_label(g))
         if ellipse:
             ellipses[g] = _ellipse(ax, sub[[pc_x, pc_y]].to_numpy(float), level, ellipse, c)
     if loadings:
@@ -158,6 +173,7 @@ def pca_plot(
                      {**res, "ellipses": ellipses, "components": (pc_x, pc_y)})
 
 
+@cleanup_on_error
 def radar(
     data: pd.DataFrame,
     metrics: Sequence[str],
@@ -183,19 +199,28 @@ def radar(
     scaled values are in the returned table. Radar charts are best
     for spotting profile *shapes*; the enclosed area depends on the order of
     the metrics and should not be compared.
+
+    An *ax* passed in must be a polar Axes, for example from
+    ``plt.subplots(subplot_kw={"projection": "polar"})`` or
+    ``fig.add_subplot(projection="polar")``; any other Axes raises
+    ``ValueError`` before anything is drawn.
     """
+    metrics = column_list("metrics", metrics)
     check_dataframe(data, [*metrics, group])
     check_numeric(data, *metrics)
     check_choice("normalize", normalize, ["data", "groups", "none"])
     check_choice("stat", stat, ["mean", "median"])
     if len(metrics) < 3:
         raise ValueError("radar needs at least three metrics")
+    if ax is not None and ax.name != "polar":
+        raise ValueError(f"radar needs a polar Axes, got a {ax.name!r} one; create it with "
+                         "plt.subplots(subplot_kw={'projection': 'polar'}) or fig.add_subplot(projection='polar')")
     groups = category_order(data[group], order)
-    raw = data.groupby(group, observed=True)[list(metrics)].agg(stat).reindex(groups)
+    raw = data.groupby(group, observed=True)[metrics].agg(stat).reindex(groups)
     raw = pd.DataFrame(raw.to_numpy(dtype=float, na_value=np.nan), index=raw.index, columns=raw.columns)
     scaled = raw.copy()
     if normalize != "none":
-        ref = data[list(metrics)].astype(float) if normalize == "data" else raw
+        ref = data[metrics].astype(float) if normalize == "data" else raw
         lo, span = ref.min(), (ref.max() - ref.min()).replace(0, np.nan)
         scaled = (raw - lo) / span
         flat = [m for m in metrics if pd.isna(span[m])]  # metric has one value only: put groups mid-scale
@@ -211,10 +236,10 @@ def radar(
     for g, c in zip(groups, cols):
         vals = scaled.loc[g].to_numpy(float)
         # Markers keep a group visible even when missing metrics break its outline into isolated points.
-        ax.plot(closed, np.r_[vals, vals[0]], color=c, lw=2, marker="o", ms=4, label=str(g))
+        ax.plot(closed, np.r_[vals, vals[0]], color=c, lw=2, marker="o", ms=4, label=level_label(g))
         if not np.isnan(vals).any():  # a polygon with a missing vertex would be misleading
             ax.fill(closed, np.r_[vals, vals[0]], color=c, alpha=0.12)
-    ax.set_xticks(angles, list(metrics))
+    ax.set_xticks(angles, metrics)
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
     if normalize != "none":

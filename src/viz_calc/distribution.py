@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from numbers import Real
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
@@ -12,7 +13,19 @@ from matplotlib.axes import Axes
 from scipy.stats import gaussian_kde
 
 from . import stats as st
-from ._core import VizResult, category_order, check_choice, check_dataframe, check_numeric, get_ax, palette
+from ._core import (
+    VizResult,
+    category_order,
+    check_choice,
+    check_count,
+    check_dataframe,
+    check_has_values,
+    check_numeric,
+    cleanup_on_error,
+    get_ax,
+    level_label,
+    palette,
+)
 
 __all__ = ["histogram", "ridgeplot", "raincloud"]
 
@@ -30,6 +43,7 @@ def _kde(values: np.ndarray, grid: np.ndarray, bw_method: Any = None) -> np.ndar
     return gaussian_kde(values, bw_method=bw_method)(grid)
 
 
+@cleanup_on_error
 def histogram(
     data: pd.DataFrame,
     x: str,
@@ -53,7 +67,8 @@ def histogram(
     Use ``stat="density"`` or ``"percent"`` when groups differ in size.
 
     ``ref_line`` draws the mean or median **of each facet** (and of each hue
-    group within it), not a single global value.
+    group within it), not a single global value; a number draws a fixed line
+    at that value.
 
     If the Freedman–Diaconis width is unusable (the IQR is zero, e.g. heavily
     tied or zero-inflated data, or FD would need more than 100,000 bins)
@@ -67,7 +82,15 @@ def histogram(
     """
     check_dataframe(data, [x, hue, facet])
     check_numeric(data, x)
+    check_has_values(data, x)
     check_choice("stat", stat, ["count", "density", "percent"])
+    if isinstance(bins, str):
+        check_choice("bins", bins, ["fd", "scott", "sturges", "auto"])
+    if isinstance(ref_line, str):
+        check_choice("ref_line", ref_line, ["mean", "median"])
+    elif ref_line is not None and (isinstance(ref_line, bool) or not isinstance(ref_line, Real)):
+        raise ValueError(f"ref_line must be 'mean', 'median', a number or None, got {ref_line!r}")
+    check_count("col_wrap", col_wrap)
     values = data[x].dropna().to_numpy(float)
     if isinstance(bins, str):
         edges, rule = st._bin_edges(values, bins)
@@ -100,7 +123,7 @@ def histogram(
                        edgecolor="white", lw=0.5)
             else:  # outlined steps keep overlapping groups readable
                 ax.stairs(heights, edges, fill=True, color=col, alpha=alpha * 0.4)
-                ax.stairs(heights, edges, color=col, lw=1.8, label=str(h))
+                ax.stairs(heights, edges, color=col, lw=1.8, label=level_label(h))
             if density_curve:
                 dens = _kde(s, grid)
                 if dens is not None:
@@ -111,7 +134,7 @@ def histogram(
                 ax.axvline(v, color=col if h is not None else "black", ls="--", lw=1.2)
             rows.append({"facet": f, "hue": h, **_describe(pd.Series(s))})
         if f is not None:
-            ax.set_title(f"{facet} = {f}", fontsize="medium", loc="left")
+            ax.set_title(f"{facet} = {level_label(f)}", fontsize="medium", loc="left")
         ax.spines[["top", "right"]].set_visible(False)
     for ax in list(axes.flat)[len(facets):]:
         ax.set_visible(False)
@@ -127,6 +150,7 @@ def histogram(
     return VizResult(fig, axes, table, {"bin_edges": edges, "bin_rule": rule, "stat": stat})
 
 
+@cleanup_on_error
 def ridgeplot(
     data: pd.DataFrame,
     x: str,
@@ -146,6 +170,7 @@ def ridgeplot(
     """
     check_dataframe(data, [x, group])
     check_numeric(data, x)
+    check_has_values(data, x)
     groups = category_order(data[group], order)
     values = data[x].dropna().to_numpy(float)
     pad = 0.05 * np.ptp(values) if np.ptp(values) else 1.0
@@ -168,7 +193,7 @@ def ridgeplot(
                 m = s.median()
                 ax.plot([m, m], [base, base + np.interp(m, grid, d) / peak], color="black", lw=1, zorder=2 * i + 2)
         rows.append({group: g, **_describe(s)})
-    ax.set_yticks([(len(groups) - 1 - i) * step for i in range(len(groups))], [str(g) for g in groups])
+    ax.set_yticks([(len(groups) - 1 - i) * step for i in range(len(groups))], [level_label(g) for g in groups])
     ax.set_xlabel(x)
     ax.set_ylabel(group)
     ax.spines[["top", "right", "left"]].set_visible(False)
@@ -176,6 +201,7 @@ def ridgeplot(
     return VizResult(fig, ax, pd.DataFrame(rows))
 
 
+@cleanup_on_error
 def raincloud(
     data: pd.DataFrame,
     x: str,
@@ -200,6 +226,7 @@ def raincloud(
     """
     check_dataframe(data, [x, y])
     check_numeric(data, y)
+    check_has_values(data, y)
     groups = category_order(data[x], order)
     cols = palette(len(groups), colors)
     rng = np.random.default_rng(seed)
@@ -224,7 +251,7 @@ def raincloud(
                 ax.boxplot(s, vert=False, **box)
             ax.scatter(s, pos - 0.22 + rng.uniform(-0.08, 0.08, s.size), s=10, color=cols[i], alpha=0.6, lw=0)
         rows.append({x: g, **_describe(pd.Series(s))})
-    ax.set_yticks([len(groups) - 1 - i for i in range(len(groups))], [f"{g}\n(n={r['n']})" for g, r in zip(groups, rows)])
+    ax.set_yticks([len(groups) - 1 - i for i in range(len(groups))], [f"{level_label(g)}\n(n={r['n']})" for g, r in zip(groups, rows)])
     ax.set_xlabel(y)
     ax.set_ylabel(x)
     ax.spines[["top", "right"]].set_visible(False)

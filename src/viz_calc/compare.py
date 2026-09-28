@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from numbers import Real
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
@@ -22,9 +23,15 @@ from ._core import (
     category_order,
     check_choice,
     check_dataframe,
+    check_has_values,
     check_numeric,
+    cleanup_on_error,
+    column_list,
+    exact_mean,
     get_ax,
+    level_label,
     palette,
+    slot_colors,
     text_color,
 )
 
@@ -35,6 +42,31 @@ def _jitter(n: int, width: float, rng: np.random.Generator) -> np.ndarray:
     return rng.uniform(-width, width, n) if n > 1 else np.zeros(n)
 
 
+_TIE = 4 * np.finfo(float).eps  # a floating-point rounding difference, relative to the data's scale
+
+
+def _threshold(data: pd.DataFrame, y: str, threshold: Any) -> tuple[float, float]:
+    """``(value, tie tolerance)`` for a *threshold* option: a number, or ``"mean"``/``"median"`` of *y*.
+
+    ``"mean"`` is the correctly rounded mean, and the tolerance is the rounding
+    error the data can carry, so a value that equals the mean in decimal is
+    not pushed to one side of it by floating-point arithmetic.
+    """
+    values = data[y].to_numpy(dtype=float, na_value=np.nan)
+    values = values[~np.isnan(values)]
+    if values.size == 0:
+        raise ValueError(f"column {y!r} has no non-missing values")
+    if isinstance(threshold, str) and threshold in ("mean", "median"):
+        if threshold == "median":
+            return float(np.median(values)), 0.0
+        thr, scale = exact_mean(values), float(np.mean(np.abs(values)))
+        return thr, (_TIE * scale if np.isfinite(thr) and np.isfinite(scale) else 0.0)
+    if isinstance(threshold, Real) and not isinstance(threshold, bool) and np.isfinite(float(threshold)):
+        return float(threshold), 0.0
+    raise ValueError(f"threshold must be a finite number, 'mean' or 'median', got {threshold!r}")
+
+
+@cleanup_on_error
 def estimation_plot(
     data: pd.DataFrame,
     x: str,
@@ -79,9 +111,11 @@ def estimation_plot(
     n_resamples
         Bootstrap resamples for the difference CI.
     p_adjust
-        Multiple-comparison correction for the Welch p-values.
+        Multiple-comparison correction for the Welch p-values: ``"holm"``,
+        ``"fdr_bh"``, ``"bonferroni"`` or ``"none"``.
     colors
-        One colour per group (defaults to the Okabe–Ito palette).
+        A colormap name or a list of colours, one per group (a shorter list
+        is cycled). Defaults to the Okabe–Ito palette.
     seed
         Seed for jitter and bootstrap, so the figure is reproducible.
 
@@ -102,6 +136,7 @@ def estimation_plot(
     """
     check_dataframe(data, [x, y])
     check_numeric(data, y)
+    check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     groups = category_order(data[x], order)
     if len(groups) < 2:
         raise ValueError("estimation_plot needs at least two groups")
@@ -149,7 +184,7 @@ def estimation_plot(
     comps_df = pd.DataFrame(comps)
     comps_df["p_adjusted"] = st.adjust_pvalues(comps_df["p"], p_adjust)
     ax_diff.set_ylabel(f"Difference from\n{reference}")
-    ax_diff.set_xticks(range(len(groups)), [str(g) for g in groups])
+    ax_diff.set_xticks(range(len(groups)), [level_label(g) for g in groups])
     ax_diff.set_xlabel(x)
     ax_diff.set_title(f"Mean difference with bootstrap {level:.0%} CI (BCa)", loc="left", fontsize="medium")
     for ax in (ax_raw, ax_diff):
@@ -171,6 +206,7 @@ def _half_violin(values: np.ndarray, points: int = 200):
     return grid, dens / dens.max()
 
 
+@cleanup_on_error
 def benchmark_bar(
     data: pd.DataFrame,
     x: str,
@@ -201,13 +237,17 @@ def benchmark_bar(
     ----------
     threshold
         A number, or ``"mean"``/``"median"`` of all observations of *y*.
+        ``"mean"`` is correctly rounded, and group means or CI limits that
+        differ from the threshold only by floating-point rounding count as
+        equal to it.
     error
         What the error bars show: ``"ci"``, ``"se"`` or ``"sd"``.
     classify
         ``"ci"`` colours by whether the CI excludes the threshold; ``"mean"``
-        by which side the mean falls on.
+        by which side the mean falls on (a mean equal to the threshold counts
+        as *above*).
     colors
-        ``(below, above, indistinguishable)`` colours.
+        A tuple of three colours: ``(below, above, indistinguishable)``.
 
     References
     ----------
@@ -218,14 +258,8 @@ def benchmark_bar(
     check_numeric(data, y)
     check_choice("error", error, ["ci", "se", "sd"])
     check_choice("classify", classify, ["ci", "mean"])
-    if threshold == "mean":
-        thr = float(data[y].mean())
-    elif threshold == "median":
-        thr = float(data[y].median())
-    elif isinstance(threshold, (int, float, np.number)) and not isinstance(threshold, bool):
-        thr = float(threshold)
-    else:
-        raise ValueError("threshold must be a number, 'mean' or 'median'")
+    colors = slot_colors(colors, ("below", "above", "indistinguishable"))
+    thr, tol = _threshold(data, y, threshold)
 
     groups = category_order(data[x], order)
     rows = []
@@ -235,10 +269,14 @@ def benchmark_bar(
         sd = s.std(ddof=1) if s.size > 1 else np.nan
         if s.size == 0:
             status = "no data"
-        elif classify == "ci":
-            status = "above" if lo > thr else "below" if hi < thr else "indistinguishable"
         else:
-            status = "above" if m >= thr else "below"
+            # A group mean carries its own rounding error, so widen the tie tolerance by the group's scale.
+            scale = float(np.mean(np.abs(s)))
+            tie = tol + (_TIE * scale if np.isfinite(scale) else 0.0)
+            if classify == "ci":
+                status = "above" if lo > thr + tie else "below" if hi < thr - tie else "indistinguishable"
+            else:
+                status = "above" if exact_mean(s) >= thr - tie else "below"
         rows.append({x: g, "n": s.size, "mean": m, "sd": sd, "se": sd / np.sqrt(s.size) if s.size else np.nan,
                      "ci_low": lo, "ci_high": hi, "status": status})
     table = pd.DataFrame(rows)
@@ -263,7 +301,7 @@ def benchmark_bar(
             s = data.loc[data[x] == g, y].dropna().to_numpy(float)
             ax.scatter(p + _jitter(s.size, 0.18, rng), s, s=8, color="black", alpha=0.35, lw=0, zorder=4)
     ax.axhline(thr, color="black", ls="--", lw=1, zorder=5)
-    ax.set_xticks(pos, [str(g) for g in table[x]])
+    ax.set_xticks(pos, [level_label(g) for g in table[x]])
     ax.set_xlabel(x)
     ax.set_ylabel(f"Mean {y}")
     ax.set_title(f"Mean {y} by {x} vs benchmark {thr:.3g} (bars: {err_text})", loc="left")
@@ -274,6 +312,7 @@ def benchmark_bar(
     return VizResult(fig, ax, table, {"threshold": thr, "error": error, "classify": classify, "level": level})
 
 
+@cleanup_on_error
 def lollipop(
     data: pd.DataFrame,
     x: str,
@@ -291,7 +330,8 @@ def lollipop(
     Dot plots are read more accurately than bars for comparing values on a
     common scale, and horizontal labels stay legible (Cleveland & McGill,
     1984). Stems start at zero so lengths stay honest. Values below
-    *threshold* are faded.
+    *threshold* are faded. *sort* is ``"descending"``, ``"ascending"`` or
+    ``None`` (keep the order of the categories).
 
     References
     ----------
@@ -300,15 +340,18 @@ def lollipop(
     """
     check_dataframe(data, [x, y])
     check_choice("stat", stat, ["mean", "median", "sum", "count"])
+    check_choice("sort", sort, ["descending", "ascending", None])
+    check_has_values(data, x)
     if stat != "count":
         if y is None:
             raise ValueError(f"stat={stat!r} needs a y column")
         check_numeric(data, y)
+        check_has_values(data, y)
         agg = data.groupby(x, observed=True)[y].agg(stat)
     else:
         agg = data.groupby(x, observed=True).size()
     table = agg.rename("value").reset_index()
-    if sort:
+    if sort is not None:
         table = table.sort_values("value", ascending=(sort == "ascending"), ignore_index=True)
 
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)) if horizontal else (8, 5))
@@ -331,7 +374,7 @@ def lollipop(
             else:
                 ax.annotate(abbreviate(v), (p, v), xytext=(0, 8 if v >= 0 else -8), textcoords="offset points",
                             ha="center", va="bottom" if v >= 0 else "top", fontsize=9)
-    ticks = [str(v) for v in table[x]]
+    ticks = [level_label(v) for v in table[x]]
     label = f"{stat} of {y}" if stat != "count" else "count"
     fmt = AbbrevFormatter()
     if horizontal:
@@ -354,6 +397,7 @@ def lollipop(
     return VizResult(fig, ax, table, {"stat": stat, "threshold": threshold})
 
 
+@cleanup_on_error
 def dumbbell(
     data: pd.DataFrame,
     label: str,
@@ -370,9 +414,15 @@ def dumbbell(
 
     Rows are sorted by the change so the largest movers are easy to find. The
     table reports absolute and percentage change.
+
+    Parameters
+    ----------
+    colors
+        A tuple of two colours: ``(start, end)``.
     """
     check_dataframe(data, [label, start, end])
     check_numeric(data, start, end)
+    colors = slot_colors(colors, ("start", "end"))
     table = data[[label, start, end]].copy()
     for c in dict.fromkeys((start, end)):
         # Subtract in a safe dtype: complete integer columns (any width, signed or not, nullable or not) become
@@ -402,7 +452,7 @@ def dumbbell(
             ax.annotate(abbreviate(left), (left, p), xytext=(-8, 0), textcoords="offset points", ha="right", va="center", fontsize=8)
             ax.annotate(abbreviate(right), (right, p), xytext=(8, 0), textcoords="offset points", ha="left", va="center", fontsize=8)
         ax.margins(x=0.1)
-    ax.set_yticks(pos, [str(v) for v in table[label]])
+    ax.set_yticks(pos, [level_label(v) for v in table[label]])
     ax.set_ylabel(label)
     ax.set_xlabel("Value")
     ax.xaxis.set_major_formatter(AbbrevFormatter())
@@ -413,6 +463,7 @@ def dumbbell(
     return VizResult(fig, ax, table)
 
 
+@cleanup_on_error
 def divergent_bar(
     data: pd.DataFrame,
     category: str,
@@ -429,9 +480,16 @@ def divergent_bar(
     *left* values are drawn to the left of zero, *right* values to the right.
     Axis labels show absolute values, so nothing reads as negative.
     Rows with a repeated category are summed.
+
+    Parameters
+    ----------
+    colors
+        A tuple of two colours: ``(left, right)``.
     """
     check_dataframe(data, [category, left, right])
     check_numeric(data, left, right)
+    check_has_values(data, category)
+    colors = slot_colors(colors, ("left", "right"))
     if (data[[left, right]] < 0).any().any():
         raise ValueError("divergent_bar expects non-negative values in both columns")
     table = data.groupby(category, sort=False, observed=True)[[left, right]].sum().reset_index()
@@ -443,7 +501,7 @@ def divergent_bar(
     ax.barh(pos, -table[left], color=colors[0], label=left_label or left)
     ax.barh(pos, table[right], color=colors[1], label=right_label or right)
     ax.axvline(0, color="black", lw=0.8)
-    ax.set_yticks(pos, [str(v) for v in table[category]])
+    ax.set_yticks(pos, [level_label(v) for v in table[category]])
     ax.xaxis.set_major_formatter(AbbrevFormatter(absolute=True))
     lim = max(table[left].max(), table[right].max()) * 1.1
     ax.set_xlim(-lim, lim)
@@ -453,6 +511,7 @@ def divergent_bar(
     return VizResult(fig, ax, table)
 
 
+@cleanup_on_error
 def centered_bar(
     data: pd.DataFrame,
     x: str,
@@ -469,15 +528,25 @@ def centered_bar(
     Error bars are Wilson score intervals for the at-or-above proportion
     (Wilson, 1927), which behave well for small groups and extreme
     proportions (Brown, Cai & DasGupta, 2001).
+
+    Parameters
+    ----------
+    threshold
+        A number, or ``"mean"``/``"median"`` of all observations of *y*.
+        ``"mean"`` is correctly rounded, and values that differ from it only
+        by floating-point rounding count as on it (so at-or-above).
+    colors
+        A tuple of two colours: ``(at_or_above, below)``.
     """
     check_dataframe(data, [x, y])
     check_numeric(data, y)
-    thr = float(data[y].mean()) if threshold == "mean" else float(data[y].median()) if threshold == "median" else float(threshold)
+    colors = slot_colors(colors, ("at_or_above", "below"))
+    thr, tol = _threshold(data, y, threshold)
     groups = category_order(data[x], order)
     rows = []
     for g in groups:
-        s = data.loc[data[x] == g, y].dropna()
-        n, k = int(s.size), int((s >= thr).sum())
+        s = data.loc[data[x] == g, y].dropna().to_numpy(float)
+        n, k = int(s.size), int((s >= thr - tol).sum())
         lo, hi = st.wilson_ci(k, n, level)
         rows.append({x: g, "n": n, "n_above": k, "p_above": k / n if n else np.nan,
                      "ci_low": float(lo), "ci_high": float(hi), "p_below": (n - k) / n if n else np.nan})
@@ -496,7 +565,7 @@ def centered_bar(
     ax.axhline(0, color="black", lw=0.8)
     ax.set_ylim(-1.05, 1.05)
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{abs(v):.0%}"))
-    ax.set_xticks(pos, [str(g) for g in table[x]])
+    ax.set_xticks(pos, [level_label(g) for g in table[x]])
     ax.set_xlabel(x)
     ax.set_ylabel(f"Share of {y}")
     ax.set_title(f"Share of {y} above/below {thr:.3g} (error bars: {level:.0%} Wilson CI)", loc="left")
@@ -505,6 +574,7 @@ def centered_bar(
     return VizResult(fig, ax, table, {"threshold": thr, "level": level})
 
 
+@cleanup_on_error
 def likert(
     data: pd.DataFrame,
     items: Sequence[str],
@@ -530,7 +600,7 @@ def likert(
     levels
         Response options ordered from most negative to most positive.
     colors
-        A diverging colormap name or one colour per level.
+        A diverging colormap name or a list of exactly one colour per level.
 
     References
     ----------
@@ -538,10 +608,18 @@ def likert(
     scales. *Proceedings of the 2011 Joint Statistical Meeting*, Section on
     Survey Research Methods, 1058–1066.
     """
+    items = column_list("items", items)
     check_dataframe(data, items)
+    if isinstance(levels, str):
+        raise TypeError("levels must be a list of response options, not a str")
     levels = list(levels)
     if len(levels) < 2:
         raise ValueError("levels needs at least two response options")
+    if colors is not None and not isinstance(colors, str):
+        colors = list(colors)
+        if len(colors) != len(levels):
+            raise ValueError(f"colors must be a colormap name or {len(levels)} colours (one per level), "
+                             f"got {len(colors)}")
     unknown = sorted({str(v) for c in items for v in data[c].dropna().unique() if v not in levels})
     if unknown:
         raise ValueError(f"responses not listed in levels: {unknown}")
@@ -567,13 +645,13 @@ def likert(
     left = start.to_numpy(dtype=float).copy()
     for lvl, col in zip(levels, cols):
         width = table[lvl].to_numpy(float)
-        bars = ax.barh(ypos, width, left=left, color=col, label=str(lvl), edgecolor="white", lw=0.5)
+        bars = ax.barh(ypos, width, left=left, color=col, label=level_label(lvl), edgecolor="white", lw=0.5)
         if labels:
             ax.bar_label(bars, labels=[f"{w:.0f}" if w >= 6 else "" for w in width], label_type="center", fontsize=8,
                          color=text_color(col))
         left += width
     ax.axvline(0, color="black", lw=0.8)
-    ax.set_yticks(ypos, [f"{i} (n={n})" for i, n in zip(table["item"], table["n"])])
+    ax.set_yticks(ypos, [f"{level_label(i)} (n={n})" for i, n in zip(table["item"], table["n"])])
     ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{abs(v):.0f}%"))
     ax.set_xlim(-max(float((-start).max()), 1) * 1.05, max(float(left.max()), 1) * 1.05)
     ax.set_xlabel("Share of responses")
