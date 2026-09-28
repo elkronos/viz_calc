@@ -56,7 +56,12 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False) -> pd.Series:
             return None
         return out if pd.api.types.is_datetime64_any_dtype(out) else None
 
-    if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s):
+    if s.notna().sum() == 0:  # e.g. a blank CSV column read as float NaN: nothing to parse
+        return pd.Series(pd.NaT, index=s.index, dtype="datetime64[ns]")
+    values = s.cat.categories if isinstance(s.dtype, pd.CategoricalDtype) else s
+    numeric = pd.api.types.is_numeric_dtype(values) and not pd.api.types.is_bool_dtype(values)
+    if numeric or pd.api.types.infer_dtype(values, skipna=True) in ("integer", "floating", "mixed-integer-float",
+                                                                     "decimal"):
         raise ValueError(f"column {name!r} holds numbers, which are ambiguous as dates (years? epoch seconds?); "
                          "convert it first, e.g. pd.to_datetime(values, unit='s') or format='%Y'")
     out = s if pd.api.types.is_datetime64_any_dtype(s) else attempt()
@@ -68,7 +73,7 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False) -> pd.Series:
             raise ValueError(f"column {name!r} could not be parsed as dates; use one consistent format, "
                              "ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
         if keep_tz:
-            has_zone = s.dropna().map(lambda v: pd.Timestamp(v).tzinfo is not None)
+            has_zone = s[utc.notna()].map(lambda v: pd.Timestamp(v).tzinfo is not None)  # blanks don't count
             if not has_zone.all():  # an offset-less value would silently be read as UTC
                 raise ValueError(f"column {name!r} mixes values with and without a UTC offset; make them consistent")
             out = utc
@@ -272,9 +277,13 @@ def _timeline_columns(d: pd.DataFrame, columns: Sequence[str]) -> Any:
     if any(z is None for z in zones) and any(z is not None for z in zones):
         raise ValueError(f"columns {list(columns)} mix timezone-aware and naive dates; make them consistent")
     tz = next((z for z in zones if z is not None), None)
-    for c in columns:
-        if c not in used and tz is not None and getattr(d[c].dt, "tz", None) is None:
-            d[c] = d[c].dt.tz_localize(tz)
+    for c in columns:  # give empty columns the common zone (or none) so the subtractions work
+        if c not in used:
+            own = getattr(d[c].dt, "tz", None)
+            if tz is not None:
+                d[c] = d[c].dt.tz_localize(tz) if own is None else d[c].dt.tz_convert(tz)
+            elif own is not None:
+                d[c] = d[c].dt.tz_localize(None)
     return tz
 
 

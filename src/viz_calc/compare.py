@@ -487,7 +487,8 @@ def centered_bar(
     pos = np.arange(len(table))
     up = ax.bar(pos, table["p_above"], color=colors[0], label=f"≥ {thr:.3g}")
     down = ax.bar(pos, -table["p_below"], color=colors[1], label=f"< {thr:.3g}")
-    ax.errorbar(pos, table["p_above"], yerr=[table["p_above"] - table["ci_low"], table["ci_high"] - table["p_above"]],
+    ax.errorbar(pos, table["p_above"], yerr=[np.clip(table["p_above"] - table["ci_low"], 0, None),
+                                             np.clip(table["ci_high"] - table["p_above"], 0, None)],
                 fmt="none", ecolor="black", capsize=3, lw=1)
     if labels:
         ax.bar_label(up, labels=[f"{v:.0%}" for v in table["p_above"]], padding=2, fontsize=8, label_type="center", color="white")

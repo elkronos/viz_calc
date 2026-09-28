@@ -693,3 +693,68 @@ def test_dumbbell_nullable_int64_stays_exact():
     big = 2**53
     df = pd.DataFrame({"k": ["a"], "s": pd.array([big + 1], dtype="Int64"), "e": pd.array([big + 3], dtype="Int64")})
     assert vc.dumbbell(df, label="k", start="s", end="e").table["change"].iloc[0] == 2
+
+
+# --- fifth verification round ------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("frame", [
+    pd.DataFrame({"s": ["A", "B", "A"], "t": ["B", "C", "C"], "w": np.array([0.3, 0.6, 0.2], dtype="float32")}),
+    pd.DataFrame({"s": ["A", "A", "A", "B", "A"], "t": ["B", "B", "B", "C", "C"], "w": [0.1, 0.1, 0.1, 0.6, 0.2]}),
+])
+def test_betweenness_ties_survive_float32_and_summed_rows(frame):
+    bc = vc.network_map(frame, "s", "t", weight="w").table.set_index("node")["betweenness"]
+    assert bc["B"] == pytest.approx(0.5)
+
+
+def test_plotly_save_to_binary_buffer():
+    pytest.importorskip("plotly")
+    from io import BytesIO
+
+    buf = BytesIO()
+    vc.sankey(pd.DataFrame({"a": ["x"], "b": ["y"], "v": [1]}), source="a", target="b", value="v").save(buf)
+    assert b"<html" in buf.getvalue().lower()
+
+
+def test_blank_csv_date_column_is_allowed():
+    from io import StringIO
+
+    csv = "task,start,end,ws,we\nA,2024-01-01,2024-01-05,,\nB,2024-01-03,2024-01-09,,\n"
+    p = pd.read_csv(StringIO(csv))  # ws/we are float NaN columns
+    t = vc.duration_plot(p, label="task", start="start", end="end", inner_start="ws", inner_end="we").table
+    assert t["outer_days"].tolist() == [4.0, 6.0] and t["inner_days"].isna().all()
+
+
+@pytest.mark.parametrize("col", [pd.Series([20240101, 20240102], dtype=object), pd.Categorical([2020, 2021])])
+def test_numbers_in_object_or_categorical_columns_are_not_dates(col):
+    with pytest.raises(ValueError, match="numbers"):
+        vc.period_bars(pd.DataFrame({"d": col, "v": [1.0, 2.0]}), date="d", value="v")
+
+
+def test_mixed_offsets_with_blanks():
+    g = pd.DataFrame({"task": ["A", "B", "C"],
+                      "s": ["2024-03-09 09:00-05:00", "2024-03-11 09:00-04:00", "2024-03-12 09:00-04:00"],
+                      "e": ["2024-03-09 17:00-05:00", "", "2024-03-12 17:00-04:00"]})
+    t = vc.gantt(g.iloc[[0, 2]], "task", "s", "e").table
+    assert t["duration_days"].tolist() == [pytest.approx(8 / 24)] * 2
+    from viz_calc.timeseries import _dates
+
+    assert _dates(g["e"], "e", keep_tz=True).isna().tolist() == [False, True, False]
+
+
+def test_empty_tz_aware_column_next_to_naive_ones():
+    p = datasets.projects()
+    p["work_start"] = pd.Series(pd.NaT, index=p.index, dtype="datetime64[ns, UTC]")
+    t = vc.duration_plot(p, label="task", start="start", end="end", inner_start="work_start", inner_end="work_end").table
+    assert t["inner_days"].isna().all()
+
+
+@pytest.mark.parametrize("values", [[10.0] * 5, [1.0] * 5])
+def test_centered_bar_all_above_or_all_below(values):
+    df = pd.DataFrame({"g": ["a"] * 5 + ["b"] * 5, "v": values + [0.0] * 5})
+    t = vc.centered_bar(df, x="g", y="v", threshold=5).table
+    assert t["ci_low"].min() >= 0 and t["ci_high"].max() <= 1
+
+
+def test_wilson_exact_at_the_boundaries():
+    assert st.wilson_ci(0, 7) [0] == 0.0 and st.wilson_ci(7, 7)[1] == 1.0

@@ -62,6 +62,8 @@ def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0
         half = z * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denom
     lower = np.where(n > 0, np.clip(centre - half, 0, 1), np.nan)
     upper = np.where(n > 0, np.clip(centre + half, 0, 1), np.nan)
+    lower = np.where((n > 0) & (k == 0), 0.0, lower)  # exact at the boundaries (rounding can leave 1e-17)
+    upper = np.where((n > 0) & (k == n), 1.0, upper)
     if lower.ndim == 0:
         return float(lower), float(upper)
     return lower, upper

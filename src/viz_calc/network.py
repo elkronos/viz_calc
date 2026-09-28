@@ -16,6 +16,16 @@ from ._core import NEUTRAL, VizResult, check_dataframe, check_numeric, palette, 
 __all__ = ["network_map", "sankey"]
 
 
+def _exact(value) -> Fraction:
+    """A number as an exact fraction of its shortest decimal text (numpy float32 0.3 -> 3/10)."""
+    if isinstance(value, (bool, np.bool_)):
+        return Fraction(int(value))
+    try:
+        return Fraction(str(value))
+    except (ValueError, TypeError):
+        return Fraction(float(value))
+
+
 def network_map(
     data: pd.DataFrame,
     source: str,
@@ -64,9 +74,12 @@ def network_map(
     if weighted and np.isinf(wts[keep]).any():
         raise ValueError(f"edge weights in {weight!r} must be finite")
     # Repeated edges are combined (weights summed) instead of letting the last row win; each edge keeps
-    # the orientation it was first seen with.
+    # the orientation it was first seen with. Weights are summed as exact fractions of their decimal text
+    # (float32 0.3 -> 3/10, 0.1 + 0.1 + 0.1 -> 3/10) so equally short paths tie exactly in betweenness.
+    # native dtype: iterating a float32 array yields float32 scalars, whose str() is the short decimal text
+    raw = data[weight].to_numpy() if weighted else np.ones(len(data), dtype=np.int64)
     merged: dict = {}
-    for u, v, w in zip(src[keep], tgt[keep], wts[keep]):
+    for u, v, w in zip(src[keep], tgt[keep], (_exact(x) for x in raw[keep])):
         key = (u, v) if directed else frozenset((u, v))
         if key in merged:
             merged[key][2] += w
@@ -78,6 +91,7 @@ def network_map(
         G.add_edge(u, v)
         if weighted:
             G[u][v][weight] = float(w)
+    exact = {frozenset((u, v)) if not directed else (u, v): w for u, v, w in merged.values()}
     wkey = weight if weighted else None
     nodes = list(G.nodes())
     table = pd.DataFrame({"node": nodes})
@@ -85,15 +99,15 @@ def network_map(
     table["strength"] = [G.degree(n, weight=wkey) for n in nodes]
     # Betweenness treats weights as distances; stronger ties should be shorter, so use 1/weight.
     # Zero-weight edges carry no tie and are left out of the paths.
-    # Distances are exact fractions so that equally short paths tie exactly (1/2 + 1/12 == 1/3 + 1/4, and
-    # 1/0.3 + 1/0.6 == 1/0.2);
+    # Distances are exact fractions (from the summed exact weights) so that equally short paths tie exactly
+    # (1/2 + 1/12 == 1/3 + 1/4, and 1/0.3 + 1/0.6 == 1/0.2);
     # with floats one path would win by rounding and take all the credit.
     if weighted:
         H = G.__class__()
         H.add_nodes_from(G)
         # Fractions are built from the decimal text (Fraction("0.3") == 3/10), so decimal weights tie exactly too.
-        H.add_edges_from((u, v, {"distance": 1 / Fraction(repr(d[weight]))}) for u, v, d in G.edges(data=True)
-                         if d[weight] > 0)
+        H.add_edges_from((u, v, {"distance": 1 / exact[(u, v) if directed else frozenset((u, v))]})
+                         for u, v, d in G.edges(data=True) if d[weight] > 0)
         bc = {n: float(b) for n, b in nx.betweenness_centrality(H, weight="distance").items()}
     else:
         bc = nx.betweenness_centrality(G)

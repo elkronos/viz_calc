@@ -14,7 +14,9 @@ dependency versions.
 - Unknown correlation methods, a `success` value that is not one of a
   two-valued column's values, empty data, all-missing grouping columns,
   one-sided quadrant splits, missing or infinite edge weights, ambiguous date
-  strings (e.g. day-first mixed with month-first) and non-positive
+  strings (e.g. day-first mixed with month-first), numbers passed as dates
+  (years? epoch seconds?), columns mixing values with and without a UTC
+  offset, and non-positive
   `upset(max_intersections=...)` now raise clear errors.
 - Number labels keep significant digits below 1 (`0.034`, not `0`); axes that
   reach 10,000 use K/M/B/T with the fewest decimals that show every tick

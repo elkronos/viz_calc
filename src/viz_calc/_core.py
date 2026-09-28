@@ -84,7 +84,13 @@ class VizResult:
         if is_path and not Path(path).suffix:
             path = f"{path}.{fmt}"
         if fmt in ("html", "htm"):
-            self.figure.write_html(path, **kwargs)
+            if is_path:
+                self.figure.write_html(path, **kwargs)
+            else:  # text streams get str, binary ones (BytesIO, open(..., "wb")) get UTF-8 bytes
+                import io
+
+                html = self.figure.to_html(**kwargs)
+                path.write(html if isinstance(path, io.TextIOBase) else html.encode("utf-8"))
         else:
             self.figure.write_image(path, format=fmt, **kwargs)
         return str(path) if is_path else path
