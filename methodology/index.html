@@ -1,0 +1,1456 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Visual calculators — statistically sound, citable charts for pandas data.">
+      
+      
+        <meta name="author" content="elkronos">
+      
+      
+        <link rel="canonical" href="https://elkronos.github.io/viz_calc/methodology/">
+      
+      
+        <link rel="prev" href="../gallery/">
+      
+      
+        <link rel="next" href="../api/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Methodology - viz_calc</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#methodology" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="viz_calc" class="md-header__button md-logo" aria-label="viz_calc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            viz_calc
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Methodology
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/elkronos/viz_calc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    elkronos/viz_calc
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="viz_calc" class="md-nav__button md-logo" aria-label="viz_calc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    viz_calc
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/elkronos/viz_calc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    elkronos/viz_calc
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Walkthroughs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Walkthroughs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/comparing-groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparing groups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/correlations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Correlations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/proportions-and-surveys/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proportions and surveys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/exploring-a-dataset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exploring a new dataset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/time-and-projects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Time and projects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/multivariate-and-networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multivariate and networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gallery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Methodology
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#statistical-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Statistical methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Statistical methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#confidence-interval-for-a-mean" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confidence interval for a mean
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#welchs-t-test-unequal-variances" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Welch's t-test (unequal variances)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hedges-g" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hedges' g
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bootstrap-confidence-intervals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bootstrap confidence intervals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wilson-score-interval-for-a-proportion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wilson score interval for a proportion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-comparison-adjustment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple-comparison adjustment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#correlation-with-confidence-interval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlation with confidence interval
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#difference-between-two-independent-correlations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Difference between two independent correlations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#histogram-bin-width" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Histogram bin width
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kernel-density-estimates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kernel density estimates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#largest-remainder-apportionment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Largest-remainder apportionment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#eta-squared" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Eta-squared
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#principal-component-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Principal component analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#networks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Networks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visual-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visual design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from the old scripts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#statistical-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Statistical methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Statistical methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#confidence-interval-for-a-mean" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confidence interval for a mean
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#welchs-t-test-unequal-variances" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Welch's t-test (unequal variances)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hedges-g" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hedges' g
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bootstrap-confidence-intervals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bootstrap confidence intervals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wilson-score-interval-for-a-proportion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wilson score interval for a proportion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-comparison-adjustment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple-comparison adjustment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#correlation-with-confidence-interval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlation with confidence interval
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#difference-between-two-independent-correlations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Difference between two independent correlations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#histogram-bin-width" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Histogram bin width
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kernel-density-estimates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kernel density estimates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#largest-remainder-apportionment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Largest-remainder apportionment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#eta-squared" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Eta-squared
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#principal-component-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Principal component analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#networks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Networks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visual-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visual design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="methodology">Methodology<a class="headerlink" href="#methodology" title="Permanent link">&para;</a></h1>
+<p>This page lists every statistical and design decision in viz_calc, why it
+was made, and where it comes from. The implementations are in
+<a href="../api/#statistics"><code>viz_calc.stats</code></a> and are unit-tested against SciPy and
+worked examples.</p>
+<h2 id="statistical-methods">Statistical methods<a class="headerlink" href="#statistical-methods" title="Permanent link">&para;</a></h2>
+<p><code>pd.NA</code> in nullable <code>Int64</code>/<code>Float64</code> columns (or in a plain list passed to a
+<code>viz_calc.stats</code> function) is treated exactly like <code>NaN</code>:
+missing values are dropped (pairwise for correlations). Every <code>level=</code> is a
+proportion strictly between 0 and 1 (<code>0.95</code>, not <code>95</code>); anything else raises
+a <code>ValueError</code> instead of producing <code>NaN</code> intervals.</p>
+<h3 id="confidence-interval-for-a-mean">Confidence interval for a mean<a class="headerlink" href="#confidence-interval-for-a-mean" title="Permanent link">&para;</a></h3>
+<p>Student-<em>t</em> interval: <span class="arithmatex">\(\bar x \pm t_{n-1,\,1-\alpha/2}\, s/\sqrt{n}\)</span>.
+Used by <code>estimation_plot</code>, <code>benchmark_bar</code>.</p>
+<h3 id="welchs-t-test-unequal-variances">Welch's <em>t</em>-test (unequal variances)<a class="headerlink" href="#welchs-t-test-unequal-variances" title="Permanent link">&para;</a></h3>
+<p><span class="arithmatex">\(t = (\bar x_B - \bar x_A)/\sqrt{s_A^2/n_A + s_B^2/n_B}\)</span> with
+Welch–Satterthwaite degrees of freedom. The default because it keeps the
+nominal error rate when variances or group sizes differ and costs almost no
+power when they are equal (Welch, 1947; Delacre, Lakens &amp; Leys, 2017).
+If both groups are constant the standard error is zero and <span class="arithmatex">\(t = \pm\infty\)</span>
+with the sign of the difference (<span class="arithmatex">\(p = 0\)</span>); two identical constants have no
+difference, so <span class="arithmatex">\(t\)</span> is <code>NaN</code> and <span class="arithmatex">\(p = 1\)</span>. Used by <code>estimation_plot</code>.</p>
+<h3 id="hedges-g">Hedges' <em>g</em><a class="headerlink" href="#hedges-g" title="Permanent link">&para;</a></h3>
+<p>Cohen's <em>d</em> with pooled SD, times the small-sample correction
+<span class="arithmatex">\(J = 1 - 3/(4\,df - 1)\)</span> (Hedges, 1981). CI from the large-sample variance
+<span class="arithmatex">\(\frac{n_A+n_B}{n_A n_B} + \frac{g^2}{2(n_A+n_B)}\)</span> (Hedges &amp; Olkin, 1985).
+Undefined (<code>NaN</code>) when both groups are constant.</p>
+<p>A group counts as constant when all its values are identical, so <code>[0.1] * 3</code>
+behaves like <code>[1.0] * 3</code> even though its floating-point mean is off by an ulp:
+its mean is taken to be its common value, so <code>[0.1] * 3</code> and <code>[0.1] * 10</code>
+are identical groups and the mean CI of <code>[0.1] * 3</code> is exactly 0.1.
+The mean CI, Welch's test and <em>g</em> rescale the data by a power of two before
+squaring deviations; the rescaling is exact, so ordinary results are
+unchanged and magnitudes beyond about <span class="arithmatex">\(10^{\pm 154}\)</span> no longer overflow or
+underflow (which used to give <span class="arithmatex">\(g = 0\)</span>).</p>
+<h3 id="bootstrap-confidence-intervals">Bootstrap confidence intervals<a class="headerlink" href="#bootstrap-confidence-intervals" title="Permanent link">&para;</a></h3>
+<p>Bias-corrected and accelerated (BCa) intervals (Efron, 1987) from
+<code>scipy.stats.bootstrap</code>, 5,000 resamples, fixed seed. Each group is resampled
+independently. Used for the mean difference in <code>estimation_plot</code>, following
+estimation-statistics practice (Cumming, 2014; Ho et al., 2019).</p>
+<h3 id="wilson-score-interval-for-a-proportion">Wilson score interval for a proportion<a class="headerlink" href="#wilson-score-interval-for-a-proportion" title="Permanent link">&para;</a></h3>
+<p><span class="arithmatex">\(\dfrac{\hat p + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat p(1-\hat p)}{n} + \frac{z^2}{4n^2}}}{1 + z^2/n}\)</span>.
+Recommended over the Wald interval, whose coverage collapses for small <em>n</em>
+or extreme proportions (Wilson, 1927; Brown, Cai &amp; DasGupta, 2001). Used by
+<code>percent_grid</code>, <code>centered_bar</code>.</p>
+<h3 id="multiple-comparison-adjustment">Multiple-comparison adjustment<a class="headerlink" href="#multiple-comparison-adjustment" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Holm</strong> step-down (Holm, 1979): controls the family-wise error rate and
+  is uniformly more powerful than Bonferroni. Default everywhere.</li>
+<li><strong>Benjamini–Hochberg</strong> (1995): controls the false discovery rate. Better
+  for screening many correlations.</li>
+<li><strong>Bonferroni</strong> and <strong>none</strong> are available.</li>
+</ul>
+<p>P-values outside <span class="arithmatex">\([0, 1]\)</span> raise a <code>ValueError</code>.</p>
+<p>Used by <code>estimation_plot</code> (across comparisons with the reference),
+<code>correlogram</code> (across the <em>k(k−1)/2</em> unique pairs), <code>compare_correlations</code>
+(within each pair of groups) and <code>profile_scatters</code>.</p>
+<h3 id="correlation-with-confidence-interval">Correlation with confidence interval<a class="headerlink" href="#correlation-with-confidence-interval" title="Permanent link">&para;</a></h3>
+<p>Pearson's <em>r</em> or Spearman's ρ with pairwise deletion of missing values.
+The CI uses Fisher's <span class="arithmatex">\(z = \operatorname{atanh}(r)\)</span> with standard error
+<span class="arithmatex">\(1/\sqrt{n-3}\)</span> (Fisher, 1921). For Spearman the standard error is
+<span class="arithmatex">\(\sqrt{1.06/(n-3)}\)</span> (Fieller, Hartley &amp; Pearson, 1957). The CI is <code>NaN</code> for
+<span class="arithmatex">\(n \le 3\)</span> or <span class="arithmatex">\(|r| = 1\)</span> (up to rounding).</p>
+<p>The Pearson p-value is the usual <em>t</em> test. For Spearman with <span class="arithmatex">\(n \le 9\)</span>
+complete pairs the p-value is exact: under independence all <span class="arithmatex">\(n!\)</span> pairings
+of the ranks are equally likely, and p is the share of them whose <span class="arithmatex">\(|\rho|\)</span>
+is at least the observed one (tied values keep their midranks, so the test is
+conditional on the ties). The <em>t</em> approximation is badly anti-conservative
+there: it gives <span class="arithmatex">\(p = 0\)</span> for any perfect rank agreement, whereas the exact
+two-sided p for <span class="arithmatex">\(|\rho| = 1\)</span> is <span class="arithmatex">\(2/n!\)</span>, i.e. 0.33 at <span class="arithmatex">\(n = 3\)</span> and 0.083 at
+<span class="arithmatex">\(n = 4\)</span>, so no rank correlation of three or four pairs can reach <span class="arithmatex">\(p &lt; 0.05\)</span>.
+From <span class="arithmatex">\(n = 10\)</span> the <em>t</em> approximation is used. <code>correlogram</code>,
+<code>profile_scatters</code> and <code>quadrant_plot</code> inherit this.</p>
+<h3 id="difference-between-two-independent-correlations">Difference between two independent correlations<a class="headerlink" href="#difference-between-two-independent-correlations" title="Permanent link">&para;</a></h3>
+<p><span class="arithmatex">\(z = \dfrac{\operatorname{atanh} r_B - \operatorname{atanh} r_A}{\sqrt{SE_A^2 + SE_B^2}}\)</span>,
+two-sided normal p-value (Fisher, 1921; Cohen, Cohen, West &amp; Aiken, 2003).
+Valid only when the groups contain different units; dependent correlations
+need Steiger's (1980) test. The test is asymptotic, so read it with caution
+for groups of only a few units; correlations of ±1 are clipped to ±0.999999.
+Used by <code>compare_correlations</code>.</p>
+<h3 id="histogram-bin-width">Histogram bin width<a class="headerlink" href="#histogram-bin-width" title="Permanent link">&para;</a></h3>
+<p>Freedman–Diaconis by default: width <span class="arithmatex">\(= 2\,\mathrm{IQR}\,n^{-1/3}\)</span>, which is
+robust to outliers (Freedman &amp; Diaconis, 1981). On heavily tied or
+zero-inflated data the IQR can be zero (or zero up to a few ulps of
+floating-point noise in the quartiles),
+which would give one bin or billions; then, or if FD would need more than
+100,000 bins, Sturges' rule is used instead and <code>info["bin_rule"]</code> records
+why. Outliers keep FD unless they are extreme enough to hit that safety
+limit. On whole-number data (counts, scores) an FD width below 1 leaves bins
+that can hold no value (a comb of empty bars), and a fractional width makes
+bins span different numbers of values (a sawtooth). There the width is
+rounded to the nearest whole number (at least 1) and the edges sit on
+half-integers from <span class="arithmatex">\(\min(x) - 0.5\)</span>; <code>info["bin_rule"]</code> then reads
+<code>fd (whole-number widths for integer data)</code>. The 100,000-bin limit is
+checked on the bins built with the rounded width, since a width rounded
+down (1.4 to 1) adds bins. Scott (1979) and
+Sturges (1926) are also available and used as published. Bins are computed
+once on all data so groups and facets are directly comparable.</p>
+<h3 id="kernel-density-estimates">Kernel density estimates<a class="headerlink" href="#kernel-density-estimates" title="Permanent link">&para;</a></h3>
+<p>Gaussian KDE with Scott's bandwidth rule (SciPy's default), adjustable with
+<code>bw_method</code>. Raincloud densities are trimmed to each group's observed range.</p>
+<h3 id="largest-remainder-apportionment">Largest-remainder apportionment<a class="headerlink" href="#largest-remainder-apportionment" title="Permanent link">&para;</a></h3>
+<p>Hamilton's method: floor each exact quota, then give the remaining units
+to the largest fractional remainders, so tile counts always sum to the grid
+size (Balinski &amp; Young, 1982). Used by <code>waffle</code>.</p>
+<h3 id="eta-squared">Eta-squared<a class="headerlink" href="#eta-squared" title="Permanent link">&para;</a></h3>
+<p><span class="arithmatex">\(\eta^2 = SS_\text{between}/SS_\text{total}\)</span>, the share of a numeric
+variable's variance explained by a grouping. Used to rank panels in
+<code>profile_boxes</code>.</p>
+<h3 id="principal-component-analysis">Principal component analysis<a class="headerlink" href="#principal-component-analysis" title="Permanent link">&para;</a></h3>
+<p>SVD of the centred (and by default standardized) data matrix; eigenvalues
+<span class="arithmatex">\(= s^2/(n-1)\)</span>; component signs fixed so the largest loading is positive
+(Jolliffe &amp; Cadima, 2016). Ellipses are drawn from the eigen-decomposition
+of each group's covariance with radius <span class="arithmatex">\(\sqrt{\chi^2_2(\text{level})}\)</span>. The
+"data" ellipse uses the covariance of the points; the "confidence" ellipse
+uses the covariance of the mean (divided by <em>n</em>).</p>
+<h3 id="networks">Networks<a class="headerlink" href="#networks" title="Permanent link">&para;</a></h3>
+<p>Repeated edges are merged by summing their weights. Louvain community
+detection (Blondel et al., 2008) via NetworkX, seeded, on the undirected graph
+(reciprocal directed weights are summed). Louvain squares sums of
+strengths and the spring layout multiplies weights, so when the largest
+weight is above 2²⁵⁶ or below 2⁻²⁵⁶ both get the weights divided or
+multiplied by a power of two, which would otherwise overflow or underflow to
+zero (exact, and modularity does not depend on scale); a node strength above
+the largest float raises an error. Betweenness centrality (Brandes, 2001) uses
+1/weight as edge length, so strong ties are short paths; zero-weight edges
+are left out. Two paths of equal length must share the credit, but
+floating-point rounding can make one of them look shorter, so how path
+lengths are compared depends on whether the weights are stored exactly:</p>
+<ul>
+<li><strong>Exact weights.</strong> Integers, and floats that cannot have been rounded
+  when stored (they print exactly as stored, and are integers below
+  2^(mantissa bits + 1), i.e. 2⁵³ for float64 and 2²⁴ for float32, or have no
+  more digits than the type's precision: <code>2.0</code>, <code>0.125</code>, <code>1001.5</code>), are
+  compared exactly. Larger float integers may be rounded counts and use the
+  tolerant comparison. Floating point orders the paths; any two
+  that come within 10⁻¹¹ of each other are then compared exactly, through
+  their residues modulo the prime 2¹²⁷ − 1 and, if those differ, in rational
+  arithmetic. Unlike rational arithmetic throughout, whose denominators grow
+  along every path, this costs about as much as floating point.</li>
+<li><strong>Other floats</strong> (<code>0.3</code>, <code>73/9</code>, shares such as count/438, float32 counts
+  above 2²⁴) may stand for a value the type cannot hold, and which value was
+  meant cannot be known (<code>0.98989898989899</code> may be a typed decimal or 98/99).
+  Brandes' algorithm then treats path lengths within a relative 10⁻¹⁰ of the
+  shortest as equal, the tolerance igraph uses (Csárdi &amp; Nepusz, 2006),
+  except that the slack is at most a quarter of the edge being added, the
+  last edge of the path. The cap applies to that edge only: a path with an
+  extra hop earlier on it that is shorter than 10⁻¹⁰ of the path length
+  can still tie, and since which edge is last depends on the direction the
+  path is traversed, in an undirected graph such a pair of paths can tie
+  from one endpoint and not from the other. An edge
+  too short for float64 to add to the path length at all (about 10¹⁶ times
+  shorter) leaves its two ends at the same floating-point distance; such
+  runs of nodes are ordered in rational arithmetic from where the run is
+  entered, with the same rule on that scale, so paths through the edge
+  still count (a path s–a–b–c with weights 0.1, 10¹⁷, 0.1 gives a and b
+  each 2/3, as the exact lengths do). float32 and
+  float16 hold only about 7 and 3 significant digits; a value entered and
+  then rescaled can be off by one machine epsilon, and two equal paths by
+  two, so for them the tolerance is four epsilons (4.8 × 10⁻⁷ and 0.4%), and
+  smaller differences cannot be resolved.</li>
+</ul>
+<p>The choice is made for the whole weight column, so one inexact weight makes
+every comparison tolerant. Either way the result does not depend on row
+order. <code>info["betweenness_arithmetic"]</code> and <code>info["betweenness_tolerance"]</code>
+record which comparison was used.</p>
+<h2 id="visual-design-decisions">Visual design decisions<a class="headerlink" href="#visual-design-decisions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Reason</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Show raw data with summaries (raincloud, estimation plot, points on bars)</td>
+<td>Bar-of-means charts hide <em>n</em>, spread and outliers</td>
+<td>Weissgerber et al., 2015; Allen et al., 2019</td>
+</tr>
+<tr>
+<td>Default error bars are CIs, not ±1 SE</td>
+<td>CIs have a stated coverage; SE bars are often misread</td>
+<td>Cumming &amp; Finch, 2005</td>
+</tr>
+<tr>
+<td>Dot plots and lengths on a common baseline for rankings</td>
+<td>Position/length are judged more accurately than angle or area</td>
+<td>Cleveland &amp; McGill, 1984</td>
+</tr>
+<tr>
+<td>Okabe–Ito categorical palette</td>
+<td>Distinguishable with common colour-vision deficiencies</td>
+<td>Okabe &amp; Ito, 2008</td>
+</tr>
+<tr>
+<td>Perceptually uniform (viridis) and diverging-centred colormaps</td>
+<td>Rainbow maps distort data and exclude colour-blind readers</td>
+<td>Crameri, Shephard &amp; Heron, 2020</td>
+</tr>
+<tr>
+<td>Diverging stacked bars for Likert items</td>
+<td>Aligns the neutral point so agreement reads as position</td>
+<td>Robbins &amp; Heiberger, 2011</td>
+</tr>
+<tr>
+<td>UpSet plots instead of Venn diagrams</td>
+<td>Venn diagrams do not scale beyond three sets</td>
+<td>Lex et al., 2014</td>
+</tr>
+<tr>
+<td>Bullet graphs in greyscale bands</td>
+<td>Compact target comparison readable without colour</td>
+<td>Few, 2013</td>
+</tr>
+<tr>
+<td>Bubble <strong>area</strong> ∝ value, one scale and fixed axes per animation</td>
+<td>Area is the size cue readers use; per-frame rescaling breaks comparison between frames</td>
+<td>Cleveland &amp; McGill, 1984</td>
+</tr>
+<tr>
+<td>Label text colour chosen by contrast</td>
+<td>Keeps labels legible on light and dark fills</td>
+<td>WCAG 2.x contrast ratio</td>
+</tr>
+</tbody>
+</table>
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Allen, M., Poggiali, D., Whitaker, K., Marshall, T. R., &amp; Kievit, R. A. (2019). Raincloud plots: a multi-platform tool for robust data visualization. <em>Wellcome Open Research</em>, 4, 63.</li>
+<li>Balinski, M. L., &amp; Young, H. P. (1982). <em>Fair Representation: Meeting the Ideal of One Man, One Vote</em>. Yale University Press.</li>
+<li>Benjamini, Y., &amp; Hochberg, Y. (1995). Controlling the false discovery rate: a practical and powerful approach to multiple testing. <em>Journal of the Royal Statistical Society B</em>, 57(1), 289–300.</li>
+<li>Blondel, V. D., Guillaume, J.-L., Lambiotte, R., &amp; Lefebvre, E. (2008). Fast unfolding of communities in large networks. <em>Journal of Statistical Mechanics</em>, P10008.</li>
+<li>Brandes, U. (2001). A faster algorithm for betweenness centrality. <em>Journal of Mathematical Sociology</em>, 25(2), 163–177.</li>
+<li>Brown, L. D., Cai, T. T., &amp; DasGupta, A. (2001). Interval estimation for a binomial proportion. <em>Statistical Science</em>, 16(2), 101–133.</li>
+<li>Cleveland, W. S., &amp; McGill, R. (1984). Graphical perception: theory, experimentation, and application to the development of graphical methods. <em>Journal of the American Statistical Association</em>, 79(387), 531–554.</li>
+<li>Cohen, J., Cohen, P., West, S. G., &amp; Aiken, L. S. (2003). <em>Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences</em> (3rd ed.). Erlbaum.</li>
+<li>Crameri, F., Shephard, G. E., &amp; Heron, P. J. (2020). The misuse of colour in science communication. <em>Nature Communications</em>, 11, 5444.</li>
+<li>Csárdi, G., &amp; Nepusz, T. (2006). The igraph software package for complex network research. <em>InterJournal, Complex Systems</em>, 1695.</li>
+<li>Cumming, G. (2014). The new statistics: why and how. <em>Psychological Science</em>, 25(1), 7–29.</li>
+<li>Cumming, G., &amp; Finch, S. (2005). Inference by eye: confidence intervals and how to read pictures of data. <em>American Psychologist</em>, 60(2), 170–180.</li>
+<li>Delacre, M., Lakens, D., &amp; Leys, C. (2017). Why psychologists should by default use Welch's t-test instead of Student's t-test. <em>International Review of Social Psychology</em>, 30(1), 92–101.</li>
+<li>Efron, B. (1987). Better bootstrap confidence intervals. <em>Journal of the American Statistical Association</em>, 82(397), 171–185.</li>
+<li>Few, S. (2013). <em>Bullet Graph Design Specification</em>. Perceptual Edge.</li>
+<li>Fieller, E. C., Hartley, H. O., &amp; Pearson, E. S. (1957). Tests for rank correlation coefficients. I. <em>Biometrika</em>, 44(3/4), 470–481.</li>
+<li>Fisher, R. A. (1921). On the "probable error" of a coefficient of correlation deduced from a small sample. <em>Metron</em>, 1, 3–32.</li>
+<li>Freedman, D., &amp; Diaconis, P. (1981). On the histogram as a density estimator: L2 theory. <em>Zeitschrift für Wahrscheinlichkeitstheorie und verwandte Gebiete</em>, 57, 453–476.</li>
+<li>Hedges, L. V. (1981). Distribution theory for Glass's estimator of effect size and related estimators. <em>Journal of Educational Statistics</em>, 6(2), 107–128.</li>
+<li>Hedges, L. V., &amp; Olkin, I. (1985). <em>Statistical Methods for Meta-Analysis</em>. Academic Press.</li>
+<li>Ho, J., Tumkaya, T., Aryal, S., Choi, H., &amp; Claridge-Chang, A. (2019). Moving beyond P values: data analysis with estimation graphics. <em>Nature Methods</em>, 16, 565–566.</li>
+<li>Holm, S. (1979). A simple sequentially rejective multiple test procedure. <em>Scandinavian Journal of Statistics</em>, 6(2), 65–70.</li>
+<li>Jolliffe, I. T., &amp; Cadima, J. (2016). Principal component analysis: a review and recent developments. <em>Philosophical Transactions of the Royal Society A</em>, 374, 20150202.</li>
+<li>Lex, A., Gehlenborg, N., Strobelt, H., Vuillemot, R., &amp; Pfister, H. (2014). UpSet: visualization of intersecting sets. <em>IEEE Transactions on Visualization and Computer Graphics</em>, 20(12), 1983–1992.</li>
+<li>Okabe, M., &amp; Ito, K. (2008). <em>Color Universal Design (CUD): How to make figures and presentations that are friendly to colorblind people</em>. J*Fly.</li>
+<li>Robbins, N. B., &amp; Heiberger, R. M. (2011). Plotting Likert and other rating scales. <em>Proceedings of the 2011 Joint Statistical Meeting</em>, Section on Survey Research Methods, 1058–1066.</li>
+<li>Scott, D. W. (1979). On optimal and data-based histograms. <em>Biometrika</em>, 66(3), 605–610.</li>
+<li>Steiger, J. H. (1980). Tests for comparing elements of a correlation matrix. <em>Psychological Bulletin</em>, 87(2), 245–251.</li>
+<li>Sturges, H. A. (1926). The choice of a class interval. <em>Journal of the American Statistical Association</em>, 21(153), 65–66.</li>
+<li>Weissgerber, T. L., Milic, N. M., Winham, S. J., &amp; Garovic, V. D. (2015). Beyond bar and line graphs: time for a new data presentation paradigm. <em>PLoS Biology</em>, 13(4), e1002128.</li>
+<li>Welch, B. L. (1947). The generalization of "Student's" problem when several different population variances are involved. <em>Biometrika</em>, 34(1–2), 28–35.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

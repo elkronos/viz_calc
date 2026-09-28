@@ -1,0 +1,1301 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Visual calculators — statistically sound, citable charts for pandas data.">
+      
+      
+        <meta name="author" content="elkronos">
+      
+      
+        <link rel="canonical" href="https://elkronos.github.io/viz_calc/getting-started/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../walkthroughs/comparing-groups/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Getting started - viz_calc</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#getting-started" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="viz_calc" class="md-header__button md-logo" aria-label="viz_calc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            viz_calc
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Getting started
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/elkronos/viz_calc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    elkronos/viz_calc
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="viz_calc" class="md-nav__button md-logo" aria-label="viz_calc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    viz_calc
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/elkronos/viz_calc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    elkronos/viz_calc
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-one-pattern-to-learn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The one pattern to learn
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showing-figures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Showing figures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#putting-charts-into-your-own-layouts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Putting charts into your own layouts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-the-statistics-without-a-chart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using the statistics without a chart
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#colours" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Colours
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conventions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example datasets
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Walkthroughs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Walkthroughs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/comparing-groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparing groups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/correlations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Correlations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/proportions-and-surveys/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proportions and surveys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/exploring-a-dataset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exploring a new dataset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/time-and-projects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Time and projects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/multivariate-and-networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multivariate and networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gallery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../methodology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from the old scripts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-one-pattern-to-learn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The one pattern to learn
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#showing-figures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Showing figures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#putting-charts-into-your-own-layouts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Putting charts into your own layouts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-the-statistics-without-a-chart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using the statistics without a chart
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#colours" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Colours
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conventions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example datasets
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h1>
+<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"viz_calc @ git+https://github.com/elkronos/viz_calc"</span>
+</code></pre></div>
+<p>Optional extras:</p>
+<table>
+<thead>
+<tr>
+<th>Extra</th>
+<th>Adds</th>
+<th>Needed for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>network</code></td>
+<td>networkx</td>
+<td><code>network_map</code></td>
+</tr>
+<tr>
+<td><code>interactive</code></td>
+<td>plotly</td>
+<td><code>sankey</code>, <code>network_map(interactive=True)</code></td>
+</tr>
+<tr>
+<td><code>pptx</code></td>
+<td>python-pptx</td>
+<td><code>to_pptx</code></td>
+</tr>
+<tr>
+<td><code>all</code></td>
+<td>all of the above</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"viz_calc[all] @ git+https://github.com/elkronos/viz_calc"</span>
+</code></pre></div>
+<p>Python 3.10+ with NumPy ≥ 1.24, pandas ≥ 2.0, Matplotlib ≥ 3.7 and SciPy ≥ 1.11.</p>
+<h2 id="the-one-pattern-to-learn">The one pattern to learn<a class="headerlink" href="#the-one-pattern-to-learn" title="Permanent link">&para;</a></h2>
+<p>Every chart function takes a DataFrame first (<code>upset</code> also accepts a dict of
+sets) and column names as keywords, and returns a
+<a href="../api/#viz_calc.VizResult"><code>VizResult</code></a>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">viz_calc</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">vc</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">viz_calc</span><span class="w"> </span><span class="kn">import</span> <span class="n">datasets</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">trial</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">trial</span><span class="p">()</span>                      <span class="c1"># seeded example data: 3 arms × 40 people</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">benchmark_bar</span><span class="p">(</span><span class="n">trial</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"arm"</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">"score"</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">res</span><span class="o">.</span><span class="n">figure</span>      <span class="c1"># matplotlib.figure.Figure</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">res</span><span class="o">.</span><span class="n">axes</span>        <span class="c1"># the Axes you can keep customising</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">res</span><span class="o">.</span><span class="n">table</span>       <span class="c1"># the numbers that were drawn</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">res</span><span class="o">.</span><span class="n">info</span>        <span class="c1"># extra results and the settings used</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">res</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">"benchmark.png"</span><span class="p">)</span>   <span class="c1"># PNG, SVG or PDF; HTML for Plotly figures</span>
+</code></pre></div>
+<p><code>res.table</code> for the call above:</p>
+<table>
+<thead>
+<tr>
+<th>arm</th>
+<th>n</th>
+<th>mean</th>
+<th>sd</th>
+<th>se</th>
+<th>ci_low</th>
+<th>ci_high</th>
+<th>status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>control</td>
+<td>40</td>
+<td>48.91</td>
+<td>9.10</td>
+<td>1.44</td>
+<td>46.00</td>
+<td>51.82</td>
+<td>indistinguishable</td>
+</tr>
+<tr>
+<td>low dose</td>
+<td>40</td>
+<td>52.26</td>
+<td>16.14</td>
+<td>2.55</td>
+<td>47.09</td>
+<td>57.42</td>
+<td>indistinguishable</td>
+</tr>
+<tr>
+<td>high dose</td>
+<td>40</td>
+<td>53.53</td>
+<td>10.86</td>
+<td>1.72</td>
+<td>50.05</td>
+<td>57.00</td>
+<td>above</td>
+</tr>
+</tbody>
+</table>
+<p>The table is an ordinary DataFrame: export it with <code>res.table.to_csv(...)</code>,
+cite it in a report, or test it.</p>
+<h2 id="showing-figures">Showing figures<a class="headerlink" href="#showing-figures" title="Permanent link">&para;</a></h2>
+<p>viz_calc never calls <code>plt.show()</code>. In Jupyter the figure appears
+automatically when it is the last thing in a cell (<code>res.figure</code>). In a script:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">waffle</span><span class="p">(</span><span class="n">datasets</span><span class="o">.</span><span class="n">survey</span><span class="p">(),</span> <span class="n">category</span><span class="o">=</span><span class="s2">"team"</span><span class="p">)</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</code></pre></div>
+<h2 id="putting-charts-into-your-own-layouts">Putting charts into your own layouts<a class="headerlink" href="#putting-charts-into-your-own-layouts" title="Permanent link">&para;</a></h2>
+<p>Functions that draw a single chart accept <code>ax=</code>, so several can share one
+figure:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">fig</span><span class="p">,</span> <span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">)</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">vc</span><span class="o">.</span><span class="n">lollipop</span><span class="p">(</span><span class="n">trial</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"arm"</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">"score"</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">left</span><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">vc</span><span class="o">.</span><span class="n">centered_bar</span><span class="p">(</span><span class="n">trial</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"arm"</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">"score"</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">55</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">right</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">fig</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+</code></pre></div>
+<p><code>radar</code> and <code>circular_bar</code> draw on a <strong>polar</strong> Axes, so create that panel with
+<code>projection="polar"</code> (or <code>plt.subplots(subplot_kw={"projection": "polar"})</code>);
+an ordinary Axes raises <code>ValueError</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">bars</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">spider</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">projection</span><span class="o">=</span><span class="s2">"polar"</span><span class="p">)</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">meas</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">measurements</span><span class="p">()</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">vc</span><span class="o">.</span><span class="n">lollipop</span><span class="p">(</span><span class="n">meas</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"group"</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">"mass"</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">bars</span><span class="p">)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">vc</span><span class="o">.</span><span class="n">radar</span><span class="p">(</span><span class="n">meas</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">"length"</span><span class="p">,</span> <span class="s2">"width"</span><span class="p">,</span> <span class="s2">"depth"</span><span class="p">,</span> <span class="s2">"mass"</span><span class="p">],</span> <span class="n">group</span><span class="o">=</span><span class="s2">"group"</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">spider</span><span class="p">)</span>
+</code></pre></div>
+<p><code>bullet</code> draws one panel per row, so it takes <code>ax=</code> only for a single row.</p>
+<p>These functions have no <code>ax=</code> and always create their own figure:</p>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>estimation_plot</code></td>
+<td>two linked panels: the data and the differences</td>
+</tr>
+<tr>
+<td><code>histogram</code></td>
+<td>lays out its own grid, one panel per facet, under a figure title; without <code>facet</code> the grid is 1 × 1 (<code>res.axes</code> is a 1 × 1 array)</td>
+</tr>
+<tr>
+<td><code>compare_correlations</code></td>
+<td>one heatmap per pair of groups</td>
+</tr>
+<tr>
+<td><code>percent_grid</code>, <code>donut_grid</code></td>
+<td>one panel per facet or row</td>
+</tr>
+<tr>
+<td><code>upset</code></td>
+<td>intersection bars, membership matrix and set sizes on linked axes</td>
+</tr>
+<tr>
+<td><code>calendar_heatmap</code></td>
+<td>one panel per year</td>
+</tr>
+<tr>
+<td><code>profile_bars</code>, <code>profile_boxes</code>, <code>profile_scatters</code></td>
+<td>pages of small multiples; <code>res.figure</code> is a list</td>
+</tr>
+<tr>
+<td><code>animated_bubble</code></td>
+<td>the animation redraws its own figure</td>
+</tr>
+<tr>
+<td><code>sankey</code></td>
+<td>returns a Plotly figure, as does <code>network_map(interactive=True)</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="using-the-statistics-without-a-chart">Using the statistics without a chart<a class="headerlink" href="#using-the-statistics-without-a-chart" title="Permanent link">&para;</a></h2>
+<p>All the methods are public in <a href="../api/#statistics"><code>viz_calc.stats</code></a>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">viz_calc</span><span class="w"> </span><span class="kn">import</span> <span class="n">stats</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">control_scores</span> <span class="o">=</span> <span class="n">trial</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">trial</span><span class="p">[</span><span class="s2">"arm"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"control"</span><span class="p">,</span> <span class="s2">"score"</span><span class="p">]</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">treated_scores</span> <span class="o">=</span> <span class="n">trial</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">trial</span><span class="p">[</span><span class="s2">"arm"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"high dose"</span><span class="p">,</span> <span class="s2">"score"</span><span class="p">]</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">stats</span><span class="o">.</span><span class="n">wilson_ci</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">40</span><span class="p">)</span>                              <span class="c1"># (0.181, 0.454)</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">stats</span><span class="o">.</span><span class="n">welch_test</span><span class="p">(</span><span class="n">control_scores</span><span class="p">,</span> <span class="n">treated_scores</span><span class="p">)</span>     <span class="c1"># treated − control: 4.6, 95% CI 0.2 to 9.1, p = 0.043</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">stats</span><span class="o">.</span><span class="n">adjust_pvalues</span><span class="p">([</span><span class="mf">0.01</span><span class="p">,</span> <span class="mf">0.04</span><span class="p">,</span> <span class="mf">0.03</span><span class="p">],</span> <span class="s2">"holm"</span><span class="p">)</span>     <span class="c1"># [0.03, 0.06, 0.06]</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">stats</span><span class="o">.</span><span class="n">compare_correlations_test</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>  <span class="c1"># z ≈ 1.67, p ≈ .095</span>
+</code></pre></div>
+<h2 id="colours">Colours<a class="headerlink" href="#colours" title="Permanent link">&para;</a></h2>
+<p>The default categorical palette is Okabe–Ito, designed to stay distinct for
+colour-blind readers. For more than eight categories viz_calc switches to
+<code>viridis</code>. <code>vc.palette(n, colors)</code> gives you the same colours for your own
+additions. How you change a chart's colours depends on what it colours:</p>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Takes</th>
+<th>Functions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>colors=</code></td>
+<td>a Matplotlib colormap name (e.g. <code>"viridis"</code>) or a list of colours, cycled if short; one colour per group or category</td>
+<td><code>estimation_plot</code>, <code>histogram</code>, <code>ridgeplot</code>, <code>raincloud</code>, <code>waffle</code>, <code>stacked_percentages</code>, <code>donut_grid</code>, <code>nested_pie</code>, <code>circular_bar</code>, <code>gantt</code>, <code>animated_bubble</code>, <code>pca_plot</code>, <code>radar</code></td>
+</tr>
+<tr>
+<td><code>colors=</code></td>
+<td>a diverging colormap name (default <code>"RdBu"</code>) or a list of exactly one colour per level, most negative first</td>
+<td><code>likert</code></td>
+</tr>
+<tr>
+<td><code>colors=</code></td>
+<td>a tuple with one colour per role, in this order (not a colormap name)</td>
+<td><code>benchmark_bar</code> (below, above, indistinguishable), <code>waterfall</code> (increase, decrease, total), <code>dumbbell</code> (start, end), <code>divergent_bar</code> (left, right), <code>centered_bar</code> (at or above, below), <code>percent_grid</code> (success, other), <code>timeseries_fill</code> (first series, second series), <code>duration_plot</code> (outer, inner)</td>
+</tr>
+<tr>
+<td><code>color=</code></td>
+<td>one colour</td>
+<td><code>lollipop</code>, <code>quadrant_plot</code>, <code>funnel</code>, <code>upset</code>, <code>period_bars</code>, <code>profile_bars</code></td>
+</tr>
+<tr>
+<td><code>bar_color=</code></td>
+<td>one colour for the measure; the bands are shades of grey</td>
+<td><code>bullet</code></td>
+</tr>
+<tr>
+<td><code>cmap=</code></td>
+<td>a colormap name</td>
+<td><code>correlogram</code>, <code>compare_correlations</code>, <code>calendar_heatmap</code> (plus <code>missing_color=</code> for days without data)</td>
+</tr>
+<tr>
+<td>none</td>
+<td>the default palette</td>
+<td><code>network_map</code> (one colour per community), <code>sankey</code>, <code>profile_boxes</code>, <code>profile_scatters</code></td>
+</tr>
+</tbody>
+</table>
+<p>In <code>animated_bubble</code>, <code>color=</code> names the <strong>column</strong> whose categories set the
+bubble colours; the colours themselves go in <code>colors=</code>.</p>
+<h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
+<p>Arguments are named for the role a column plays, and most names mean the
+same thing everywhere. The exceptions are listed here.</p>
+<ul>
+<li><strong><code>x</code> and <code>y</code>.</strong> In the group comparisons (<code>estimation_plot</code>,
+  <code>benchmark_bar</code>, <code>lollipop</code>, <code>centered_bar</code>, <code>raincloud</code>), <code>x</code> is the
+  grouping column and <code>y</code> the numeric column being compared, whichever way
+  the chart is drawn: <code>raincloud</code> and <code>lollipop</code> (with its default
+  <code>horizontal=True</code>) list the groups down the vertical axis. In <code>histogram</code>
+  and <code>ridgeplot</code>, <code>x</code> is the numeric column whose distribution is drawn, and
+  the groups come from <code>hue=</code>/<code>facet=</code> or <code>group=</code>. In <code>quadrant_plot</code> and
+  <code>animated_bubble</code>, <code>x</code> and <code>y</code> are the horizontal and vertical axes.</li>
+<li><strong><code>group</code></strong> is a categorical column whose levels are drawn separately, as
+  colours, rows, sections or panels (<code>ridgeplot</code>, <code>compare_correlations</code>,
+  <code>stacked_percentages</code>, <code>circular_bar</code>, <code>gantt</code>, <code>pca_plot</code>, <code>radar</code>).
+  <code>histogram</code> splits by <code>hue=</code> (overlaid) and <code>facet=</code> (panels), and
+  <code>percent_grid</code> by <code>facet=</code>.</li>
+<li><strong><code>value</code></strong> is the numeric column being drawn (<code>waffle</code>, <code>nested_pie</code>,
+  <code>circular_bar</code>, <code>waterfall</code>, <code>funnel</code>, <code>bullet</code>, <code>period_bars</code>,
+  <code>calendar_heatmap</code>, <code>sankey</code>). Where it is optional (<code>waffle</code>,
+  <code>nested_pie</code>, <code>calendar_heatmap</code>), leaving it out counts rows.</li>
+<li><strong><code>label</code></strong> is the column that names each bar or row (<code>dumbbell</code>,
+  <code>circular_bar</code>, <code>waterfall</code>, <code>bullet</code>, <code>duration_plot</code>); in
+  <code>quadrant_plot</code> and <code>animated_bubble</code> it is an optional column that
+  annotates the points.</li>
+<li><strong><code>columns</code></strong> is a list of column names to use (<code>correlogram</code>,
+  <code>compare_correlations</code>, <code>donut_grid</code>, <code>profile_bars</code>, <code>profile_scatters</code>;
+  <code>None</code> means every suitable column), except in <code>waffle</code>, where <code>rows</code> and
+  <code>columns</code> are the size of the grid in tiles.</li>
+<li><strong><code>labels</code></strong> switches the text labels on the chart on or off (<code>lollipop</code>,
+  <code>centered_bar</code>, <code>likert</code>, <code>donut_grid</code>, <code>nested_pie</code>, <code>network_map</code>,
+  <code>profile_bars</code>), except in <code>timeseries_fill</code>, where it is a list of the two
+  legend names. Other two-part legends are named in pairs: <code>start_label</code> /
+  <code>end_label</code> (<code>dumbbell</code>), <code>left_label</code> / <code>right_label</code> (<code>divergent_bar</code>)
+  and <code>outer_name</code> / <code>inner_name</code> (<code>duration_plot</code>). In <code>waterfall</code>,
+  <code>start_label</code> and <code>total_label</code> instead name the starting and final total
+  bars (setting <code>start_label</code> makes the first row the starting total).</li>
+<li><strong><code>alpha</code></strong> is the significance level in <code>correlogram</code> and
+  <code>compare_correlations</code>, but the opacity of the bars or shading in
+  <code>histogram</code> and <code>timeseries_fill</code>.</li>
+<li><strong><code>level</code></strong> is the confidence level of intervals (default 0.95); <code>levels</code>
+  in <code>likert</code> is the response scale.</li>
+<li><strong>Order.</strong> Where a function has <code>order=</code>, it fixes the order of the
+  categories; otherwise a Categorical column keeps its category order and any
+  other column is sorted. The exceptions: <code>waffle</code> puts the largest category
+  first; <code>divergent_bar</code> and <code>nested_pie</code> keep the order in which categories
+  first appear (<code>divergent_bar</code> keeps a Categorical's category order);
+  <code>funnel</code>, <code>waterfall</code> and <code>bullet</code> keep row order. Functions with <code>sort=</code>
+  order by value while it is on: by default <code>lollipop</code> (descending value),
+  <code>dumbbell</code> (change), <code>likert</code> (net agreement), <code>circular_bar</code> (value within
+  each group), and <code>gantt</code> and <code>duration_plot</code> (start date); only with
+  <code>sort=True</code>, <code>benchmark_bar</code> (mean) and <code>divergent_bar</code> (total). With it
+  off, <code>dumbbell</code>, <code>gantt</code> and <code>duration_plot</code> keep row order and <code>likert</code>
+  the order of <em>items</em>. <code>upset</code> orders by <code>sort_by</code>.
+  So <code>estimation_plot</code>'s default <code>reference</code> is the first level in sorted
+  order unless the column is Categorical or <code>order=</code> is given. Where the
+  order applies to one particular argument it is named after it:
+  <code>hue_order</code>/<code>facet_order</code> in <code>histogram</code>, <code>facet_order</code> in <code>percent_grid</code>,
+  and <code>group_order</code>/<code>category_order</code> in <code>stacked_percentages</code>.</li>
+<li><strong>Grid width</strong> of multi-panel figures is <code>col_wrap</code> in <code>histogram</code>,
+  <code>percent_grid</code> and <code>donut_grid</code>, and <code>ncols</code> in the <code>profile_*</code> functions.</li>
+<li><strong>Column labels</strong> need not be strings: a column labelled 0 (from a
+  headerless CSV) or False/True (from a pivot on a boolean column) is
+  selected as a column. One known limitation comes from pandas itself, which
+  treats the labels 0 and False, and 1 and True, as the same key: in a frame
+  with both 0 and False (or 1 and True) as column labels, selecting either
+  label returns both columns, and viz_calc treats them as one column passed
+  twice. Rename one of them first.</li>
+</ul>
+<h2 id="example-datasets">Example datasets<a class="headerlink" href="#example-datasets" title="Permanent link">&para;</a></h2>
+<p><code>viz_calc.datasets</code> generates small, seeded, synthetic datasets (no
+downloads, same numbers every time): <code>trial</code>, <code>survey</code>, <code>sales</code>,
+<code>measurements</code>, <code>projects</code>, <code>network</code>, <code>memberships</code>. They are used
+throughout these docs.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

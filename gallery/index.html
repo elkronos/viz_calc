@@ -1,0 +1,1916 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Visual calculators — statistically sound, citable charts for pandas data.">
+      
+      
+        <meta name="author" content="elkronos">
+      
+      
+        <link rel="canonical" href="https://elkronos.github.io/viz_calc/gallery/">
+      
+      
+        <link rel="prev" href="../walkthroughs/multivariate-and-networks/">
+      
+      
+        <link rel="next" href="../methodology/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Gallery - viz_calc</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#gallery" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="viz_calc" class="md-header__button md-logo" aria-label="viz_calc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            viz_calc
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Gallery
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="indigo"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="indigo"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/elkronos/viz_calc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    elkronos/viz_calc
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="viz_calc" class="md-nav__button md-logo" aria-label="viz_calc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    viz_calc
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/elkronos/viz_calc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    elkronos/viz_calc
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Walkthroughs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Walkthroughs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/comparing-groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparing groups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/correlations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Correlations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/proportions-and-surveys/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proportions and surveys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/exploring-a-dataset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exploring a new dataset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/time-and-projects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Time and projects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../walkthroughs/multivariate-and-networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multivariate and networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gallery
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gallery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#comparing-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparing groups
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comparing groups">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#estimation_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        estimation_plot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benchmark_bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmark_bar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lollipop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lollipop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dumbbell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dumbbell
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#divergent_bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        divergent_bar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#centered_bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        centered_bar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#likert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        likert
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#correlation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Correlation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#correlogram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        correlogram
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compare_correlations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compare_correlations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quadrant_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        quadrant_plot
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#distributions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Distributions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#histogram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        histogram
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ridgeplot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ridgeplot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#raincloud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        raincloud
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#part-to-whole-flows-and-sets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part-to-whole, flows and sets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Part-to-whole, flows and sets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#waffle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        waffle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#percent_grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        percent_grid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stacked_percentages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stacked_percentages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#donut_grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        donut_grid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nested_pie" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nested_pie
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#circular_bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        circular_bar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#waterfall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        waterfall
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#funnel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        funnel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bullet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        bullet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        upset
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#time-and-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time and projects
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Time and projects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#period_bars" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        period_bars
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timeseries_fill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        timeseries_fill
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#calendar_heatmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        calendar_heatmap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gantt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gantt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#duration_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        duration_plot
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multivariate-and-networks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multivariate and networks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multivariate and networks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pca_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pca_plot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#radar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        radar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#network_map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        network_map
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exploring-a-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exploring a dataset
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Exploring a dataset">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#profile_boxes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        profile_boxes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../methodology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from the old scripts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#comparing-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparing groups
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comparing groups">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#estimation_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        estimation_plot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benchmark_bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmark_bar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lollipop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lollipop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dumbbell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dumbbell
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#divergent_bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        divergent_bar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#centered_bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        centered_bar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#likert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        likert
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#correlation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Correlation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#correlogram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        correlogram
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compare_correlations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compare_correlations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quadrant_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        quadrant_plot
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#distributions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distributions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Distributions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#histogram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        histogram
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ridgeplot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ridgeplot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#raincloud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        raincloud
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#part-to-whole-flows-and-sets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part-to-whole, flows and sets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Part-to-whole, flows and sets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#waffle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        waffle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#percent_grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        percent_grid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stacked_percentages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stacked_percentages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#donut_grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        donut_grid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nested_pie" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nested_pie
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#circular_bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        circular_bar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#waterfall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        waterfall
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#funnel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        funnel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bullet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        bullet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        upset
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#time-and-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time and projects
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Time and projects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#period_bars" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        period_bars
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timeseries_fill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        timeseries_fill
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#calendar_heatmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        calendar_heatmap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gantt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gantt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#duration_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        duration_plot
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multivariate-and-networks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multivariate and networks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multivariate and networks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pca_plot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pca_plot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#radar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        radar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#network_map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        network_map
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exploring-a-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exploring a dataset
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Exploring a dataset">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#profile_boxes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        profile_boxes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="gallery">Gallery<a class="headerlink" href="#gallery" title="Permanent link">&para;</a></h1>
+<p>Every chart below is produced by <code>examples/gallery.py</code>; this page is generated from it.
+All examples use this setup:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">viz_calc</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">vc</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">viz_calc</span><span class="w"> </span><span class="kn">import</span> <span class="n">datasets</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">trial</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">trial</span><span class="p">()</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">survey</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">survey</span><span class="p">()</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">sales</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">sales</span><span class="p">()</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">meas</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">measurements</span><span class="p">()</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">proj</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">projects</span><span class="p">()</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">edges</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">network</span><span class="p">()</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">survey</span><span class="p">[</span><span class="s2">"work_mode"</span><span class="p">]</span> <span class="o">=</span> <span class="n">survey</span><span class="p">[</span><span class="s2">"remote"</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">({</span><span class="kc">True</span><span class="p">:</span> <span class="s2">"Remote"</span><span class="p">,</span> <span class="kc">False</span><span class="p">:</span> <span class="s2">"On-site"</span><span class="p">})</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">likert_items</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"Workload is manageable"</span><span class="p">,</span> <span class="s2">"My manager supports me"</span><span class="p">,</span> <span class="s2">"Tools are adequate"</span><span class="p">,</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>                <span class="s2">"I see a future here"</span><span class="p">,</span> <span class="s2">"Meetings are useful"</span><span class="p">]</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">levels</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"Strongly disagree"</span><span class="p">,</span> <span class="s2">"Disagree"</span><span class="p">,</span> <span class="s2">"Neutral"</span><span class="p">,</span> <span class="s2">"Agree"</span><span class="p">,</span> <span class="s2">"Strongly agree"</span><span class="p">]</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">monthly</span> <span class="o">=</span> <span class="p">(</span><span class="n">sales</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">month</span><span class="o">=</span><span class="n">sales</span><span class="p">[</span><span class="s2">"date"</span><span class="p">]</span><span class="o">.</span><span class="n">dt</span><span class="o">.</span><span class="n">to_period</span><span class="p">(</span><span class="s2">"M"</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">))</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>           <span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"month"</span><span class="p">,</span> <span class="n">as_index</span><span class="o">=</span><span class="kc">False</span><span class="p">)[[</span><span class="s2">"online"</span><span class="p">,</span> <span class="s2">"store"</span><span class="p">]]</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+</code></pre></div>
+<h2 id="comparing-groups">Comparing groups<a class="headerlink" href="#comparing-groups" title="Permanent link">&para;</a></h2>
+<h3 id="estimation_plot"><code>estimation_plot</code><a class="headerlink" href="#estimation_plot" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">estimation_plot</span><span class="p">(</span><span class="n">trial</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"arm"</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">"score"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="estimation_plot" src="../images/estimation_plot.png" /></p>
+<h3 id="benchmark_bar"><code>benchmark_bar</code><a class="headerlink" href="#benchmark_bar" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">benchmark_bar</span><span class="p">(</span><span class="n">trial</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"arm"</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">"score"</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="benchmark_bar" src="../images/benchmark_bar.png" /></p>
+<h3 id="lollipop"><code>lollipop</code><a class="headerlink" href="#lollipop" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">lollipop</span><span class="p">(</span><span class="n">survey</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"team"</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">"tenure_years"</span><span class="p">,</span> <span class="n">stat</span><span class="o">=</span><span class="s2">"median"</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="lollipop" src="../images/lollipop.png" /></p>
+<h3 id="dumbbell"><code>dumbbell</code><a class="headerlink" href="#dumbbell" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">dumbbell</span><span class="p">(</span><span class="n">monthly</span><span class="o">.</span><span class="n">tail</span><span class="p">(</span><span class="mi">8</span><span class="p">),</span> <span class="n">label</span><span class="o">=</span><span class="s2">"month"</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="s2">"store"</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">"online"</span><span class="p">,</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_values</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="dumbbell" src="../images/dumbbell.png" /></p>
+<h3 id="divergent_bar"><code>divergent_bar</code><a class="headerlink" href="#divergent_bar" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">divergent_bar</span><span class="p">(</span><span class="n">monthly</span><span class="o">.</span><span class="n">tail</span><span class="p">(</span><span class="mi">8</span><span class="p">),</span> <span class="n">category</span><span class="o">=</span><span class="s2">"month"</span><span class="p">,</span> <span class="n">left</span><span class="o">=</span><span class="s2">"store"</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="s2">"online"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="divergent_bar" src="../images/divergent_bar.png" /></p>
+<h3 id="centered_bar"><code>centered_bar</code><a class="headerlink" href="#centered_bar" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">centered_bar</span><span class="p">(</span><span class="n">trial</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"arm"</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">"score"</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">55</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="centered_bar" src="../images/centered_bar.png" /></p>
+<h3 id="likert"><code>likert</code><a class="headerlink" href="#likert" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">likert</span><span class="p">(</span><span class="n">survey</span><span class="p">,</span> <span class="n">items</span><span class="o">=</span><span class="n">likert_items</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="likert" src="../images/likert.png" /></p>
+<h2 id="correlation">Correlation<a class="headerlink" href="#correlation" title="Permanent link">&para;</a></h2>
+<h3 id="correlogram"><code>correlogram</code><a class="headerlink" href="#correlogram" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">correlogram</span><span class="p">(</span><span class="n">meas</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">"spearman"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="correlogram" src="../images/correlogram.png" /></p>
+<h3 id="compare_correlations"><code>compare_correlations</code><a class="headerlink" href="#compare_correlations" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">compare_correlations</span><span class="p">(</span><span class="n">meas</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="s2">"group"</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"length"</span><span class="p">,</span> <span class="s2">"width"</span><span class="p">,</span> <span class="s2">"depth"</span><span class="p">,</span> <span class="s2">"mass"</span><span class="p">])</span>
+</code></pre></div>
+<p><img alt="compare_correlations" src="../images/compare_correlations.png" /></p>
+<h3 id="quadrant_plot"><code>quadrant_plot</code><a class="headerlink" href="#quadrant_plot" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">quadrant_plot</span><span class="p">(</span><span class="n">trial</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"baseline"</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">"score"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="quadrant_plot" src="../images/quadrant_plot.png" /></p>
+<h2 id="distributions">Distributions<a class="headerlink" href="#distributions" title="Permanent link">&para;</a></h2>
+<h3 id="histogram"><code>histogram</code><a class="headerlink" href="#histogram" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">histogram</span><span class="p">(</span><span class="n">trial</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"score"</span><span class="p">,</span> <span class="n">hue</span><span class="o">=</span><span class="s2">"arm"</span><span class="p">,</span> <span class="n">facet</span><span class="o">=</span><span class="s2">"site"</span><span class="p">,</span> <span class="n">stat</span><span class="o">=</span><span class="s2">"density"</span><span class="p">,</span> <span class="n">ref_line</span><span class="o">=</span><span class="s2">"mean"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="histogram" src="../images/histogram.png" /></p>
+<h3 id="ridgeplot"><code>ridgeplot</code><a class="headerlink" href="#ridgeplot" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">ridgeplot</span><span class="p">(</span><span class="n">meas</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"depth"</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="s2">"group"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="ridgeplot" src="../images/ridgeplot.png" /></p>
+<h3 id="raincloud"><code>raincloud</code><a class="headerlink" href="#raincloud" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">raincloud</span><span class="p">(</span><span class="n">trial</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s2">"arm"</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">"score"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="raincloud" src="../images/raincloud.png" /></p>
+<h2 id="part-to-whole-flows-and-sets">Part-to-whole, flows and sets<a class="headerlink" href="#part-to-whole-flows-and-sets" title="Permanent link">&para;</a></h2>
+<h3 id="waffle"><code>waffle</code><a class="headerlink" href="#waffle" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">waffle</span><span class="p">(</span><span class="n">survey</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="s2">"team"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="waffle" src="../images/waffle.png" /></p>
+<h3 id="percent_grid"><code>percent_grid</code><a class="headerlink" href="#percent_grid" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">percent_grid</span><span class="p">(</span><span class="n">trial</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s2">"improved"</span><span class="p">,</span> <span class="n">facet</span><span class="o">=</span><span class="s2">"arm"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="percent_grid" src="../images/percent_grid.png" /></p>
+<h3 id="stacked_percentages"><code>stacked_percentages</code><a class="headerlink" href="#stacked_percentages" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">stacked_percentages</span><span class="p">(</span><span class="n">survey</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="s2">"team"</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="s2">"Meetings are useful"</span><span class="p">,</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>    <span class="n">category_order</span><span class="o">=</span><span class="n">levels</span><span class="p">,</span> <span class="n">colors</span><span class="o">=</span><span class="s2">"RdBu"</span><span class="p">,</span> <span class="n">horizontal</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="stacked_percentages" src="../images/stacked_percentages.png" /></p>
+<h3 id="donut_grid"><code>donut_grid</code><a class="headerlink" href="#donut_grid" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">donut_grid</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">crosstab</span><span class="p">(</span><span class="n">survey</span><span class="p">[</span><span class="s2">"team"</span><span class="p">],</span> <span class="n">survey</span><span class="p">[</span><span class="s2">"work_mode"</span><span class="p">]))</span>
+</code></pre></div>
+<p><img alt="donut_grid" src="../images/donut_grid.png" /></p>
+<h3 id="nested_pie"><code>nested_pie</code><a class="headerlink" href="#nested_pie" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">nested_pie</span><span class="p">(</span><span class="n">survey</span><span class="p">,</span> <span class="n">outer</span><span class="o">=</span><span class="s2">"team"</span><span class="p">,</span> <span class="n">inner</span><span class="o">=</span><span class="s2">"work_mode"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="nested_pie" src="../images/nested_pie.png" /></p>
+<h3 id="circular_bar"><code>circular_bar</code><a class="headerlink" href="#circular_bar" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">circular_bar</span><span class="p">(</span><span class="n">monthly</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">year</span><span class="o">=</span><span class="n">monthly</span><span class="p">[</span><span class="s2">"month"</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="p">[:</span><span class="mi">4</span><span class="p">]),</span> <span class="n">label</span><span class="o">=</span><span class="s2">"month"</span><span class="p">,</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>    <span class="n">value</span><span class="o">=</span><span class="s2">"online"</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="s2">"year"</span><span class="p">,</span> <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="circular_bar" src="../images/circular_bar.png" /></p>
+<h3 id="waterfall"><code>waterfall</code><a class="headerlink" href="#waterfall" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">waterfall</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">"item"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"Opening"</span><span class="p">,</span> <span class="s2">"Sales"</span><span class="p">,</span> <span class="s2">"Refunds"</span><span class="p">,</span> <span class="s2">"Costs"</span><span class="p">,</span> <span class="s2">"Tax"</span><span class="p">],</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>                  <span class="s2">"amount"</span><span class="p">:</span> <span class="p">[</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">650</span><span class="p">,</span> <span class="o">-</span><span class="mi">120</span><span class="p">,</span> <span class="o">-</span><span class="mi">380</span><span class="p">,</span> <span class="o">-</span><span class="mi">45</span><span class="p">]}),</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="n">label</span><span class="o">=</span><span class="s2">"item"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">"amount"</span><span class="p">,</span> <span class="n">start_label</span><span class="o">=</span><span class="s2">"Opening"</span><span class="p">,</span> <span class="n">total_label</span><span class="o">=</span><span class="s2">"Closing"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="waterfall" src="../images/waterfall.png" /></p>
+<h3 id="funnel"><code>funnel</code><a class="headerlink" href="#funnel" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">funnel</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">"stage"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"Visited"</span><span class="p">,</span> <span class="s2">"Signed up"</span><span class="p">,</span> <span class="s2">"Activated"</span><span class="p">,</span> <span class="s2">"Paid"</span><span class="p">],</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>    <span class="s2">"users"</span><span class="p">:</span> <span class="p">[</span><span class="mi">10000</span><span class="p">,</span> <span class="mi">3200</span><span class="p">,</span> <span class="mi">1900</span><span class="p">,</span> <span class="mi">410</span><span class="p">]}),</span> <span class="n">stage</span><span class="o">=</span><span class="s2">"stage"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">"users"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="funnel" src="../images/funnel.png" /></p>
+<h3 id="bullet"><code>bullet</code><a class="headerlink" href="#bullet" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">bullet</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">"kpi"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"Revenue"</span><span class="p">,</span> <span class="s2">"Profit"</span><span class="p">,</span> <span class="s2">"Satisfaction"</span><span class="p">],</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>                  <span class="s2">"value"</span><span class="p">:</span> <span class="p">[</span><span class="mi">270</span><span class="p">,</span> <span class="mi">22</span><span class="p">,</span> <span class="mf">4.1</span><span class="p">],</span> <span class="s2">"target"</span><span class="p">:</span> <span class="p">[</span><span class="mi">250</span><span class="p">,</span> <span class="mi">26</span><span class="p">,</span> <span class="mf">4.5</span><span class="p">],</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>                  <span class="s2">"poor"</span><span class="p">:</span> <span class="p">[</span><span class="mi">150</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">],</span> <span class="s2">"ok"</span><span class="p">:</span> <span class="p">[</span><span class="mi">225</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mf">3.5</span><span class="p">],</span> <span class="s2">"good"</span><span class="p">:</span> <span class="p">[</span><span class="mi">300</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">5</span><span class="p">]}),</span>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>    <span class="n">label</span><span class="o">=</span><span class="s2">"kpi"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">"value"</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s2">"target"</span><span class="p">,</span> <span class="n">bands</span><span class="o">=</span><span class="p">[</span><span class="s2">"poor"</span><span class="p">,</span> <span class="s2">"ok"</span><span class="p">,</span> <span class="s2">"good"</span><span class="p">])</span>
+</code></pre></div>
+<p><img alt="bullet" src="../images/bullet.png" /></p>
+<h3 id="upset"><code>upset</code><a class="headerlink" href="#upset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">upset</span><span class="p">(</span><span class="n">datasets</span><span class="o">.</span><span class="n">memberships</span><span class="p">(),</span> <span class="n">max_intersections</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="upset" src="../images/upset.png" /></p>
+<h2 id="time-and-projects">Time and projects<a class="headerlink" href="#time-and-projects" title="Permanent link">&para;</a></h2>
+<h3 id="period_bars"><code>period_bars</code><a class="headerlink" href="#period_bars" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">period_bars</span><span class="p">(</span><span class="n">sales</span><span class="p">,</span> <span class="n">date</span><span class="o">=</span><span class="s2">"date"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">"online"</span><span class="p">,</span> <span class="n">freq</span><span class="o">=</span><span class="s2">"month"</span><span class="p">,</span> <span class="n">stat</span><span class="o">=</span><span class="s2">"sum"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="period_bars" src="../images/period_bars.png" /></p>
+<h3 id="timeseries_fill"><code>timeseries_fill</code><a class="headerlink" href="#timeseries_fill" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">timeseries_fill</span><span class="p">(</span><span class="n">sales</span><span class="o">.</span><span class="n">set_index</span><span class="p">(</span><span class="s2">"date"</span><span class="p">)[[</span><span class="s2">"online"</span><span class="p">,</span> <span class="s2">"store"</span><span class="p">]]</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="s2">"W"</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>    <span class="o">.</span><span class="n">reset_index</span><span class="p">(),</span> <span class="n">time</span><span class="o">=</span><span class="s2">"date"</span><span class="p">,</span> <span class="n">series</span><span class="o">=</span><span class="p">[</span><span class="s2">"online"</span><span class="p">,</span> <span class="s2">"store"</span><span class="p">])</span>
+</code></pre></div>
+<p><img alt="timeseries_fill" src="../images/timeseries_fill.png" /></p>
+<h3 id="calendar_heatmap"><code>calendar_heatmap</code><a class="headerlink" href="#calendar_heatmap" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">calendar_heatmap</span><span class="p">(</span><span class="n">sales</span><span class="p">,</span> <span class="n">date</span><span class="o">=</span><span class="s2">"date"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">"online"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="calendar_heatmap" src="../images/calendar_heatmap.png" /></p>
+<h3 id="gantt"><code>gantt</code><a class="headerlink" href="#gantt" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">gantt</span><span class="p">(</span><span class="n">proj</span><span class="p">,</span> <span class="n">task</span><span class="o">=</span><span class="s2">"task"</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="s2">"start"</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">"end"</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="s2">"team"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="gantt" src="../images/gantt.png" /></p>
+<h3 id="duration_plot"><code>duration_plot</code><a class="headerlink" href="#duration_plot" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">duration_plot</span><span class="p">(</span><span class="n">proj</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">"task"</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="s2">"start"</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">"end"</span><span class="p">,</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>    <span class="n">inner_start</span><span class="o">=</span><span class="s2">"work_start"</span><span class="p">,</span> <span class="n">inner_end</span><span class="o">=</span><span class="s2">"work_end"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="duration_plot" src="../images/duration_plot.png" /></p>
+<h2 id="multivariate-and-networks">Multivariate and networks<a class="headerlink" href="#multivariate-and-networks" title="Permanent link">&para;</a></h2>
+<h3 id="pca_plot"><code>pca_plot</code><a class="headerlink" href="#pca_plot" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">pca_plot</span><span class="p">(</span><span class="n">meas</span><span class="p">,</span> <span class="n">features</span><span class="o">=</span><span class="p">[</span><span class="s2">"length"</span><span class="p">,</span> <span class="s2">"width"</span><span class="p">,</span> <span class="s2">"depth"</span><span class="p">,</span> <span class="s2">"mass"</span><span class="p">],</span> <span class="n">group</span><span class="o">=</span><span class="s2">"group"</span><span class="p">,</span> <span class="n">loadings</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="pca_plot" src="../images/pca_plot.png" /></p>
+<h3 id="radar"><code>radar</code><a class="headerlink" href="#radar" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">radar</span><span class="p">(</span><span class="n">meas</span><span class="p">,</span> <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">"length"</span><span class="p">,</span> <span class="s2">"width"</span><span class="p">,</span> <span class="s2">"depth"</span><span class="p">,</span> <span class="s2">"mass"</span><span class="p">],</span> <span class="n">group</span><span class="o">=</span><span class="s2">"group"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="radar" src="../images/radar.png" /></p>
+<h3 id="network_map"><code>network_map</code><a class="headerlink" href="#network_map" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">network_map</span><span class="p">(</span><span class="n">edges</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">"source"</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s2">"target"</span><span class="p">,</span> <span class="n">weight</span><span class="o">=</span><span class="s2">"strength"</span><span class="p">,</span> <span class="n">size_by</span><span class="o">=</span><span class="s2">"betweenness"</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="network_map" src="../images/network_map.png" /></p>
+<h2 id="exploring-a-dataset">Exploring a dataset<a class="headerlink" href="#exploring-a-dataset" title="Permanent link">&para;</a></h2>
+<h3 id="profile_boxes"><code>profile_boxes</code><a class="headerlink" href="#profile_boxes" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="n">res</span> <span class="o">=</span> <span class="n">vc</span><span class="o">.</span><span class="n">profile_boxes</span><span class="p">(</span><span class="n">meas</span><span class="p">,</span> <span class="n">per_page</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">ncols</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="profile_boxes" src="../images/profile_boxes.png" /></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
