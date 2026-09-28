@@ -32,7 +32,7 @@ res.info["matrix"]
 | var1 | var2 | ρ | 95% CI | n |
 |---|---|---|---|---|
 | length | width | −0.36 | −0.50 to −0.21 | 150 |
-| length | depth | 0.89 | 0.85 to 0.92 | 150 |
+| length | depth | 0.89 | 0.84 to 0.92 | 150 |
 | length | mass | 0.91 | 0.87 to 0.93 | 150 |
 | width | depth | −0.36 | −0.49 to −0.20 | 150 |
 | width | mass | −0.38 | −0.51 to −0.23 | 150 |
@@ -70,17 +70,19 @@ res.table[res.table.significant]
 
 ![Compare correlations](../images/compare_correlations.png)
 
-Selected rows:
+Selected rows of `res.table`, which has one row per pair of groups and pair
+of variables:
 
 | A | B | pair | r(A) | r(B) | Δr | z | adjusted p |
 |---|---|---|---|---|---|---|---|
 | alpha | beta | length–width | 0.69 | −0.24 | −0.93 | −5.31 | < .001 |
-| alpha | gamma | length–width | 0.69 | −0.41 | −1.10 | −6.27 | < .001 |
+| alpha | gamma | length–width | 0.69 | −0.41 | −1.10 | −6.26 | < .001 |
 | alpha | beta | depth–mass | 0.61 | 0.54 | −0.07 | −0.52 | 1.00 |
-| beta | gamma | *every pair* | | | ≤ 0.23 | | 1.00 |
+| beta | gamma | *every pair* | | | within ±0.23 | | 1.00 |
 
 Width tracks the other measurements positively in alpha and negatively in
-beta and gamma. The depth–mass relationship is the same in all groups.
+beta and gamma. The depth–mass correlations show no detectable difference
+between any two groups (adjusted p = 1.00).
 
 !!! note "Assumptions"
     The test assumes the groups contain *different* units. To compare two

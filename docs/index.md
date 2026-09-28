@@ -54,9 +54,13 @@ The core needs only NumPy, pandas, Matplotlib and SciPy.
   your DataFrame is never modified.
 * **One calling convention.** `func(data, column=..., ...)` returns a
   [`VizResult`](api.md#viz_calc.VizResult) with `.figure`, `.axes`, `.table`,
-  `.info` and `.save()`.
-* **Composable.** Single-panel functions accept `ax=` so they can go into
-  your own subplot layouts.
+  `.info` and `.save()`. What `x`, `group`, `value` and other shared argument
+  names mean is summarized under
+  [Conventions](getting-started.md#conventions).
+* **Composable.** Functions that draw a single chart accept `ax=` so they can
+  go into your own subplot layouts (`radar` and `circular_bar` need a polar
+  Axes). Multi-panel charts create their own figure; see
+  [Putting charts into your own layouts](getting-started.md#putting-charts-into-your-own-layouts).
 * **Reproducible.** Anything random (jitter, bootstrap, layouts) is seeded.
 * **Clear errors.** A missing column raises `KeyError` naming the column and
   listing what exists; a bad option raises `ValueError` listing valid ones.

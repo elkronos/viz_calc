@@ -88,7 +88,26 @@ res.table.sort_values("betweenness", ascending=False).head(3)
 
 ## 4. Flows
 
+`sankey` takes one row per flow (repeated source–target rows are summed) and
+returns a Plotly figure (`pip install "viz_calc[interactive]"`):
+
 ```python
-res = vc.sankey(flows, source="from", target="to", value="amount")   # Plotly
+import pandas as pd
+
+flows = pd.DataFrame({
+    "from":   ["Search", "Search", "Email", "Email", "Landing page", "Landing page", "Pricing", "Pricing"],
+    "to":     ["Landing page", "Pricing", "Landing page", "Pricing", "Sign-up", "Left", "Sign-up", "Left"],
+    "amount": [500, 200, 300, 100, 350, 450, 120, 180],
+})
+res = vc.sankey(flows, source="from", target="to", value="amount")
 res.table   # each node's total inflow and outflow
 ```
+
+| node | inflow | outflow |
+|---|---|---|
+| Search | 0 | 700 |
+| Email | 0 | 400 |
+| Landing page | 800 | 800 |
+| Pricing | 300 | 300 |
+| Sign-up | 470 | 0 |
+| Left | 630 | 0 |
