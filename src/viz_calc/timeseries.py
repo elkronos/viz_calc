@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import numbers
+import re
 import warnings
 from collections.abc import Iterable, Sequence
 from typing import Any, Literal
@@ -12,6 +13,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from dateutil import parser as dateparser
 from matplotlib.animation import FuncAnimation
 from matplotlib.axes import Axes
 from matplotlib.patches import Patch
@@ -26,12 +28,14 @@ from ._core import (
     check_count,
     check_dataframe,
     check_has_values,
+    check_not_reserved,
     check_numeric,
     cleanup_on_error,
     column_list,
     get_ax,
     level_label,
     palette,
+    select_columns,
     slot_colors,
 )
 
@@ -40,7 +44,7 @@ __all__ = ["period_bars", "timeseries_fill", "calendar_heatmap", "gantt", "durat
 _PERIOD = {"day": "D", "week": "W", "month": "M", "quarter": "Q", "year": "Y"}
 
 
-def _dates(s: pd.Series, name: str, keep_tz: bool = False) -> pd.Series:
+def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = False) -> pd.Series:
     """Parse *s* to datetimes, strictly.
 
     Accepts datetime columns, strings pandas can parse with one consistent
@@ -53,6 +57,10 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False) -> pd.Series:
     times, so each value lands on the calendar day it was recorded in. With
     ``keep_tz=True`` time zones are kept (mixed offsets become UTC), so
     elapsed times and instants stay exact.
+
+    With ``dayfirst=True`` numeric dates such as ``"05/01/2021"`` are read
+    day first (5 January). It is not meant for ISO 8601 strings, which
+    pandas would then read as year-day-month.
     """
 
     def attempt(**kwargs):
@@ -74,7 +82,7 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False) -> pd.Series:
     if numeric:
         raise ValueError(f"column {name!r} holds numbers, which are ambiguous as dates (years? epoch seconds?); "
                          "convert it first, e.g. pd.to_datetime(values, unit='s') or format='%Y'")
-    out = s if pd.api.types.is_datetime64_any_dtype(s) else attempt()
+    out = s if pd.api.types.is_datetime64_any_dtype(s) else attempt(dayfirst=dayfirst)
     if out is None:
         out = attempt(format="ISO8601")  # date-only and date-time ISO strings together
     if out is None:
@@ -113,6 +121,17 @@ def _numpy_numbers(s: pd.Series) -> pd.Series:
     if pd.api.types.is_integer_dtype(s) and s.notna().all():
         return s.astype("int64")
     return pd.Series(s.to_numpy(dtype=float, na_value=np.nan), index=s.index, name=s.name)
+
+
+def _sum_by(values: pd.Series, by: pd.Series) -> pd.Series:
+    """Sum of *values* per group of *by*, in float where an int64 sum could wrap around."""
+    total = values.groupby(by).sum()
+    if pd.api.types.is_integer_dtype(values):
+        # int64 sums wrap around silently; past 2**62 (a margin for float rounding) sum in float instead
+        floats = values.astype(float).groupby(by).sum()
+        if (floats.abs() >= 2.0**62).any():
+            return floats
+    return total
 
 
 @cleanup_on_error
@@ -155,12 +174,8 @@ def period_bars(
     if not d["v"].notna().any():
         raise ValueError(f"no row has both a date in {date!r} and a value in {value!r}")
     grouped = d.groupby("period")["v"]
-    agg = pd.DataFrame({"value": grouped.agg(stat), "n": grouped.count()})
-    if stat == "sum" and pd.api.types.is_integer_dtype(d["v"]):
-        # int64 sums wrap around silently; past 2**62 (a margin for float rounding) sum in float instead
-        floats = d["v"].astype(float).groupby(d["period"]).sum()
-        if (floats.abs() >= 2.0**62).any():
-            agg["value"] = floats
+    agg = pd.DataFrame({"value": _sum_by(d["v"], d["period"]) if stat == "sum" else grouped.agg(stat),
+                        "n": grouped.count()})
     full = pd.period_range(agg.index.min(), agg.index.max(), freq=agg.index.freq)
     agg = agg.reindex(full)
     agg["n"] = agg["n"].fillna(0).astype(int)
@@ -212,6 +227,16 @@ def timeseries_fill(
     colors
         A tuple of two colours: ``(first series, second series)``. Each is
         used for its series' line and for the shading where it leads.
+    alpha
+        Opacity of the shading, a number from 0 (invisible) to 1.
+
+    Returns
+    -------
+    VizResult
+        ``table`` has one row per time value: *time*, the two series,
+        ``difference`` (first minus second) and ``leader`` (the name of the
+        series that leads), so no column may be named ``"difference"`` or
+        ``"leader"``.
     """
     series = column_list("series", series)
     if len(series) != 2:
@@ -221,7 +246,10 @@ def timeseries_fill(
     if a == b or time in (a, b):
         raise ValueError(f"time and the two series must be three different columns, got time={time!r}, "
                          f"series={series!r}")
+    check_not_reserved(["difference", "leader"], time=time, **{"first series": a, "second series": b})
     check_numeric(data, a, b)
+    if isinstance(alpha, bool) or not isinstance(alpha, numbers.Real) or not 0 <= alpha <= 1:
+        raise ValueError(f"alpha must be a number from 0 to 1, got {alpha!r}")
     if labels is None:
         names = [a, b]
     else:  # a lone string or number is one name, not a list of them
@@ -264,8 +292,9 @@ def timeseries_fill(
     sign = np.sign(diff[~np.isnan(diff)])
     sign = sign[sign != 0]
     crossings = int(np.sum(sign[1:] != sign[:-1]))
-    table = pd.DataFrame({time: d[time].to_numpy(), a: ya, b: yb, "difference": diff,
-                          "leader": np.where(np.isnan(diff), None, np.where(diff >= 0, names[0], names[1]))})
+    # A list, not np.where, which would turn names such as 0 or False into text
+    leader = pd.Series([None if np.isnan(v) else names[0] if v >= 0 else names[1] for v in diff], dtype=object)
+    table = pd.DataFrame({time: d[time].to_numpy(), a: ya, b: yb, "difference": diff, "leader": leader})
     return VizResult(fig, ax, table, {"crossovers": crossings})
 
 
@@ -304,9 +333,9 @@ def calendar_heatmap(
         daily = d.groupby("day").size().astype(float)
         stat = "count"
     else:
-        d["v"] = data[value].to_numpy()
+        d["v"] = _numpy_numbers(data[value]).to_numpy()  # nullable Int64 sums guarded against wrapping too
         grouped = d.groupby("day")["v"]
-        daily = grouped.agg(stat).astype(float)
+        daily = (_sum_by(d["v"], d["day"]) if stat == "sum" else grouped.agg(stat)).astype(float)
         if stat != "count":
             daily[grouped.count() == 0] = np.nan  # a day whose values are all missing is "no data", not 0
     if daily.empty or daily.isna().all():
@@ -402,11 +431,13 @@ def gantt(
     different columns, each different from *task* and *group* (which may be
     the same column, to colour each task by its own name). Tasks with a
     missing *group* are drawn in grey as "(missing)" (all of them, if the
-    *group* column has no values).
+    *group* column has no values). No column may be named
+    ``"duration_days"``, which names the table's own column.
     """
     check_dataframe(data, [task, start, end, group])
     _check_distinct(task=task, start=start, end=end)
     _check_distinct(group=group, start=start, end=end)
+    check_not_reserved(["duration_days"], task=task, start=start, end=end, group=group)
     check_has_values(data, start, end)
     d = data.copy()
     tz = _timeline_columns(d, [start, end])
@@ -477,7 +508,9 @@ def duration_plot(
     :func:`gantt`, it raises if a window ends before it starts. Rows whose
     inner window is missing get no inner bar. The date columns must differ
     from *label*, and each window needs two different columns; an inner
-    window may reuse *start* and *end* (active for the whole period).
+    window may reuse *start* and *end* (active for the whole period). No
+    column may be named ``"outer_days"``, ``"inner_days"`` or
+    ``"inner_share"``, which name the table's own columns.
 
     Parameters
     ----------
@@ -489,6 +522,8 @@ def duration_plot(
     _check_distinct(label=label, inner_start=inner_start, inner_end=inner_end)
     _check_distinct(start=start, inner_end=inner_end)
     _check_distinct(end=end, inner_start=inner_start)
+    check_not_reserved(["outer_days", "inner_days", "inner_share"], label=label, start=start, end=end,
+                       inner_start=inner_start, inner_end=inner_end)
     colors = slot_colors(colors, ("outer", "inner"))
     check_has_values(data, start, end)
     d = data.copy()
@@ -524,7 +559,7 @@ def _frames(s: pd.Series, name: str) -> list[Any]:
     """Distinct non-missing values of an animation's time column, in playing order.
 
     An ordered Categorical plays in category order. Otherwise text that
-    reads as numbers or dates (see :func:`_dates`) plays in numeric or
+    reads as numbers or dates (see :func:`_label_dates`) plays in numeric or
     chronological order, keeping its labels, and other values play in sorted
     order (category order for a Categorical).
     """
@@ -545,15 +580,65 @@ def _frames(s: pd.Series, name: str) -> list[Any]:
         labels = pd.Series(frames, dtype=object)
         when = pd.to_numeric(labels, errors="coerce")
         if when.isna().any():
-            with warnings.catch_warnings():
-                # Plain labels such as "Phase A" are fine here, so pandas' hint about the format is noise.
-                warnings.filterwarnings("ignore", "Could not infer format", UserWarning)
-                try:
-                    when = _instant(_dates(labels, name, keep_tz=True))  # UTC offsets: order by the true instant
-                except ValueError:
-                    return frames
+            when = _label_dates(labels, name)
+            if when is None:
+                return frames
         frames = [frames[i] for i in np.argsort(when.to_numpy(), kind="stable")]
     return frames
+
+
+def _has_year(label: str) -> bool | None:
+    """Whether the text *label* reads as a date that names its year (``None``: not a date at all)."""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # e.g. dateutil's UnknownTimezoneWarning
+            # A date without a year ("1/2", "9am", "March") takes it from the default.
+            years = {dateparser.parse(label, default=datetime.datetime(y, 1, 1)).year for y in (2000, 2004)}
+    except (ValueError, OverflowError, TypeError):
+        return None
+    return len(years) == 1
+
+
+# Numeric dates that read either way round, day or month first: "05/01/2021", "5.1.21", "05-01-2021 10:00"
+_NUMERIC_DATE = re.compile(r"\s*\d{1,2}([/.-])\d{1,2}\1\d{2,4}(\D|$)")
+
+
+def _label_dates(labels: pd.Series, name: str) -> pd.Series | None:
+    """Instants of text frame labels that read as dates, or ``None`` if they are other labels.
+
+    Labels without a year (``"1/2"``, ``"9am"``) are not dates here, so they
+    sort the same on every pandas version. Numeric dates are read month
+    first, or day first when only that reading fits every label; if both
+    readings fit but order the labels differently, or if labels that each
+    read as a date with a year share no one format, this raises instead of
+    guessing.
+    """
+    years = [_has_year(v) for v in labels]
+    if not all(years):  # year-less or not dates at all: plain labels
+        return None
+
+    def read(dayfirst: bool) -> pd.Series | None:
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", "Could not infer format", UserWarning)
+                warnings.filterwarnings("ignore", "Parsing dates in .* format when dayfirst", UserWarning)
+                return _instant(_dates(labels, name, keep_tz=True, dayfirst=dayfirst))  # offsets: the true instant
+        except ValueError:
+            return None
+
+    when = read(dayfirst=False)
+    if all(_NUMERIC_DATE.match(v) for v in labels):
+        day_first = read(dayfirst=True)
+        if when is None:
+            when = day_first
+        elif day_first is not None and not np.array_equal(np.argsort(when.to_numpy(), kind="stable"),
+                                                          np.argsort(day_first.to_numpy(), kind="stable")):
+            raise ValueError(f"column {name!r} holds dates that read both month first and day first, in different "
+                             "orders; use ISO 8601 (YYYY-MM-DD) or make it an ordered Categorical")
+    if when is None:
+        raise ValueError(f"column {name!r} reads as dates but not in one consistent format; use one format, "
+                         "ideally ISO 8601 (YYYY-MM-DD), or make it an ordered Categorical")
+    return when
 
 
 def _stamps(frames: list[Any]) -> list[str]:
@@ -614,9 +699,13 @@ def animated_bubble(
     Frames play in time order: numbers and datetimes sorted, text that reads
     as numbers or dates in numeric or chronological order (``"9/1/2020"``
     before ``"10/1/2020"``), an ordered Categorical in category order, and
-    other labels sorted (a Categorical's in category order). To play labels
-    such as ``"Q4 2019"`` in your own order, make *time* an ordered
-    Categorical. Each frame is stamped with its time: dates as
+    other labels sorted (a Categorical's in category order). Numeric dates
+    are read month first, or day first when only that reading fits every
+    label (``"19/01/2021"`` before ``"02/02/2021"``); text dates that fit no
+    one format, or read both ways round in different orders, raise
+    ``ValueError``. Labels without a year (``"1/2"``, ``"9am"``) are sorted
+    as text. To play labels such as ``"Q4 2019"`` in your own order, make
+    *time* an ordered Categorical. Each frame is stamped with its time: dates as
     ``2024-01-05``, with the time of day (``2024-01-05 14:00``) and the zone
     when the data has them; text as written.
 
@@ -697,6 +786,7 @@ def animated_bubble(
     # is shown and is deleted only with it. A caller who wants just the table then needs no warning.
     fig.canvas.mpl_connect("close_event", lambda _event, _keep=anim: None)
     anim._draw_was_started = True  # what Animation.save() also sets to silence the warning
-    table = data.groupby(time, observed=True)[list(dict.fromkeys([x, y, size]))].mean()  # a shared column once
+    # A shared column once; selected by label, as a groupby would read [True, False] as a mask
+    table = select_columns(data, dict.fromkeys([x, y, size])).groupby(data[time], observed=True).mean()
     table = table.iloc[table.index.get_indexer(frames)].reset_index()  # rows in playing order
     return VizResult(fig, ax, table, {"animation": anim, "frames": frames, "area_scale": max_area / smax})

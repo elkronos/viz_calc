@@ -77,7 +77,9 @@ res.table[["task", "outer_days", "inner_days", "inner_share"]]
 
 Date ticks adapt to the range (days, months or years) through Matplotlib's
 concise date formatter. `gantt` and `duration_plot` raise a clear error if
-any task (or inner window) ends before it starts.
+any task (or inner window) ends before it starts, or if one of your columns
+is named like a table column they add (`duration_days`, `outer_days`,
+`inner_days`, `inner_share`), which would otherwise be overwritten.
 
 ## 5. Animated bubbles
 
@@ -120,7 +122,14 @@ or position meant different values in different frames.
 Frames play in time order, and `res.info["frames"]` and `res.table` list
 them in that order: numbers and dates ascending, text that reads as numbers
 or dates in numeric or date order (`"9/1/2020"` before `"10/1/2020"`), and
-other labels alphabetically (a `Categorical` in its category order). An
+other labels alphabetically (a `Categorical` in its category order).
+Numeric dates are read month first, or day first when only that reading
+fits every label, so UK-style weeks (`"19/01/2021"`, `"02/02/2021"`) play
+in date order. Text dates that fit no one format, or that read both ways
+round in different orders (`"05/01/2021"` and `"02/02/2021"` alone), raise
+a `ValueError` rather than being guessed; write them as ISO dates
+(`2021-01-05`). Labels without a year, such as `"1/2"` or `"9am"`, are
+sorted as text on every pandas version. An
 ordered `Categorical` always plays in its category order, so use one for
 labels such as `"Q4 2019"` and `"Q1 2020"`. Each frame is stamped with its
 time: `2024-01-05`, with the time of day (`2024-01-05 14:00`) and the zone

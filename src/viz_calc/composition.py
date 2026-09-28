@@ -52,19 +52,29 @@ def _check_count(name: str, value: Any, minimum: int = 1) -> None:
         raise ValueError(f"{name} must be an integer >= {minimum}, got {value!r}")
 
 
+def _check_real(name: str, value: Any, minimum: float = -math.inf) -> None:
+    """Raise unless *value* is a finite number of at least *minimum* (a label threshold, a radius)."""
+    if isinstance(value, bool) or not isinstance(value, numbers.Real) or not minimum <= value < math.inf:
+        at_least = f" >= {minimum:g}" if minimum > -math.inf else ""
+        raise ValueError(f"{name} must be a finite number{at_least}, got {value!r}")
+
+
 def _missing_rows(data: pd.DataFrame, columns: Sequence[str], label: str | None = None) -> list[Any]:
     """Labels (index labels, or the *label* column) of the rows with a missing value in *columns*."""
     rows = select_columns(data, columns).isna().any(axis=1).to_numpy()
     return (data.index if label is None else data[label])[rows].tolist()
 
 
-def _sum(values: pd.Series, by: pd.Series | None = None) -> Any:
-    """Sum of *values* (per group of *by*), in float where an integer sum could wrap around."""
-    total = values.sum() if by is None else values.groupby(by, sort=False, observed=True).sum()
+def _sum(values: pd.Series, by: Any = None, dropna: bool = True) -> Any:
+    """Sum of *values* (per group of *by*), in float where an integer sum could wrap around.
+
+    *by* is a Series or a list of them; with ``dropna=False`` missing keys form groups too.
+    """
+    total = values.sum() if by is None else values.groupby(by, sort=False, observed=True, dropna=dropna).sum()
     if pd.api.types.is_integer_dtype(values):
         # int64 sums wrap around silently; past 2**62 (a margin for float rounding) sum in float instead
         floats = pd.Series(values.to_numpy(dtype=float, na_value=np.nan), index=values.index)
-        floats = floats.sum() if by is None else floats.groupby(by, sort=False, observed=True).sum()
+        floats = floats.sum() if by is None else floats.groupby(by, sort=False, observed=True, dropna=dropna).sum()
         if (np.abs(floats) >= 2.0**62).any():
             return floats
     return total
@@ -112,7 +122,7 @@ def waffle(
     check_has_values(data, category, value)
     totals = _aggregate(data, category, value)
     unknown = data[category].isna()  # rows without a category still count towards the total
-    unknown_total = int(unknown.sum()) if value is None else _sum(data.loc[unknown, value])
+    unknown_total = int(unknown.sum()) if value is None else _sum(data[value][unknown])  # not .loc: True is a label
     if not ((totals > 0).any() or unknown_total > 0):  # not totals.sum(), which can overflow
         raise ValueError("waffle needs a positive total; every value is zero")
     if order is not None:  # must list every category, or the shares would be renormalized over a subset
@@ -259,9 +269,9 @@ def stacked_percentages(
     """100 % stacked bars: the share of each *category* within each *group*.
 
     Group sizes (*n*) are shown in the tick labels because percentages hide
-    them. Segments smaller than *min_label* percent are not labelled. Rows
-    with a missing *category* are left out of *n* and the percentages.
-    *group* and *category* must be different columns.
+    them. Segments smaller than *min_label* percent (a finite number) are
+    not labelled. Rows with a missing *category* are left out of *n* and the
+    percentages. *group* and *category* must be different columns.
 
     *group_order* may list a subset of groups. *category_order* sets the
     stacking order; it must list every category that occurs (so shares add to
@@ -283,6 +293,7 @@ def stacked_percentages(
     reserved = [c for c in (group, category) if c in ("n", "percent")]
     if reserved:
         raise ValueError(f"rename column(s) {reserved}: 'n' and 'percent' are the names of the output columns")
+    _check_real("min_label", min_label)
     groups = _levels(data[group], group_order)
     cats = _levels(data[category], category_order, complete=True, allow_absent=True)
     # crosstab aligns its inputs on the index, which fails on repeated labels (pd.concat) in pandas 3
@@ -330,19 +341,21 @@ def donut_grid(
     """One donut per row of a wide table (rows = charts, columns = categories).
 
     Every category keeps the same colour in every donut. The row total is
-    printed in the centre. Shares below *min_label* percent are not labelled.
-    *columns* (a list of labels or any other iterable of them, e.g.
-    ``df.columns[1:]``, but not a lone string) defaults to the numeric,
-    non-boolean columns. Values must be non-negative and not missing (fill or
-    drop missing cells first); an all-zero row is drawn as an empty grey
-    ring. *col_wrap* (donuts per row) must be a positive integer.
+    printed in the centre. Shares below *min_label* percent (a finite number)
+    are not labelled. *columns* (a list of distinct labels or any other
+    iterable of them, e.g. ``df.columns[1:]``, but not a lone string)
+    defaults to the numeric, non-boolean columns. Values must be
+    non-negative and not missing (fill or drop missing cells first); an
+    all-zero row is drawn as an empty grey ring. *col_wrap* (donuts per row)
+    must be a positive integer.
 
     Note: people compare angles less accurately than lengths (Cleveland &
     McGill, 1984); for precise comparisons use :func:`stacked_percentages`.
     """
-    columns = None if columns is None else column_list("columns", columns)
+    columns = None if columns is None else column_list("columns", columns, distinct=True)
     check_dataframe(data, columns or [])
     _check_count("col_wrap", col_wrap)
+    _check_real("min_label", min_label)
     columns = columns if columns is not None else [
         c for c in data.columns if pd.api.types.is_numeric_dtype(data[c]) and not pd.api.types.is_bool_dtype(data[c])]
     if not columns:
@@ -425,9 +438,9 @@ def nested_pie(
         check_numeric(data, value)
         if (data[value] < 0).any():
             raise ValueError("nested_pie values must be non-negative")
-        agg = grouped[value].sum().rename("value")
+        agg = _sum(data[value], [data[outer], data[inner]], dropna=False).rename("value")
     agg = agg.reset_index()
-    if not agg["value"].sum() > 0:
+    if not (agg["value"] > 0).any():  # not agg["value"].sum(), which can overflow
         raise ValueError("nested_pie needs a positive total; every value is zero or missing")
     parents = list(pd.unique(agg[outer].dropna()))
     base_cols = palette(len(parents), colors)
@@ -438,7 +451,8 @@ def nested_pie(
         codes = np.where(codes < 0, len(parents) - 1, codes)
     rank = np.argsort(codes, kind="stable")
     agg, codes = agg.iloc[rank].reset_index(drop=True), codes[rank]
-    parent_tot = agg["value"].groupby(codes).sum()
+    weights = pd.Series(agg["value"].to_numpy(dtype=float))  # totals of large integers would wrap around in int64
+    parent_tot = weights.groupby(codes).sum()
     child_cols = []
     for i, c in enumerate(base_cols):
         rgb = np.array(to_rgb(c))
@@ -455,12 +469,12 @@ def nested_pie(
                            counterclock=False, textprops={"weight": "bold", "ha": "center", "fontsize": 9})
     for t, c in zip(texts, base_cols):
         t.set_color(text_color(c))
-    ax.pie(agg["value"], radius=1.0, colors=child_cols, labels=[name(v) for v in agg[inner]] if labels else None,
+    ax.pie(weights, radius=1.0, colors=child_cols, labels=[name(v) for v in agg[inner]] if labels else None,
            labeldistance=1.06, wedgeprops={"width": 0.3, "edgecolor": "white"}, startangle=90, counterclock=False,
            textprops={"fontsize": 8})
     ax.set_aspect("equal")
-    agg["percent_of_total"] = agg["value"] / agg["value"].sum() * 100
-    agg["percent_of_parent"] = agg["value"] / agg["value"].groupby(codes).transform("sum") * 100
+    agg["percent_of_total"] = weights / weights.sum() * 100
+    agg["percent_of_parent"] = weights / weights.groupby(codes).transform("sum") * 100
     return VizResult(fig, ax, agg)
 
 
@@ -490,6 +504,9 @@ def circular_bar(
     ----------
     gap
         Empty slots between groups (a non-negative integer).
+    inner_radius
+        Radius of the empty centre, where bars start, relative to the
+        longest bar's length of 1 (a finite number >= 0).
     ax
         A **polar** Axes to draw into, e.g. ``plt.subplot(projection='polar')``
         or ``plt.subplots(subplot_kw={'projection': 'polar'})``; any other
@@ -502,10 +519,11 @@ def circular_bar(
     check_numeric(data, value)
     check_has_values(data, label, value)
     _check_count("gap", gap, minimum=0)
+    _check_real("inner_radius", inner_radius, minimum=0)
     if (data[value] < 0).any():
         raise ValueError("circular_bar values must be non-negative")
     # dict.fromkeys: one column may play two roles (label="city", group="city"), but must be selected once
-    d = data[list(dict.fromkeys([label, value] + ([group] if group is not None else [])))].copy()
+    d = select_columns(data, dict.fromkeys([label, value] + ([group] if group is not None else []))).copy()
     # a group column with no values: every row goes to the "(missing)" cluster below
     groups = (_levels(d[group]) if d[group].notna().any() else []) if group is not None else [None]
     cols = palette(len(groups), colors)
@@ -675,7 +693,7 @@ def funnel(
         raise ValueError(f"{value!r} is missing for stage(s) {missing}; a funnel needs a value for every stage")
     if (data[value] < 0).any():
         raise ValueError("funnel values must be non-negative")
-    t = data[[stage, value]].reset_index(drop=True).copy()
+    t = select_columns(data, [stage, value]).reset_index(drop=True).copy()
     v = t[value].to_numpy(dtype=float)
     t["pct_of_first"] = v / v[0] * 100 if len(v) and v[0] else np.nan
     t["pct_of_previous"] = np.r_[100.0, v[1:] / np.where(v[:-1] == 0, np.nan, v[:-1]) * 100] if len(v) else []
