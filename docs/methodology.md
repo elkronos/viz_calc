@@ -95,11 +95,14 @@ Repeated edges are merged by summing their weights. Louvain community
 detection (Blondel et al., 2008) via NetworkX, seeded, on the undirected graph
 (reciprocal directed weights are summed). Betweenness centrality (Brandes, 2001) uses
 1/weight as edge length, so strong ties are short paths; zero-weight edges
-are left out. After Dijkstra finds each shortest distance, every path within
-a relative 1e-10 of it (2× the machine precision for float32/float16 weight
-columns) counts as equally short, so floating-point rounding cannot hand one
-of two equally short paths all the credit, and the result does not depend on
-the order of the rows.
+are left out. Path lengths are computed in exact rational arithmetic on the
+values the weights stand for: integers as they are, float32/float16 values
+as the decimals they display, float64 values as their shortest decimal (or,
+for 15–17 digit values such as 73/9, the simple fraction that gives the same
+float). Floating-point rounding therefore cannot hand one of two equally
+short paths all the credit or merge paths that differ, and the result does
+not depend on row order. Graphs with more than 2,000 edges use NetworkX's
+floating-point betweenness for speed (`info["betweenness_arithmetic"]`).
 
 ## Visual design decisions
 

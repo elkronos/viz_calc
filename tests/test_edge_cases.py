@@ -945,4 +945,53 @@ def test_float16_keeps_differences_it_can_resolve():
     stored = e.astype({"w": "float16"})
     reference = vc.network_map(stored.astype({"w": "float64"}), "s", "t", weight="w", communities=False).table
     got = vc.network_map(stored, "s", "t", weight="w", communities=False).table
-    pd.testing.assert_frame_equal(reference, got)
+    pd.testing.assert_series_equal(reference["betweenness"], got["betweenness"])
+    assert got.set_index("node").loc["C", "strength"] == pytest.approx(1.994)  # float16 0.9941 displays as 0.994
+
+
+# --- eleventh verification round ---------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("rows,dtype", [
+    ([(f"P{i}", f"P{i+1}", "0.001") for i in range(5)] + [("P5", "W", "1000"), ("P5", "Y", "2000"), ("Y", "W", "1000")],
+     "float32"),
+    ([("S", "X", "0.000001"), ("X", "W", "1000000"), ("X", "Y", "2000000"), ("Y", "W", "1000000")], "float64"),
+    ([("S", "X", "1"), ("X", "W", "1000"), ("X", "Y", "2000"), ("Y", "W", "1000")], "float16"),
+    ([(f"P{i}", f"P{i+1}", "1") for i in range(5)] + [("P5", "W", "800000"), ("P5", "Y", "1000000"),
+                                                      ("Y", "W", "1000000")], "float32"),
+])
+def test_a_detour_with_an_extra_hop_is_never_a_tie(rows, dtype):
+    e = pd.DataFrame([(u, v, float(w)) for u, v, w in rows], columns=["s", "t", "w"]).astype({"w": dtype})
+    assert vc.network_map(e, "s", "t", weight="w", communities=False).table.set_index("node").loc["Y", "betweenness"] == 0
+
+
+@pytest.mark.parametrize("dtype,strong", [("float32", 1e6), ("float16", 500.0)])
+def test_exact_ties_before_a_strong_last_edge(dtype, strong):
+    rows = [("A", "B", 0.09), ("B", "D", 0.18), ("A", "C", 0.12), ("C", "E", 0.12), ("D", "W", strong),
+            ("E", "W", strong)]
+    e = pd.DataFrame(rows, columns=["s", "t", "w"])
+    exact = _exact_betweenness(e)
+    got = vc.network_map(e.astype({"w": dtype}), "s", "t", weight="w", communities=False).table
+    assert all(r.betweenness == pytest.approx(exact[r.node], abs=1e-9) for r in got.itertuples())
+
+
+def test_exactly_stored_float32_differences_are_kept():
+    rows = [("S", "A", 0.125), ("A", "B", 1000.0), ("B", "T", 1000.0), ("A", "C", 1001.0), ("C", "T", 1001.0)]
+    e = pd.DataFrame(rows, columns=["s", "t", "w"])
+    exact = _exact_betweenness(e)
+    got = vc.network_map(e.astype({"w": "float32"}), "s", "t", weight="w", communities=False).table
+    assert all(r.betweenness == pytest.approx(exact[r.node], abs=1e-9) for r in got.itertuples())
+
+
+def test_large_graphs_fall_back_to_floating_point_betweenness():
+    from viz_calc.network import EXACT_EDGE_LIMIT
+
+    rng = np.random.default_rng(0)
+    m = EXACT_EDGE_LIMIT + 50
+    e = pd.DataFrame({"s": rng.integers(0, 400, m), "t": rng.integers(400, 800, m), "w": rng.uniform(0.1, 5, m)})
+    e = e.drop_duplicates(["s", "t"])
+    res = vc.network_map(e, "s", "t", weight="w", communities=False, labels=False)
+    expected = "exact" if res.info["graph"].number_of_edges() <= EXACT_EDGE_LIMIT else "floating-point"
+    assert res.info["betweenness_arithmetic"] == expected
+    small = vc.network_map(e.head(50), "s", "t", weight="w", communities=False)
+    assert small.info["betweenness_arithmetic"] == "exact"

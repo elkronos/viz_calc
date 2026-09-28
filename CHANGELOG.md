@@ -35,10 +35,11 @@ dependency versions.
 - `network_map`: repeated edges are summed instead of the last row winning;
   categorical node columns, non-string column labels and node order work;
   directed communities use summed reciprocal weights; repeated rows are
-  summed with correct rounding; weighted betweenness (Brandes' algorithm)
-  counts every path within a relative 1e-10 of the shortest length (2× the
-  machine precision for float32/float16 columns) as equally short, so ties
-  share credit regardless of rounding or row order; directed
+  summed exactly; weighted betweenness is computed in exact rational
+  arithmetic on the values the weights stand for (float32 `0.3` as 3/10,
+  `73/9` as 73/9), so equally short paths always share credit, paths that
+  differ are never merged and results do not depend on row order (graphs
+  over 2,000 edges fall back to NetworkX floats); directed
   graphs draw arrowheads (Matplotlib and Plotly).
 - Dates: calendar views (`calendar_heatmap`, `period_bars`) place
   timezone-aware values by their local day, including mixed UTC offsets
