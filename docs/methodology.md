@@ -134,9 +134,11 @@ floating-point rounding can make one of them look shorter, so how path
 lengths are compared depends on whether the weights are stored exactly:
 
 * **Exact weights.** Integers, and floats that cannot have been rounded
-  when stored (they print exactly as stored, and are integers the type holds
-  exactly or have no more digits than its precision: `2.0`, `0.125`,
-  `1001.5`), are compared exactly. Floating point orders the paths; any two
+  when stored (they print exactly as stored, and are integers below
+  2^(mantissa bits + 1), i.e. 2⁵³ for float64 and 2²⁴ for float32, or have no
+  more digits than the type's precision: `2.0`, `0.125`, `1001.5`), are
+  compared exactly. Larger float integers may be rounded counts and use the
+  tolerant comparison. Floating point orders the paths; any two
   that come within 10⁻¹¹ of each other are then compared exactly, through
   their residues modulo the prime 2¹²⁷ − 1 and, if those differ, in rational
   arithmetic. Unlike rational arithmetic throughout, whose denominators grow

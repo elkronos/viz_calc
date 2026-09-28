@@ -101,3 +101,33 @@ def test_edges_too_short_for_float64_to_resolve():
     res, bc = _bc(pd.DataFrame(rows, columns=["s", "t", "w"]))
     assert res.info["betweenness_arithmetic"] == "exact"
     assert all(bc[n] == pytest.approx(v, abs=1e-12) for n, v in _truth(rows).items())
+
+
+def test_float_misordered_paths_joined_by_a_tiny_edge():
+    # floats put v after w although the exact path through v and the 2**-62 edge is shorter
+    rows = [("s", "a1", 23), ("a1", "a2", 17), ("a2", "v", 884130655), ("v", "w", 2**62),
+            ("s", "u1", 884130654), ("u1", "u2", 17), ("u2", "w", 23)]
+    res, bc = _bc(pd.DataFrame(rows, columns=["s", "t", "w"]), directed=True)
+    assert res.info["betweenness_arithmetic"] == "exact"
+    assert all(bc[n] == pytest.approx(v, abs=1e-12) for n, v in _truth(rows, directed=True).items())
+
+
+def test_equidistant_neighbours_do_not_need_rational_arithmetic(monkeypatch):
+    import viz_calc.network as network
+
+    calls = []
+    original = network._rational_shortest_paths
+    monkeypatch.setattr(network, "_rational_shortest_paths", lambda s, into: (calls.append(s), original(s, into))[1])
+    triangle = pd.DataFrame({"s": ["x", "x", "a"], "t": ["a", "b", "b"], "w": [1, 1, 1]})
+    _bc(triangle)
+    assert calls == []
+
+
+def test_numpy_seed_and_missing_sankey_values():
+    e = pd.DataFrame({"s": ["A", "B"], "t": ["B", "C"], "w": [1.0, 2.0]})
+    a = vc.network_map(e, "s", "t", weight="w", seed=np.int64(3)).info["positions"]
+    b = vc.network_map(e, "s", "t", weight="w", seed=3).info["positions"]
+    assert all(np.allclose(a[k], b[k]) for k in a)
+    pytest.importorskip("plotly")
+    with pytest.raises(ValueError, match="missing"):
+        vc.sankey(pd.DataFrame({"a": ["x", "y"], "b": ["y", "z"], "v": [1.0, np.nan]}), "a", "b", "v")

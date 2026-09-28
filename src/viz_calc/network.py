@@ -175,10 +175,11 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
         else:
             residue, value = {s: 0}, {s: Fraction(0)}
             for w in order[1:]:
-                if any(v in dist and dist[v] == dist[w] for v, *_ in into[w]):
-                    break  # an edge shorter than float64 can resolve against the path: floats cannot order the nodes
+                window = dist[w] * (1 + 1e-11)
+                if any(v in dist and dist[v] >= dist[w] and dist[v] + length <= window for v, length, *_ in into[w]):
+                    break  # an edge too short for float64 to resolve against the path: floats cannot order its ends
                 near = [(v, q, (residue[v] + r) % _PRIME) for v, length, q, r in into[w]
-                        if v in dist and dist[v] < dist[w] and dist[v] + length <= dist[w] * (1 + 1e-11)]
+                        if v in dist and dist[v] < dist[w] and dist[v] + length <= window]
                 if len({r for *_, r in near}) > 1:  # candidates that really differ: keep the exactly shortest
                     totals = [_exact_distance(v, preds, value) + q for v, q, _ in near]
                     value[w] = min(totals)
@@ -348,14 +349,14 @@ def network_map(
             else:
                 U.add_edge(u, v, w=w)
         if U.size(weight="w") > 0:
-            comms = nx.community.louvain_communities(U, weight="w", seed=seed)
+            comms = nx.community.louvain_communities(U, weight="w", seed=None if seed is None else int(seed))
             cmap = {n: i for i, c in enumerate(sorted(comms, key=len, reverse=True)) for n in c}
             table["community"] = [cmap[n] for n in nodes]
         else:  # no positive weights: modularity is undefined
             table["community"] = 0
     else:
         table["community"] = 0
-    pos = nx.spring_layout(G, weight=wkey, seed=seed)
+    pos = nx.spring_layout(G, weight=wkey, seed=None if seed is None else int(seed))
     metric = table[size_by].to_numpy(float)
     sizes = 150 + 850 * (metric - metric.min()) / (np.ptp(metric) or 1)
     ncomm = int(table["community"].max()) + 1
@@ -435,13 +436,15 @@ def sankey(
 ) -> VizResult:
     """Interactive Sankey diagram of flows between nodes (requires Plotly).
 
-    Repeated source→target rows are summed. The table reports each node's
-    total inflow and outflow.
+    Repeated source→target rows are summed; missing or negative flow values
+    raise an error. The table reports each node's total inflow and outflow.
     """
     go = require("plotly.graph_objects", "interactive")
     check_dataframe(data, [source, target, value])
     check_numeric(data, value)
     check_has_values(data, source, target, value)
+    if data[value].isna().any():
+        raise ValueError(f"flow values in {value!r} contain missing values; drop or fill them first")
     if (data[value] < 0).any():
         raise ValueError("flows must be non-negative")
     flows = data.groupby([source, target], sort=False, observed=True)[value].sum().reset_index()
