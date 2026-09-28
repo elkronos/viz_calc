@@ -21,6 +21,7 @@ from ._core import (
     OKABE_ITO,
     AbbrevFormatter,
     VizResult,
+    _level_key,
     abbreviate,
     check_choice,
     check_dataframe,
@@ -48,10 +49,28 @@ def _check_count(name: str, value: Any, minimum: int = 1) -> None:
         raise ValueError(f"{name} must be an integer >= {minimum}, got {value!r}")
 
 
+def _select(data: pd.DataFrame, columns: Sequence[Any]) -> pd.DataFrame:
+    """The *columns* of *data* by label: ``data[[False, True]]`` would read the labels as a row mask."""
+    positions = data.columns.get_indexer(list(columns)) if data.columns.is_unique else np.array([-1])
+    return data.iloc[:, positions] if (positions >= 0).all() else data[list(columns)]
+
+
 def _missing_rows(data: pd.DataFrame, columns: Sequence[str], label: str | None = None) -> list[Any]:
     """Labels (index labels, or the *label* column) of the rows with a missing value in *columns*."""
-    rows = data[list(columns)].isna().any(axis=1).to_numpy()
+    rows = _select(data, columns).isna().any(axis=1).to_numpy()
     return (data.index if label is None else data[label])[rows].tolist()
+
+
+def _sum(values: pd.Series, by: pd.Series | None = None) -> Any:
+    """Sum of *values* (per group of *by*), in float where an integer sum could wrap around."""
+    total = values.sum() if by is None else values.groupby(by, sort=False, observed=True).sum()
+    if pd.api.types.is_integer_dtype(values):
+        # int64 sums wrap around silently; past 2**62 (a margin for float rounding) sum in float instead
+        floats = pd.Series(values.to_numpy(dtype=float, na_value=np.nan), index=values.index)
+        floats = floats.sum() if by is None else floats.groupby(by, sort=False, observed=True).sum()
+        if (np.abs(floats) >= 2.0**62).any():
+            return floats
+    return total
 
 
 def _aggregate(data: pd.DataFrame, category: str, value: str | None) -> pd.Series:
@@ -61,7 +80,7 @@ def _aggregate(data: pd.DataFrame, category: str, value: str | None) -> pd.Serie
     check_numeric(data, value)
     if (data[value] < 0).any():  # per row: summing first would net a negative row against the others
         raise ValueError("waffle values must be non-negative")
-    return data.groupby(category, sort=False, observed=True)[value].sum()
+    return _sum(data[value], data[category])
 
 
 @cleanup_on_error
@@ -95,7 +114,7 @@ def waffle(
     check_has_values(data, category, value)
     totals = _aggregate(data, category, value)
     unknown = data[category].isna()  # rows without a category still count towards the total
-    unknown_total = int(unknown.sum()) if value is None else data.loc[unknown, value].sum()
+    unknown_total = int(unknown.sum()) if value is None else _sum(data.loc[unknown, value])
     if not ((totals > 0).any() or unknown_total > 0):  # not totals.sum(), which can overflow
         raise ValueError("waffle needs a positive total; every value is zero")
     if order is not None:  # must list every category, or the shares would be renormalized over a subset
@@ -148,7 +167,8 @@ def percent_grid(
 
     Each title reports the percentage, its Wilson score CI and *n*, so small
     groups are not over-read. A group with no non-missing values is titled
-    "no data (n=0)".
+    "no data (n=0)". Each dot is 1 %; the percentage is rounded half up to
+    a whole number of dots.
 
     Parameters
     ----------
@@ -183,7 +203,7 @@ def percent_grid(
     colors = slot_colors(colors, ("success", "other"))
     check_has_values(data, column)
     values = data[column].dropna()
-    uniq = set(pd.unique(values))
+    uniq = {_level_key(v) for v in pd.unique(values)}  # a datetime64 misses an equal Timestamp in a set on NumPy 1.x
     if len(uniq) > 2:
         raise ValueError(f"{column!r} must have at most two distinct values, found {len(uniq)}")
     if success is None:
@@ -191,7 +211,7 @@ def percent_grid(
             success = 1
         else:
             raise ValueError(f"set success= to the value of {column!r} to count (found {sorted(map(str, uniq))})")
-    elif len(uniq) == 2 and success not in uniq:
+    elif len(uniq) == 2 and _level_key(success) not in uniq:
         raise ValueError(f"success={success!r} does not occur in {column!r}; its values are {sorted(map(str, uniq))}")
     facets = _levels(data[facet], facet_order) if facet is not None else [None]
     ncol = min(col_wrap, len(facets))
@@ -203,7 +223,7 @@ def percent_grid(
         n, k = int(s.size), int((s == success).sum())
         p = k / n if n else np.nan
         lo, hi = st.wilson_ci(k, n, level)
-        filled = int(round(p * 100)) if n else 0
+        filled = (200 * k + n) // (2 * n) if n else 0  # exact, halves round up (round() would go to even)
         xs, ys = np.meshgrid(np.arange(10), np.arange(10)[::-1])
         fill = np.arange(100) < filled
         ax.scatter(xs.ravel(), ys.ravel(), s=70, c=[colors[0] if on else colors[1] for on in fill])  # any colour form
@@ -335,7 +355,7 @@ def donut_grid(
     if missing:
         raise ValueError(f"donut_grid needs a value in every cell of {columns}; row(s) {missing} have missing "
                          "values (fill them, e.g. with data.fillna(0), or drop those rows)")
-    values = data[columns].to_numpy(dtype=float)  # nullable Int64/Float64 too
+    values = _select(data, columns).to_numpy(dtype=float)  # nullable Int64/Float64 too
     if (values < 0).any():
         raise ValueError("donut values must be non-negative")
     cols = palette(len(columns), colors)
@@ -503,7 +523,8 @@ def circular_bar(
     theta = np.linspace(0, 2 * np.pi, n_slots, endpoint=False)[slot_idx]
     vals = ordered[value].to_numpy(dtype=float, na_value=np.nan)  # nullable Int64/Float64 with pd.NA too
     drawn = np.isfinite(vals)  # a missing value leaves its slot empty: Matplotlib cannot render a NaN polar bar
-    vmax = (float(vals[drawn].max()) if drawn.any() else 0.0) or 1.0
+    top = float(vals[drawn].max()) if drawn.any() else 0.0
+    vmax = top or 1.0  # all-zero values: any divisor draws empty bars
     heights = np.where(drawn, vals, 0.0) / vmax
     col_for = [cols[c] for c in ordered_codes]
 
@@ -530,7 +551,7 @@ def circular_bar(
     ax.set_theta_zero_location("N")
     ax.set_theta_direction(-1)
     ax.axis("off")
-    ax.set_title(f"{value} (bar length relative to max = {abbreviate(vmax)})", fontsize="medium")
+    ax.set_title(f"{value} (bar length relative to max = {abbreviate(top)})", fontsize="medium")
     return VizResult(fig, ax, ordered)
 
 
@@ -631,6 +652,8 @@ def funnel(
     columns. Every stage needs a non-negative, non-missing value, and *stage*
     needs at least one non-missing name. A rate after a zero stage is
     undefined: it is ``NaN`` in the table and shown as "–" on the chart.
+    The chart labels rates in whole percent, with more digits where that
+    would show a non-zero rate as 0 % or a rate short of 100 % as 100 %.
     """
     check_dataframe(data, [stage, value])
     reserved = [c for c in (stage, value) if c in ("pct_of_first", "pct_of_previous", "drop_off")]
@@ -657,7 +680,14 @@ def funnel(
     ax.barh(pos, v, left=-v / 2, color=color, height=0.75)
 
     def pct(x: float) -> str:  # a rate after a zero stage is undefined
-        return "–" if np.isnan(x) else f"{x:.0f}%"
+        if np.isnan(x):
+            return "–"
+        if 0 < x < 1:  # a non-zero rate never reads 0%
+            return f"{abbreviate(x)}%"
+        digits = 0  # whole percent, but a rate just off 100% never reads 100%
+        while x != 100 and float(f"{x:.{digits}f}") == 100:
+            digits += 1
+        return f"{x:.{digits}f}%"
 
     for p, row in zip(pos, t.itertuples(index=False)):
         vv, pf, pp = row[1], row[2], row[3]
@@ -693,9 +723,9 @@ def bullet(
     readable in greyscale and for colour-blind readers.
 
     Each row of *data* gets its own panel (and its own scale) in a new
-    figure; a single row can instead be drawn into *ax*. A missing value or
-    target is left out of its panel, but *label* and *value* each need at
-    least one non-missing value.
+    figure; a single row can instead be drawn into *ax*. A missing value,
+    target or band limit is left out of its panel, but *label* and *value*
+    each need at least one non-missing value.
 
     Parameters
     ----------
@@ -756,7 +786,7 @@ def bullet(
         fig, axes = ax.figure, np.array([ax])
     rows = []
     for i, (ax, (_, row)) in enumerate(zip(axes, data.iterrows())):
-        limits = limit_rows[i].tolist()
+        limits = [lim for lim in limit_rows[i].tolist() if not math.isnan(lim)]  # a missing limit: no band
         points = limits + [vals[i]] + ([targets[i]] if target is not None else [])
         top, bottom = max([0.0] + points), min([0.0] + points)  # the zero baseline is always in view
         if top == bottom:
@@ -803,9 +833,11 @@ def upset(
     ----------
     sets
         A mapping ``{name: iterable of members}`` or a DataFrame of boolean
-        membership columns (one row per element). One set or more, with at
-        least one member between them; ``"size"`` and ``"degree"`` cannot be
-        set names, as they name the table's count columns.
+        membership columns (one row per element). Missing values (``None``,
+        ``NaN``, ``NaT``, ``pd.NA``) are not members, in either form. One set
+        or more, with at least one member between them; ``"size"`` and
+        ``"degree"`` cannot be set names, as they name the table's count
+        columns.
     min_size
         Hide intersections smaller than this (a number).
     max_intersections
@@ -834,7 +866,8 @@ def upset(
         membership = pd.DataFrame({c: [bool(v) if pd.notna(v) else False for v in sets[c]] for c in sets.columns},
                                   index=sets.index)
     else:
-        sets = {k: set(v) for k, v in sets.items()}
+        # A missing value is not a member, as in a DataFrame (one shared NaN would be a fake common member).
+        sets = {k: {e for e in v if not (pd.api.types.is_scalar(e) and pd.isna(e))} for k, v in sets.items()}
         universe = sorted(set().union(*sets.values()), key=str)
         membership = pd.DataFrame({k: [e in s for e in universe] for k, s in sets.items()}, index=universe)
     names = list(membership.columns)

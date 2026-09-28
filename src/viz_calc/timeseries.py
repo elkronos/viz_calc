@@ -530,7 +530,12 @@ def _frames(s: pd.Series, name: str) -> list[Any]:
         if s.cat.ordered:
             return frames
     else:
-        frames = sorted(pd.unique(s.dropna()))
+        try:
+            frames = sorted(pd.unique(s.dropna()))
+        except TypeError:  # e.g. 2019 next to "2020", as read from a spreadsheet
+            kinds = sorted({type(v).__name__ for v in s.dropna()})
+            raise ValueError(f"column {name!r} mixes values that cannot be ordered ({', '.join(kinds)}); convert it "
+                             f"to one type first, e.g. data[{name!r}].astype(str)") from None
         if not frames:
             raise ValueError(f"column {name!r} has no non-missing values")
     if all(isinstance(f, str) for f in frames):  # "2" plays before "10", and "9/1/2020" before "10/1/2020"
