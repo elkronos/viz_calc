@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.colors import to_hex, to_rgb
+from matplotlib.ticker import ScalarFormatter
 
 # Okabe & Ito (2008) "Color Universal Design" palette. The eight colours stay
 # distinguishable under the common forms of colour-vision deficiency.
@@ -66,11 +67,18 @@ class VizResult:
             p = Path(path)
             return [VizResult(f).save(str(p.with_name(f"{p.stem}_{i}{p.suffix}")), **kwargs)
                     for i, f in enumerate(self.figure, start=1)]
+        from pathlib import Path
+
         if hasattr(self.figure, "savefig"):
+            if not Path(path).suffix and "format" not in kwargs:  # Matplotlib would add one; return the real path
+                path = f"{path}.{plt.rcParams['savefig.format']}"
             kwargs.setdefault("bbox_inches", "tight")
             kwargs.setdefault("dpi", 150)
             self.figure.savefig(path, **kwargs)
-        elif str(path).lower().endswith((".html", ".htm")):
+            return str(path)
+        if not Path(path).suffix:
+            path = f"{path}.html"
+        if str(path).lower().endswith((".html", ".htm")):
             self.figure.write_html(path, **kwargs)
         else:
             self.figure.write_image(path, **kwargs)
@@ -148,26 +156,33 @@ def text_color(background: str) -> str:
     return "black" if (lum + 0.05) / 0.05 >= 1.05 / (lum + 0.05) else "white"
 
 
-def category_order(values: pd.Series, order: Sequence[Any] | None = None, complete: bool = False) -> list[Any]:
+def category_order(values: pd.Series, order: Sequence[Any] | None = None, complete: bool = False,
+                   allow_absent: bool = False) -> list[Any]:
     """Levels of a categorical series in a stable order.
 
     Uses *order* if given (every entry must exist), the categorical order for
     ``Categorical`` data, and sorted order otherwise. With ``complete=True``
     the *order* must also list every level present, for charts whose shares
-    would otherwise be silently renormalized over a subset.
+    would otherwise be silently renormalized over a subset. With
+    ``allow_absent=True`` the *order* may name levels that do not occur (for
+    example the unused points of a response scale); they are drawn as zero.
     """
     present = pd.unique(values.dropna())
     if len(present) == 0:
         raise ValueError(f"column {values.name!r} has no non-missing values")
     if order is not None:
         order = list(order)
+        duplicated = sorted({str(o) for o in order if order.count(o) > 1})
+        if duplicated:
+            raise ValueError(f"order for {values.name!r} repeats level(s): {duplicated}")
         unknown = [o for o in order if o not in set(present)]
-        if unknown:
+        if unknown and not allow_absent:
             raise ValueError(f"order for {values.name!r} contains levels not in the data: {unknown}")
         if complete:
             left_out = [p for p in present if p not in set(order)]
             if left_out:
-                raise ValueError(f"order for {values.name!r} must list every level; missing: {left_out}")
+                hint = f"; listed but not in the data (a typo?): {unknown}" if unknown else ""
+                raise ValueError(f"order for {values.name!r} must list every level; missing: {left_out}{hint}")
         return order
     if isinstance(values.dtype, pd.CategoricalDtype):
         return [c for c in values.cat.categories if c in set(present)]
@@ -177,21 +192,71 @@ def category_order(values: pd.Series, order: Sequence[Any] | None = None, comple
         return list(present)
 
 
+_SUFFIXES = ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K"))
+
+
+def _strip(text: str) -> str:
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
 def abbreviate(num: float, digits: int = 1) -> str:
-    """Compact number label: exact below 10,000 (``1,105``), then K/M/B/T (``12.3K``). Keeps the sign."""
+    """Compact number label. Keeps the sign.
+
+    * 10,000 and above: K/M/B/T suffix with *digits* decimals (``12.3K``).
+    * 1 to 9,999: thousands separator, up to *digits* decimals (``1,105``).
+    * Below 1: *digits* + 1 significant digits (``0.034``, ``0.5``), so
+      small rates and proportions never collapse to ``0``.
+    """
     if num is None or pd.isna(num):
         return "NA"
-
-    def strip(text: str) -> str:
-        return text.rstrip("0").rstrip(".") if "." in text else text
-
     sign = "-" if num < 0 else ""
     num = abs(float(num))
-    for threshold, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e4, "K")):
-        if num >= threshold:
-            scale = 1e3 if suffix == "K" else threshold
-            return f"{sign}{strip(f'{num / scale:.{digits}f}')}{suffix}"
-    return f"{sign}{strip(f'{num:,.{digits}f}')}"
+    if num == 0:
+        return "0"
+    for threshold, suffix in _SUFFIXES:
+        if num >= max(threshold, 1e4):
+            return f"{sign}{_strip(f'{num / threshold:.{digits}f}')}{suffix}"
+    if num < 1:
+        return f"{sign}{float(f'{num:.{digits + 1}g}'):g}"
+    return f"{sign}{_strip(f'{num:,.{digits}f}')}"
+
+
+class AbbrevFormatter(ScalarFormatter):
+    """Axis formatter: K/M/B/T suffixes when ticks reach 10,000, Matplotlib's defaults otherwise.
+
+    Unlike formatting each tick with :func:`abbreviate`, the precision is
+    chosen from the tick spacing so neighbouring ticks never share a label.
+    """
+
+    def __init__(self, absolute: bool = False) -> None:
+        super().__init__()
+        self.absolute = absolute
+        self._ticks = np.array([])
+
+    def set_locs(self, locs: Sequence[float]) -> None:
+        self._ticks = np.asarray(locs, dtype=float)  # own copy: Formatter.locs is deprecated in Matplotlib 3.11
+        super().set_locs(locs)
+
+    def _scale(self) -> tuple[float, str] | None:
+        big = float(np.max(np.abs(self._ticks))) if self._ticks.size else 0.0
+        if big < 1e4:
+            return None
+        return next((t, suf) for t, suf in _SUFFIXES if big >= t)
+
+    def __call__(self, x: float, pos: int | None = None) -> str:
+        scale = self._scale()
+        if scale is None:
+            text = super().__call__(abs(x) if self.absolute else x, pos)
+            return text.lstrip("\u2212-") if self.absolute else text
+        unit, suffix = scale
+        locs = np.sort(self._ticks)
+        step = float(np.min(np.diff(locs))) if locs.size > 1 else unit
+        decimals = int(min(3, max(0, -np.floor(np.log10(step / unit))))) if step > 0 else 0
+        value = abs(x) if self.absolute else x
+        return f"{value / unit:.{decimals}f}{suffix}" if value else "0"
+
+    def get_offset(self) -> str:
+        return "" if self._scale() is not None else super().get_offset()
 
 
 def require(module: str, extra: str) -> Any:

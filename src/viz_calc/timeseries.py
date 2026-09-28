@@ -16,8 +16,8 @@ from matplotlib.patches import Patch
 from ._core import (
     NEUTRAL,
     OKABE_ITO,
+    AbbrevFormatter,
     VizResult,
-    abbreviate,
     category_order,
     check_choice,
     check_dataframe,
@@ -32,10 +32,40 @@ _PERIOD = {"day": "D", "week": "W", "month": "M", "quarter": "Q", "year": "Y"}
 
 
 def _dates(s: pd.Series, name: str) -> pd.Series:
-    try:
-        return pd.to_datetime(s)
-    except (ValueError, TypeError) as exc:
-        raise ValueError(f"column {name!r} could not be parsed as dates") from exc
+    """Parse *s* to timezone-naive datetimes.
+
+    Timezone-aware values (including strings whose UTC offset changes across
+    a daylight-saving switch) keep their local wall-clock time, so each value
+    lands on the calendar day and hour it was recorded in.
+    """
+    import warnings
+
+    out = s if pd.api.types.is_datetime64_any_dtype(s) else None
+    if out is None:
+        for kwargs in ({}, {"format": "mixed"}):  # "mixed": e.g. date-only and date-time ISO strings together
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", FutureWarning)  # pandas 2.x warns about mixed offsets
+                    parsed = pd.to_datetime(s, **kwargs)
+            except (ValueError, TypeError):
+                continue
+            if pd.api.types.is_datetime64_any_dtype(parsed):
+                out = parsed
+                break
+    if out is None:  # mixed UTC offsets: parse each value and keep its local time
+        def local(v):
+            if pd.isna(v):
+                return pd.NaT
+            t = pd.Timestamp(v)
+            return t.tz_localize(None) if t.tzinfo is not None else t
+
+        try:
+            out = pd.to_datetime(s.map(local))
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"column {name!r} could not be parsed as dates") from exc
+    if getattr(out.dt, "tz", None) is not None:
+        out = out.dt.tz_localize(None)
+    return out
 
 
 def _date_axis(ax: Axes, axis: str = "x") -> None:
@@ -87,7 +117,7 @@ def period_bars(
         mids = starts + pd.to_timedelta(widths / 2, unit="D")
         ax.plot(mids, agg["trend"], color=OKABE_ITO[5], lw=2, label=f"{trend_window}-{freq} moving average")
     _date_axis(ax)
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: abbreviate(v)))
+    ax.yaxis.set_major_formatter(AbbrevFormatter())
     ax.set_ylabel(f"{stat} of {value}")
     ax.legend(frameon=False, loc="upper left")
     ax.spines[["top", "right"]].set_visible(False)
@@ -118,7 +148,10 @@ def timeseries_fill(
     check_numeric(data, a, b)
     d = data[[time, a, b]].copy()
     if not pd.api.types.is_numeric_dtype(d[time]):
-        d[time] = _dates(d[time], time)  # parse before grouping so dates sort chronologically, not as text
+        if pd.api.types.infer_dtype(d[time], skipna=True) in ("integer", "floating", "mixed-integer-float", "decimal"):
+            d[time] = pd.to_numeric(d[time])  # e.g. years stored as objects: keep them numeric
+        else:
+            d[time] = _dates(d[time], time)  # parse before grouping so dates sort chronologically, not as text
     d = d.dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
     t = d[time]
     ya, yb = d[a].to_numpy(float), d[b].to_numpy(float)
@@ -138,7 +171,7 @@ def timeseries_fill(
     sign = sign[sign != 0]
     crossings = int(np.sum(sign[1:] != sign[:-1]))
     table = pd.DataFrame({time: d[time].to_numpy(), a: ya, b: yb, "difference": diff,
-                          "leader": np.where(diff >= 0, labels[0], labels[1])})
+                          "leader": np.where(np.isnan(diff), None, np.where(diff >= 0, labels[0], labels[1]))})
     return VizResult(fig, ax, table, {"crossovers": crossings})
 
 
@@ -157,10 +190,7 @@ def calendar_heatmap(
     with zero. One colour scale is shared across years.
     """
     check_dataframe(data, [date, value])
-    days = _dates(data[date], date)
-    if days.dt.tz is not None:  # place each day by its local calendar date
-        days = days.dt.tz_localize(None)
-    d = pd.DataFrame({"day": days.dt.normalize()})
+    d = pd.DataFrame({"day": _dates(data[date], date).dt.normalize()})  # tz-aware dates: local calendar day
     if value is None:
         daily = d.groupby("day").size().astype(float)
         stat = "count"
@@ -234,8 +264,9 @@ def gantt(
         d = d.sort_values(start, kind="stable")
     groups = category_order(d[group]) if group else [None]
     cols = palette(len(groups), colors)
-    color_of = dict(zip(groups, cols))
-    col = [color_of.get(g, NEUTRAL) for g in d[group]] if group else [cols[0]] * len(d)  # missing group: grey
+    # Match by value (not hashing), so datetime-like groups work; a missing group is drawn grey.
+    codes = pd.Categorical(d[group], categories=groups).codes if group else np.zeros(len(d), dtype=int)
+    col = [cols[c] if c >= 0 else NEUTRAL for c in codes]
     fig, ax = get_ax(ax, figsize=(10, 0.45 * len(d) + 1.5))
     _timeline(ax, d[task].astype(str).tolist(), d[start], d[end], col, 0.6)
     ax.set_yticks(np.arange(len(d))[::-1], d[task].astype(str))
@@ -245,7 +276,10 @@ def gantt(
         t = pd.Timestamp.now() if today == "now" else pd.Timestamp(today)
         ax.axvline(mdates.date2num(t), color=OKABE_ITO[5], lw=1.5, ls="--")
     if group:
-        ax.legend(handles=[Patch(color=c, label=str(g)) for g, c in zip(groups, cols)], title=group, frameon=False,
+        handles = [Patch(color=c, label=str(g)) for g, c in zip(groups, cols)]
+        if (codes < 0).any():
+            handles.append(Patch(color=NEUTRAL, label="(missing)"))
+        ax.legend(handles=handles, title=group, frameon=False,
                   loc="upper left", bbox_to_anchor=(1.01, 1))
     ax.grid(axis="x", color="#eeeeee")
     ax.set_axisbelow(True)
@@ -323,15 +357,20 @@ def animated_bubble(
     """
     check_dataframe(data, [time, x, y, size, color, label])
     check_numeric(data, x, y, size)
+    if data[x].notna().sum() == 0 or data[y].notna().sum() == 0:
+        raise ValueError("x and y need at least one non-missing value")
+    data = data.copy()
+    for c in dict.fromkeys((x, y, size)):  # nullable (Int64/Float64) columns -> float with NaN
+        data[c] = data[c].to_numpy(dtype=float, na_value=np.nan)
     if (data[size] < 0).any():
         raise ValueError("size must be non-negative")
     frames = sorted(pd.unique(data[time].dropna()))
     cats = category_order(data[color]) if color else [None]
     cols = palette(len(cats), colors)
+    if color and data[color].isna().any():  # rows without a colour category are drawn grey, not dropped
+        cats, cols = cats + [None], cols + [NEUTRAL]
     smax = float(data[size].max()) or 1.0
     fig, ax = plt.subplots(figsize=(9, 6))
-    if data[x].notna().sum() == 0 or data[y].notna().sum() == 0:
-        raise ValueError("x and y need at least one non-missing value")
     # Missing values are skipped (pandas min/max ignore NaN) so the fixed limits stay finite.
     pad_x = 0.08 * ((data[x].max() - data[x].min()) or 1)
     pad_y = 0.08 * ((data[y].max() - data[y].min()) or 1)
@@ -342,11 +381,16 @@ def animated_bubble(
         ax.clear()
         cur = data[data[time] == frames[i]]
         for c, col in zip(cats, cols):
-            sub = cur if c is None else cur[cur[color] == c]
+            if not color:
+                sub, name = cur, None
+            elif c is None:
+                sub, name = cur[cur[color].isna()], "(missing)"
+            else:
+                sub, name = cur[cur[color] == c], str(c)
             ax.scatter(sub[x], sub[y], s=sub[size] / smax * max_area, color=col, alpha=0.65, edgecolors="white",
-                       label=None if c is None else str(c))
+                       label=name)
             if label:
-                for _, r in sub.iterrows():
+                for _, r in sub.dropna(subset=[x, y]).iterrows():
                     ax.annotate(str(r[label]), (r[x], r[y]), fontsize=7, ha="center", va="center")
         ax.set_xlim(*xlim)
         ax.set_ylim(*ylim)

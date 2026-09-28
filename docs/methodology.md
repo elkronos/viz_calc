@@ -60,10 +60,11 @@ need Steiger's (1980) test. Used by `compare_correlations`.
 
 ### Histogram bin width
 Freedman–Diaconis by default: width $= 2\,\mathrm{IQR}\,n^{-1/3}$, which is
-robust to outliers (Freedman & Diaconis, 1981). When the IQR is zero
-(heavily tied or zero-inflated data) that width is zero, so Sturges' rule is
-used instead and `info["bin_rule"]` records it. Scott (1979) and Sturges
-(1926) are also available. Bins are computed once on all data so groups and
+robust to outliers (Freedman & Diaconis, 1981). On heavily tied or
+zero-inflated data the IQR can be zero or nearly zero, which would give one
+bin or millions; whenever FD would produce more bins than observations,
+Sturges' rule is used instead and `info["bin_rule"]` records it. Scott (1979)
+and Sturges (1926) are also available. Bins are computed once on all data so groups and
 facets are directly comparable.
 
 ### Kernel density estimates
@@ -89,9 +90,11 @@ of each group's covariance with radius $\sqrt{\chi^2_2(\text{level})}$. The
 uses the covariance of the mean (divided by *n*).
 
 ### Networks
-Louvain community detection (Blondel et al., 2008) via NetworkX, seeded.
-Betweenness centrality uses 1/weight as edge length, so strong ties are
-short paths.
+Repeated edges are merged by summing their weights. Louvain community
+detection (Blondel et al., 2008) via NetworkX, seeded, on the undirected graph
+(reciprocal directed weights are summed). Betweenness centrality uses
+1/weight as edge length, so strong ties are short paths; zero-weight edges
+are left out.
 
 ## Visual design decisions
 

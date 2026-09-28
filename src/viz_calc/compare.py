@@ -16,6 +16,7 @@ from . import stats as st
 from ._core import (
     NEUTRAL,
     OKABE_ITO,
+    AbbrevFormatter,
     VizResult,
     abbreviate,
     category_order,
@@ -266,7 +267,7 @@ def benchmark_bar(
     ax.set_xlabel(x)
     ax.set_ylabel(f"Mean {y}")
     ax.set_title(f"Mean {y} by {x} vs benchmark {thr:.3g} (bars: {err_text})", loc="left")
-    present = [s for s in ("above", "below", "indistinguishable", "no data") if s in set(table["status"])]
+    present = [s for s in ("above", "below", "indistinguishable") if s in set(table["status"])]  # "no data" draws nothing
     ax.legend(handles=[Patch(color=color_for[s], label=s) for s in present], frameon=False, loc="upper left",
               bbox_to_anchor=(1.01, 1))
     ax.spines[["top", "right"]].set_visible(False)
@@ -332,7 +333,7 @@ def lollipop(
                             ha="center", va="bottom" if v >= 0 else "top", fontsize=9)
     ticks = [str(v) for v in table[x]]
     label = f"{stat} of {y}" if stat != "count" else "count"
-    fmt = FuncFormatter(lambda v, _: abbreviate(v))
+    fmt = AbbrevFormatter()
     if horizontal:
         ax.set_yticks(pos, ticks)
         ax.set_xlabel(label)
@@ -373,7 +374,9 @@ def dumbbell(
     check_dataframe(data, [label, start, end])
     check_numeric(data, start, end)
     table = data[[label, start, end]].copy()
-    table[[start, end]] = table[[start, end]].astype(float)  # booleans pass check_numeric but cannot be subtracted
+    for c in dict.fromkeys((start, end)):
+        if pd.api.types.is_bool_dtype(table[c]):  # booleans pass check_numeric but cannot be subtracted
+            table[c] = table[c].astype(int)
     table["change"] = table[end] - table[start]
     with np.errstate(divide="ignore", invalid="ignore"):
         table["pct_change"] = np.where(table[start] != 0, table["change"] / table[start].abs() * 100, np.nan)
@@ -396,7 +399,7 @@ def dumbbell(
     ax.set_yticks(pos, [str(v) for v in table[label]])
     ax.set_ylabel(label)
     ax.set_xlabel("Value")
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: abbreviate(v)))
+    ax.xaxis.set_major_formatter(AbbrevFormatter())
     ax.legend(frameon=False, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2)
     ax.spines[["top", "right"]].set_visible(False)
     ax.grid(axis="x", color="#eeeeee")
@@ -435,7 +438,7 @@ def divergent_bar(
     ax.barh(pos, table[right], color=colors[1], label=right_label or right)
     ax.axvline(0, color="black", lw=0.8)
     ax.set_yticks(pos, [str(v) for v in table[category]])
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: abbreviate(abs(v))))
+    ax.xaxis.set_major_formatter(AbbrevFormatter(absolute=True))
     lim = max(table[left].max(), table[right].max()) * 1.1
     ax.set_xlim(-lim, lim)
     ax.set_ylabel(category)

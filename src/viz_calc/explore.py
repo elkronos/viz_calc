@@ -184,19 +184,31 @@ def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: i
     Requires ``python-pptx`` (``pip install "viz_calc[pptx]"``). Images are
     scaled to fit a 13.33 × 7.5 inch (16:9) slide while keeping their aspect
     ratio.
+
+    *titles* gives one title per item in *figures*. A multi-page result (such
+    as the ``profile_*`` functions return) puts one page per slide, and each
+    slide gets the item's title with a page counter, e.g. ``"Counts (2/3)"``.
+    Only Matplotlib figures are supported; save Plotly figures with
+    ``figure.write_image`` or ``VizResult.save``.
     """
     pptx = require("pptx", "pptx")
+    from PIL import Image
     from pptx.util import Inches, Pt
 
-    items = figures if isinstance(figures, (list, tuple)) else [figures]
-    flat = []
-    for it in items:
+    items = list(figures) if isinstance(figures, (list, tuple)) else [figures]
+    titles = list(titles) if titles is not None else []
+    slides = []  # (figure, title) pairs
+    for i, it in enumerate(items):
         fig = it.figure if isinstance(it, VizResult) else it
-        flat.extend(fig if isinstance(fig, list) else [fig])
-    titles = list(titles) if titles is not None else [None] * len(flat)
+        pages = fig if isinstance(fig, list) else [fig]
+        title = titles[i] if i < len(titles) else None
+        for k, page in enumerate(pages, start=1):
+            if not hasattr(page, "savefig"):
+                raise TypeError("to_pptx supports Matplotlib figures only; save Plotly figures with write_image")
+            slides.append((page, f"{title} ({k}/{len(pages)})" if title and len(pages) > 1 else title))
     prs = pptx.Presentation()
     prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
-    for fig, title in zip(flat, titles + [None] * (len(flat) - len(titles))):
+    for fig, title in slides:
         slide = prs.slides.add_slide(prs.slide_layouts[6])
         top = 0.3
         if title:
@@ -207,7 +219,9 @@ def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: i
         buf = BytesIO()
         fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
         buf.seek(0)
-        w, h = fig.get_size_inches()
+        px_w, px_h = Image.open(buf).size  # the tight bbox changes the size, so measure the saved image
+        buf.seek(0)
+        w, h = px_w / dpi, px_h / dpi
         scale = min(12.3 / w, (7.5 - top - 0.3) / h)
         slide.shapes.add_picture(buf, Inches((13.333 - w * scale) / 2), Inches(top), Inches(w * scale), Inches(h * scale))
     prs.save(path)

@@ -201,9 +201,6 @@ def raincloud(
     check_numeric(data, y)
     groups = category_order(data[x], order)
     cols = palette(len(groups), colors)
-    values = data[y].dropna().to_numpy(float)
-    pad = 0.05 * np.ptp(values) if np.ptp(values) else 1.0
-    grid = np.linspace(values.min() - pad, values.max() + pad, 300)
     rng = np.random.default_rng(seed)
     fig, ax = get_ax(ax, figsize=(8, 1.4 * len(groups) + 1.5))
     rows = []
@@ -211,9 +208,10 @@ def raincloud(
         s = data.loc[data[x] == g, y].dropna().to_numpy(float)
         pos = len(groups) - 1 - i
         if s.size:
-            # Trim each density to its own data range so it does not suggest values that were never seen.
-            g_grid = grid[(grid >= s.min()) & (grid <= s.max())]
-            d = _kde(s, g_grid, bw_method) if g_grid.size > 1 else None
+            # Each group gets its own grid over its own range, so the density never suggests unseen values
+            # and narrow groups are still drawn in full detail.
+            g_grid = np.linspace(s.min(), s.max(), 300)
+            d = _kde(s, g_grid, bw_method)
             if d is not None:
                 ax.fill_between(g_grid, pos + 0.1, pos + 0.1 + 0.45 * d / d.max(), color=cols[i], alpha=0.6, lw=0)
         if s.size:

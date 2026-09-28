@@ -236,7 +236,8 @@ def quadrant_plot(
     ----------
     center
         Split at the ``"mean"`` or ``"median"``. The median gives quadrants
-        that are balanced on each axis when the data are skewed.
+        that are balanced on each axis when the data are skewed. Points exactly
+        at the centre count as "high".
     label
         Optional column whose values annotate each point.
     fit
@@ -271,7 +272,12 @@ def quadrant_plot(
         for xi, yi, t in zip(xv, yv, d[label]):
             ax.annotate(str(t), (xi, yi), xytext=(3, 3), textcoords="offset points", fontsize=7, color=NEUTRAL)
 
-    right, top = xv >= cx, yv >= cy
+    right, top = xv >= cx, yv >= cy  # points exactly at the centre count as "high"
+    for name, side in ((x, right), (y, top)):
+        if side.all() or not side.any():
+            raise ValueError(f"every point of {name!r} is on one side of its {center} (heavy ties); "
+                             "try center='mean'" if center == "median" else
+                             f"every point of {name!r} is on one side of its {center}")
     spec = [("high x, high y", right & top, 0.97, 0.97, "right", "top"),
             ("low x, high y", ~right & top, 0.03, 0.97, "left", "top"),
             ("low x, low y", ~right & ~top, 0.03, 0.03, "left", "bottom"),

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "viz_calc"
-version = "1.0.0"
+version = "1.1.0"
 description = "Visual calculators: statistically sound, citable charts for pandas data that return the numbers behind the picture."
 readme = "README.md"
 license = "MIT"

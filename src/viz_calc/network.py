@@ -35,7 +35,9 @@ def network_map(
     Louvain communities (Blondel et al., 2008), using NetworkX's built-in
     implementation. Node size encodes *size_by*; colour encodes community.
     The layout is seeded so it is reproducible. Repeated edges (including
-    B→A after A→B in an undirected graph) are merged, summing their weights.
+    B→A after A→B in an undirected graph) are merged, summing their weights;
+    missing weights raise an error. For directed graphs, communities are found
+    on the undirected graph with reciprocal weights summed.
 
     Set ``interactive=True`` for a Plotly figure with hover details.
 
@@ -50,31 +52,59 @@ def network_map(
         check_numeric(data, weight)
         if (data[weight] < 0).any():
             raise ValueError("edge weights must be non-negative")
-    edges = data[[source, target] + ([weight] if weight else [])].dropna(subset=[source, target])
-    if not directed:  # A–B and B–A are the same undirected edge
-        swap = edges[source].astype(str) > edges[target].astype(str)
-        edges = edges.assign(**{source: edges[source].where(~swap, edges[target]),
-                                target: edges[target].where(~swap, edges[source])})
-    # Repeated edges are combined (weights summed) instead of letting the last row win.
-    grouped = edges.groupby([source, target], sort=False)
-    merged = grouped[weight].sum().reset_index() if weight else grouped.size().reset_index()[[source, target]]
-    G = nx.from_pandas_edgelist(merged, source, target, edge_attr=weight,
-                                create_using=nx.DiGraph if directed else nx.Graph)
+    # Work on plain Python objects: categorical columns, non-string labels and nullable dtypes all behave the same.
+    src = data[source].to_numpy(dtype=object)
+    tgt = data[target].to_numpy(dtype=object)
+    keep = ~(pd.isna(src) | pd.isna(tgt))
+    wts = data[weight].to_numpy(dtype=float, na_value=np.nan) if weight else np.ones(len(data))
+    if weight and np.isnan(wts[keep]).any():
+        raise ValueError(f"edge weights in {weight!r} contain missing values; drop or fill them first")
+    # Repeated edges are combined (weights summed) instead of letting the last row win; each edge keeps
+    # the orientation it was first seen with.
+    merged: dict = {}
+    for u, v, w in zip(src[keep], tgt[keep], wts[keep]):
+        key = (u, v) if directed else frozenset((u, v))
+        if key in merged:
+            merged[key][2] += w
+        else:
+            merged[key] = [u, v, w]
+    G = nx.DiGraph() if directed else nx.Graph()
+    G.add_nodes_from(pd.unique(np.column_stack([src[keep], tgt[keep]]).ravel()))  # first-appearance order
+    for u, v, w in merged.values():
+        G.add_edge(u, v)
+        if weight:
+            G[u][v][weight] = float(w)
     wkey = weight if weight else None
     nodes = list(G.nodes())
     table = pd.DataFrame({"node": nodes})
     table["degree"] = [G.degree(n) for n in nodes]
     table["strength"] = [G.degree(n, weight=wkey) for n in nodes]
     # Betweenness treats weights as distances; stronger ties should be shorter, so use 1/weight.
+    # Zero-weight edges carry no tie and are left out of the paths.
     if weight:
-        for *_, d in G.edges(data=True):
-            d["_distance"] = 1.0 / d[weight] if d[weight] else np.inf
-    bc = nx.betweenness_centrality(G, weight="_distance" if weight else None)
+        H = G.__class__()
+        H.add_nodes_from(G)
+        H.add_edges_from((u, v, {"distance": 1.0 / d[weight]}) for u, v, d in G.edges(data=True) if d[weight] > 0)
+        bc = nx.betweenness_centrality(H, weight="distance")
+    else:
+        bc = nx.betweenness_centrality(G)
     table["betweenness"] = [bc[n] for n in nodes]
     if communities:
-        comms = nx.community.louvain_communities(G.to_undirected() if directed else G, weight=wkey, seed=seed)
-        cmap = {n: i for i, c in enumerate(sorted(comms, key=len, reverse=True)) for n in c}
-        table["community"] = [cmap[n] for n in nodes]
+        # Communities are found on the undirected graph; reciprocal edges A→B and B→A add their weights.
+        U = nx.Graph()
+        U.add_nodes_from(G)
+        for u, v, d in G.edges(data=True):
+            w = d[weight] if weight else 1.0
+            if U.has_edge(u, v):
+                U[u][v]["w"] += w
+            else:
+                U.add_edge(u, v, w=w)
+        if U.size(weight="w") > 0:
+            comms = nx.community.louvain_communities(U, weight="w", seed=seed)
+            cmap = {n: i for i, c in enumerate(sorted(comms, key=len, reverse=True)) for n in c}
+            table["community"] = [cmap[n] for n in nodes]
+        else:  # no positive weights: modularity is undefined
+            table["community"] = 0
     else:
         table["community"] = 0
     pos = nx.spring_layout(G, weight=wkey, seed=seed)
@@ -87,7 +117,8 @@ def network_map(
     if weight:
         w = np.array([d[weight] for _, _, d in G.edges(data=True)], float)
         widths = 0.5 + 3.5 * (w - w.min()) / (np.ptp(w) or 1)
-    info = {"graph": G, "positions": pos, "n_communities": ncomm, "duplicate_rows_merged": len(edges) - len(merged)}
+    info = {"graph": G, "positions": pos, "n_communities": ncomm,
+            "duplicate_rows_merged": int(keep.sum()) - len(merged)}
 
     if interactive:
         go = require("plotly.graph_objects", "interactive")

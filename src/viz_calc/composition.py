@@ -11,12 +11,13 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.colors import to_rgb
 from matplotlib.patches import Patch
-from matplotlib.ticker import FuncFormatter, PercentFormatter
+from matplotlib.ticker import PercentFormatter
 
 from . import stats as st
 from ._core import (
     NEUTRAL,
     OKABE_ITO,
+    AbbrevFormatter,
     VizResult,
     abbreviate,
     check_choice,
@@ -56,8 +57,8 @@ def waffle(
     Tiles are allocated with the largest-remainder (Hamilton) method, so the
     grid is always exactly full; rounding each share independently can over-
     or under-fill it. With *value* omitted, rows are counted. Categories are
-    drawn largest first unless *order* is given; *order* must list every
-    category.
+    drawn largest first unless *order* is given. *order* must list every
+    category that occurs and may add unused ones (drawn with zero tiles).
     """
     check_dataframe(data, [category, value])
     totals = _aggregate(data, category, value)
@@ -66,7 +67,7 @@ def waffle(
     if totals.sum() == 0:
         raise ValueError("waffle needs a positive total; every value is zero")
     if order is not None:  # must list every category, or the shares would be renormalized over a subset
-        levels = _levels(data[category], order, complete=True)
+        levels = _levels(data[category], order, complete=True, allow_absent=True)
     else:
         levels = list(totals.sort_values(ascending=False, kind="stable").index)
     totals = totals.reindex(levels).fillna(0)
@@ -115,7 +116,9 @@ def percent_grid(
         A binary column (two distinct values, e.g. 0/1, True/False, "yes"/"no").
     success
         The value counted as success. Defaults to ``True``/``1`` for boolean or
-        0/1 data; required otherwise.
+        0/1 data; required otherwise. It must be one of the column's two
+        values (a column with a single value cannot be checked, so a
+        misspelled *success* there reads as 0 %).
     """
     check_dataframe(data, [column, facet])
     values = data[column].dropna()
@@ -170,6 +173,7 @@ def stacked_percentages(
     min_label: float = 5.0,
     colors: Sequence[str] | str | None = None,
     ax: Axes | None = None,
+    category_order_: Sequence[Any] | None = None,
 ) -> VizResult:
     """100 % stacked bars: the share of each *category* within each *group*.
 
@@ -178,12 +182,24 @@ def stacked_percentages(
     with a missing *category* are left out of *n* and the percentages.
 
     *group_order* may list a subset of groups. *category_order* sets the
-    stacking order and must list every category, so shares always add to
-    100 %.
+    stacking order; it must list every category that occurs (so shares add to
+    100 %) and may add unused ones, such as the empty points of a response
+    scale. A group with no non-missing answers is drawn empty, with ``n=0``
+    and ``nan`` percentages in the table.
+
+    ``category_order_`` is a deprecated alias of *category_order*.
     """
+    if category_order_ is not None:
+        import warnings
+
+        warnings.warn("category_order_ is deprecated; use category_order", FutureWarning, stacklevel=2)
+        category_order = category_order if category_order is not None else category_order_
     check_dataframe(data, [group, category])
+    reserved = [c for c in (group, category) if c in ("n", "percent")]
+    if reserved:
+        raise ValueError(f"rename column(s) {reserved}: 'n' and 'percent' are the names of the output columns")
     groups = _levels(data[group], group_order)
-    cats = _levels(data[category], category_order, complete=True)
+    cats = _levels(data[category], category_order, complete=True, allow_absent=True)
     counts = pd.crosstab(data[group], data[category]).reindex(index=groups, columns=cats, fill_value=0)
     pct = counts.div(counts.sum(axis=1).replace(0, np.nan), axis=0).fillna(0) * 100
     cols = palette(len(cats), colors)
@@ -211,7 +227,7 @@ def stacked_percentages(
     ax.spines[["top", "right"]].set_visible(False)
     table = counts.stack().rename("n").reset_index()
     group_n = table.groupby(group)["n"].transform("sum")
-    table["percent"] = (table["n"] / group_n.replace(0, np.nan) * 100).fillna(0)
+    table["percent"] = table["n"] / group_n.replace(0, np.nan) * 100  # nan for a group with n = 0
     return VizResult(fig, ax, table)
 
 
@@ -232,7 +248,8 @@ def donut_grid(
     McGill, 1984); for precise comparisons use :func:`stacked_percentages`.
     """
     check_dataframe(data, columns or [])
-    columns = list(columns) if columns is not None else [c for c in data.columns if pd.api.types.is_numeric_dtype(data[c])]
+    columns = list(columns) if columns is not None else [
+        c for c in data.columns if pd.api.types.is_numeric_dtype(data[c]) and not pd.api.types.is_bool_dtype(data[c])]
     check_numeric(data, *columns)
     if (data[columns] < 0).any().any():
         raise ValueError("donut values must be non-negative")
@@ -395,7 +412,9 @@ def waterfall(
         starting value, see *start_label*). ``"levels"``: each row is a running
         level and increments are computed as differences.
     start_label
-        Treat the first row as the starting total, drawn as a total bar.
+        Treat the first row as the starting total, drawn as a total bar with
+        this label. With ``values_are="levels"`` it defaults to the first
+        row's label.
     total_label
         Label for a final total bar; ``None`` omits it.
     colors
@@ -413,6 +432,8 @@ def waterfall(
         changes = vals.copy()
     else:
         raise ValueError("values_are must be 'changes' or 'levels'")
+    if start_label is not None:
+        labels[0] = str(start_label)
     kinds = ["total" if (i == 0 and start_label is not None) else "change" for i in range(len(changes))]
     ends = np.cumsum(changes)
     starts = np.r_[0, ends[:-1]]
@@ -434,7 +455,7 @@ def waterfall(
         ax.plot([i + 0.33, i + 1 - 0.33], [table["end"][i]] * 2, color=NEUTRAL, lw=0.8)
     ax.axhline(0, color="black", lw=0.8)
     ax.set_xticks(pos, table["label"], rotation=30, ha="right")
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: abbreviate(v)))
+    ax.yaxis.set_major_formatter(AbbrevFormatter())
     ax.set_ylabel(value)
     ax.legend(handles=[Patch(color=colors[0], label="increase"), Patch(color=colors[1], label="decrease"),
                        Patch(color=colors[2], label="total")], frameon=False, loc="upper left", bbox_to_anchor=(1, 1))
@@ -506,15 +527,17 @@ def bullet(
     ----------
     Few, S. (2013). *Bullet Graph Design Specification*. Perceptual Edge.
     """
-    band_cols = [b for b in (bands or []) if isinstance(b, str)]
+    bands = [] if bands is None else list(bands)  # also accepts NumPy arrays and Series
+    band_cols = [b for b in bands if isinstance(b, str)]
     check_dataframe(data, [label, value, target, *band_cols])
     check_numeric(data, value, *([target] if target else []), *band_cols)
     n = len(data)
     fig, axes = plt.subplots(n, 1, figsize=(8, 0.9 * n + 0.6), squeeze=False)
     rows = []
     for ax, (_, row) in zip(axes[:, 0], data.iterrows()):
-        limits = [float(row[b]) for b in band_cols] if band_cols else [float(b) for b in (bands or [])]
+        limits = [float(row[b]) for b in band_cols] if band_cols else [float(b) for b in bands]
         top = max(limits + [float(row[value]), float(row[target]) if target else 0.0]) or 1.0
+        bottom = min(0.0, float(row[value]), float(row[target]) if target else 0.0)  # show negative measures
         greys = plt.get_cmap("Greys")(np.linspace(0.45, 0.15, max(len(limits), 1)))
         prev = 0.0
         for lim, g in zip(sorted(limits), greys):
@@ -523,7 +546,9 @@ def bullet(
         ax.barh(0, row[value], height=0.35, color=bar_color)
         if target:
             ax.plot([row[target]] * 2, [-0.35, 0.35], color="black", lw=2.5)
-        ax.set_xlim(0, top * 1.02)
+        ax.set_xlim(bottom * 1.02, top * 1.02)
+        if bottom < 0:
+            ax.axvline(0, color="black", lw=0.8)
         ax.set_yticks([0], [str(row[label])])
         ax.set_ylim(-0.5, 0.5)
         ax.spines[["top", "right", "left"]].set_visible(False)
@@ -556,7 +581,7 @@ def upset(
     min_size
         Hide intersections smaller than this.
     max_intersections
-        Show at most this many, keeping the largest.
+        Show at most this many, keeping the largest (``None`` shows all).
     sort_by
         Display order: ``"size"`` (largest first) or ``"degree"`` (number of
         sets involved, then size).
@@ -567,6 +592,8 @@ def upset(
     UpSet: visualization of intersecting sets. *IEEE TVCG*, 20(12), 1983–1992.
     """
     check_choice("sort_by", sort_by, ["size", "degree"])
+    if max_intersections is not None and (not isinstance(max_intersections, (int, np.integer)) or max_intersections < 1):
+        raise ValueError("max_intersections must be a positive integer or None")
     if isinstance(sets, pd.DataFrame):
         for c in sets.columns:
             bad = [v for v in pd.unique(sets[c].dropna()) if v not in (True, False)]  # 0/1 compare equal to bools
@@ -590,7 +617,7 @@ def upset(
     table["degree"] = table[names].sum(axis=1)
     table = table[table["size"] >= min_size]
     table = table.sort_values(["size", "degree"], ascending=[False, False], ignore_index=True)
-    if max_intersections:  # keep the largest intersections, then apply the requested display order
+    if max_intersections is not None:  # keep the largest intersections, then apply the requested display order
         table = table.head(max_intersections)
     if sort_by == "degree":
         table = table.sort_values(["degree", "size"], ascending=[True, False], ignore_index=True)

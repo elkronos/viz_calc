@@ -315,11 +315,13 @@ def histogram_bins(x: Sequence[float], rule: Literal["fd", "sturges", "scott", "
     * ``"scott"`` – Scott (1979): width ``3.49·σ·n^(-1/3)``.
     * ``"sturges"`` – Sturges (1926): ``log2(n) + 1`` bins; only for small,
       roughly normal samples.
-    * ``"auto"`` – the larger bin count of FD and Sturges (NumPy's ``"auto"``).
+    * ``"auto"`` – NumPy's ``"auto"`` rule, which combines FD and Sturges
+      (its exact definition differs between NumPy versions).
 
-    When the IQR is zero (heavily tied or zero-inflated data) the FD width is
-    zero and would give a single bin; Sturges is used instead. Use
-    :func:`_bin_edges` internally to learn which rule was applied.
+    FD breaks down on heavily tied or zero-inflated data: when the IQR is zero
+    (or tiny relative to the range) its width is zero or near zero, giving
+    one bin or millions of bins. Whenever FD would give more bins than there
+    are observations, Sturges is used instead (for ``"fd"`` and ``"auto"``).
 
     References
     ----------
@@ -339,8 +341,13 @@ def _bin_edges(x: Sequence[float], rule: str) -> tuple[np.ndarray, str]:
         raise ValueError("no non-missing values")
     if rule not in ("fd", "sturges", "scott", "auto"):
         raise ValueError(f"rule must be 'fd', 'sturges', 'scott' or 'auto', got {rule!r}")
-    if rule == "fd" and np.ptp(x) > 0 and np.subtract(*np.percentile(x, [75, 25])) == 0:
-        return np.histogram_bin_edges(x, bins="sturges"), "sturges (IQR = 0, FD undefined)"
+    if rule in ("fd", "auto") and np.ptp(x) > 0:
+        iqr = np.subtract(*np.percentile(x, [75, 25]))
+        width = 2 * iqr * x.size ** (-1 / 3)
+        # Decide before calling NumPy, which would try to allocate the huge bin array.
+        if width <= 0 or np.ptp(x) / width > x.size:
+            reason = "IQR = 0" if iqr == 0 else "IQR near 0"
+            return np.histogram_bin_edges(x, bins="sturges"), f"sturges ({reason}, FD degenerate)"
     return np.histogram_bin_edges(x, bins=rule), rule
 
 
@@ -359,8 +366,8 @@ def largest_remainder(values: Sequence[float], total: int) -> np.ndarray:
     University Press.
     """
     v = np.asarray(values, dtype=float)
-    if np.any(v < 0) or np.any(np.isnan(v)):
-        raise ValueError("values must be non-negative and not missing")
+    if not np.all(np.isfinite(v)) or np.any(v < 0):
+        raise ValueError("values must be finite, non-negative and not missing")
     if v.sum() == 0:
         return np.zeros(v.size, dtype=int)
     quotas = v / v.sum() * total

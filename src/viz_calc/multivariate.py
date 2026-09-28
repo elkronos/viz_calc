@@ -120,7 +120,7 @@ def pca_plot(
     groups = [None]
     if group:
         complete = data[list(features)].notna().all(axis=1)  # the rows pca() kept, matched by position
-        scores[group] = data.loc[complete, group].to_numpy()
+        scores[group] = data.loc[complete, group].array  # positional, and keeps a Categorical's order
         groups = category_order(scores[group], order)
     cols = palette(len(groups), colors)
 
@@ -192,9 +192,10 @@ def radar(
         raise ValueError("radar needs at least three metrics")
     groups = category_order(data[group], order)
     raw = data.groupby(group, observed=True)[list(metrics)].agg(stat).reindex(groups)
+    raw = pd.DataFrame(raw.to_numpy(dtype=float, na_value=np.nan), index=raw.index, columns=raw.columns)
     scaled = raw.copy()
     if normalize != "none":
-        ref = data[list(metrics)] if normalize == "data" else raw
+        ref = data[list(metrics)].astype(float) if normalize == "data" else raw
         lo, span = ref.min(), (ref.max() - ref.min()).replace(0, np.nan)
         scaled = (raw - lo) / span
         flat = [m for m in metrics if pd.isna(span[m])]  # metric has one value only: put groups mid-scale
@@ -209,7 +210,8 @@ def radar(
         fig = ax.figure
     for g, c in zip(groups, cols):
         vals = scaled.loc[g].to_numpy(float)
-        ax.plot(closed, np.r_[vals, vals[0]], color=c, lw=2, label=str(g))
+        # Markers keep a group visible even when missing metrics break its outline into isolated points.
+        ax.plot(closed, np.r_[vals, vals[0]], color=c, lw=2, marker="o", ms=4, label=str(g))
         if not np.isnan(vals).any():  # a polygon with a missing vertex would be misleading
             ax.fill(closed, np.r_[vals, vals[0]], color=c, alpha=0.12)
     ax.set_xticks(angles, list(metrics))
