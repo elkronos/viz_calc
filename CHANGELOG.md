@@ -172,6 +172,23 @@ versions.
   for float64 to add to a path length are no longer dropped; weights above
   2**256 no longer overflow Louvain or the layout, and node strengths past
   the largest float raise a clear error.
+- `likert` rejects a repeated response level and `donut_grid` a repeated
+  column (both gave wrong numbers); `alpha`, `decimals`, `components`,
+  `loadings`, `n_resamples`, `overlap`, `max_levels`/`min_levels`, `dpi`,
+  `min_label` and `inner_radius` are checked; `gantt`, `duration_plot` and
+  `timeseries_fill` reject columns named like their output columns.
+- `divergent_bar` works on nullable columns with missing values;
+  `divergent_bar`, `lollipop`, `calendar_heatmap` and `nested_pie` sum in
+  float where an int64 sum would wrap, and `dumbbell` gives a float change
+  instead of a wrapped int64; thresholds print with enough digits to agree
+  with the classification; `histogram`'s density curve keeps the bars' scale
+  when explicit bins leave values outside.
+- `animated_bubble` orders day-first date labels by date, rejects labels
+  that fit both day-first and month-first with different orders, and treats
+  year-less labels ("1/2") as text on every pandas version.
+- `network_map` rescales very small weights for communities and layout (it
+  raised `ZeroDivisionError`) and rejects complex weights; `sankey` rejects
+  infinite and complex flows.
 - Number labels beyond 999T use scientific notation; time-zone-aware
   midnight dates read `2024-01-01`; `quadrant_plot(standardize=True)` works
   at very large and very small magnitudes; `to_pptx` accepts a single title
