@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Sequence
 from itertools import combinations
 from typing import Any, Literal
@@ -23,7 +22,9 @@ from ._core import (
     check_numeric,
     cleanup_on_error,
     column_list,
+    exact_mean,
     get_ax,
+    level_label,
 )
 
 __all__ = ["correlogram", "compare_correlations", "quadrant_plot"]
@@ -50,6 +51,17 @@ def _pairwise(data: pd.DataFrame, cols: list[str], method: Method, level: float 
         res = st.correlation_test(data[a], data[b], method, level)
         rows.append({"var1": a, "var2": b, **res})
     return pd.DataFrame(rows)
+
+
+def _at_or_above(values: np.ndarray, centre: float, kind: str) -> np.ndarray:
+    """Which *values* are at or above *centre* (their ``"mean"`` or ``"median"``, per *kind*), rounding included.
+
+    A value equal to the mean in decimal can differ from it by the rounding of
+    every value, so for the mean the tolerance follows the data's scale, not the
+    mean's (which may be near zero); a median carries only its own rounding.
+    """
+    scale = float(np.mean(np.abs(values))) if kind == "mean" else abs(centre)
+    return values >= centre - (4 * np.finfo(float).eps * scale if np.isfinite(scale) else 0.0)
 
 
 def _draw_matrix(ax: Axes, mat: np.ndarray, labels: list[str], triangle: str, vlim: float, cmap: str,
@@ -231,7 +243,7 @@ def compare_correlations(
             mat[i, j] = mat[j, i] = row.difference
             text[i, j] = text[j, i] = "" if np.isnan(row.difference) else f"{row.difference:+.{decimals}f}" + ("*" if row.significant else "")
         _draw_matrix(ax, mat, cols, "lower", vlim, cmap, text, "Δr")
-        ax.set_title(f"r({gb}) − r({ga})", loc="left", fontsize="medium")
+        ax.set_title(f"r({level_label(gb)}) − r({level_label(ga)})", loc="left", fontsize="medium")
     for ax in list(axes.flat)[len(pairs):]:
         ax.set_visible(False)
     fig.suptitle(f"Differences in {method} correlations  (* p < {alpha}, Fisher z, {p_adjust}-adjusted)", x=0.01, ha="left")
@@ -264,8 +276,9 @@ def quadrant_plot(
     ----------
     center
         Split at the ``"mean"`` or ``"median"``. The median gives quadrants
-        that are balanced on each axis when the data are skewed. Points exactly
-        at the centre count as "high".
+        that are balanced on each axis when the data are skewed. Points at the
+        centre count as "high", including values that differ from the mean
+        only by floating-point rounding.
     label
         Optional column whose values annotate each point.
     fit
@@ -282,14 +295,12 @@ def quadrant_plot(
     if constant:
         raise ValueError(f"column(s) have a single value, so there are no quadrants: {constant}")
     xr, yr = d[x].to_numpy(float), d[y].to_numpy(float)
-    # math.fsum gives the correctly rounded mean, so a point exactly on the mean is not pushed below it.
-    rx = math.fsum(xr) / xr.size if center == "mean" else float(np.median(xr))
-    ry = math.fsum(yr) / yr.size if center == "mean" else float(np.median(yr))
+    # exact_mean is the correctly rounded mean, so a point exactly on the mean is not pushed below it.
+    rx = exact_mean(xr) if center == "mean" else float(np.median(xr))
+    ry = exact_mean(yr) if center == "mean" else float(np.median(yr))
     # Classify on the raw values: standardizing cannot change which side a point is on, but its rounding
     # error can move a point that sits exactly on the mean across the line.
-    eps = 4 * np.finfo(float).eps
-    right = (xr >= rx) | np.isclose(xr, rx, rtol=eps, atol=0)  # points at the centre count as "high"
-    top = (yr >= ry) | np.isclose(yr, ry, rtol=eps, atol=0)
+    right, top = _at_or_above(xr, rx, center), _at_or_above(yr, ry, center)  # points at the centre count as "high"
     for name, side in ((x, right), (y, top)):
         if side.all() or not side.any():
             hint = " (heavy ties); try center='mean'" if center == "median" else ""

@@ -191,3 +191,31 @@ def test_profile_scatters_uses_exact_small_n_spearman_p_values():
     assert "exact permutation p-values" in _doc(vc.profile_scatters)
     with pytest.raises(ValueError, match=r"method must be one of \['pearson', 'spearman'\], got 'kendall'"):
         vc.profile_scatters(d, columns=["x", "y"], method="kendall")
+
+
+# --- quadrant ties and date titles ---------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("standardize", [True, False])
+def test_quadrant_point_on_a_mean_near_zero_counts_as_high(standardize):
+    # The decimal mean of x is exactly 0, but the stored values sum to 2.8e-17, so 0.0 fell just below the mean;
+    # a tolerance relative to the (near-zero) mean could not absorb that.
+    df = pd.DataFrame({"x": [0.1, 0.2, -0.3, 0.0, 0.5, -0.5], "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]})
+    table = vc.quadrant_plot(df, "x", "y", standardize=standardize).table
+    assert dict(zip(table["quadrant"], table["n"])) == {"high x, high y": 2, "low x, high y": 1,
+                                                        "low x, low y": 1, "high x, low y": 2}
+
+
+def test_quadrant_median_and_real_differences_are_not_widened():
+    df = pd.DataFrame({"x": [-1.0, 0.0, 1e-17, 1.0], "y": [1.0, 2.0, 3.0, 4.0]})
+    table = vc.quadrant_plot(df, "x", "y", center="median").table  # median 5e-18: 0.0 is really below it
+    assert dict(zip(table["quadrant"], table["n"]))["low x, low y"] == 2
+    df = pd.DataFrame({"x": [0.1, 0.2, -0.3, -1e-3, 0.5, -0.5], "y": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]})
+    table = vc.quadrant_plot(df, "x", "y").table
+    assert dict(zip(table["quadrant"], table["n"]))["low x, high y"] == 2
+
+
+def test_compare_correlations_titles_date_groups_as_dates():
+    d = _corr_frame().assign(g=pd.to_datetime(np.repeat(["2024-01-01", "2024-02-01"], 20)))
+    ax = vc.compare_correlations(d, "g").axes.flat[0]
+    assert ax.get_title(loc="left") == "r(2024-02-01) − r(2024-01-01)"
