@@ -88,8 +88,9 @@ res.table.sort_values("betweenness", ascending=False).head(3)
 
 ## 4. Flows
 
-`sankey` takes one row per flow (repeated source–target rows are summed) and
-returns a Plotly figure (`pip install "viz_calc[interactive]"`):
+`sankey` takes one row per flow (repeated source–target rows are summed; a
+row with no source, target or amount raises an error rather than being
+dropped from the totals) and returns a Plotly figure (`pip install "viz_calc[interactive]"`):
 
 ```python
 import pandas as pd

@@ -90,24 +90,30 @@ def _exact_distance(v, preds: dict, value: dict) -> Fraction:
     return value[chain[0]] if chain else value[v]
 
 
-def _rational_shortest_paths(s, into: dict) -> tuple[list, dict]:
-    """Dijkstra from s in exact rational arithmetic: nodes in order of distance, and their predecessors."""
+def _rational_shortest_paths(start: dict, into: dict) -> tuple[list, dict]:
+    """Dijkstra in exact rational arithmetic from tentative distances *start*: nodes in order, and their distances.
+
+    *into* maps each node to its in-edges ``(v, exact length)``.
+    """
     out: dict = {}
     for w, edges in into.items():
-        for v, _, q, _ in edges:
+        for v, q in edges:
             out.setdefault(v, []).append((w, q))
-    value, done, heap, counter = {s: Fraction(0)}, set(), [(Fraction(0), 0, s)], count(1)
+    counter = count()
+    value, done, order = dict(start), set(), []
+    heap = [(d, next(counter), v) for v, d in start.items()]
+    heapq.heapify(heap)
     while heap:
         d, _, v = heapq.heappop(heap)
         if v in done:
             continue
         done.add(v)
+        order.append(v)
         for w, q in out.get(v, []):
             if w not in value or d + q < value[w]:
                 value[w] = d + q
                 heapq.heappush(heap, (value[w], next(counter), w))
-    order = sorted(value, key=value.get)
-    return order, {w: [v for v, _, q, _ in into[w] if v in value and value[v] + q == value[w]] for w in value}
+    return order, value
 
 
 def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: float = 0.0,
@@ -128,8 +134,9 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
       residues modulo the prime 2**127 - 1, and in rational arithmetic only
       when two candidates really differ. This costs about as much as the float
       version, unlike rational arithmetic throughout, whose denominators grow
-      along every path; that is used only for a source where some edge is too
-      short for float64 to separate its two ends.
+      along every path. Where an edge is too short for float64 to separate its
+      two ends, only the run of nodes whose distances floats cannot tell apart
+      is ordered by Dijkstra in rational arithmetic.
     * otherwise, ``dist[v] + len(v, w)`` may exceed ``dist[w]`` by
       ``max(rounding, min(rel_tol, len(v, w) / (4 * dist[w]))) * dist[w]``:
       paths equal up to a relative *rel_tol* (1e-10, as in igraph) count as
@@ -138,8 +145,9 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
       tie. Only differences within the weights' own *rounding* error, which
       low-precision floats cannot resolve, always tie.
 
-    The result does not depend on row order or on edges elsewhere.
-    Normalized as in NetworkX: by 1/((n-1)(n-2)).
+    A path longer than the largest float raises :class:`ValueError`. The
+    result does not depend on row order or on edges elsewhere. Normalized as
+    in NetworkX: by 1/((n-1)(n-2)).
 
     References
     ----------
@@ -165,6 +173,9 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
                     dist[w] = d + length
                     heapq.heappush(heap, (dist[w], next(counter), w))
         order = sorted(dist, key=dist.get)  # predecessors are always strictly closer, so this is topological
+        if math.isinf(dist[order[-1]]):  # every overflowed length would tie with every other
+            raise ValueError("a shortest path is longer than the largest float (its 1/weight edge lengths add up "
+                             "past it); multiply the weights by a constant, which leaves betweenness unchanged")
         preds = {v: [] for v in dist}  # 2. predecessors on the shortest paths
         if exact is None:
             for v in dist:
@@ -174,11 +185,31 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
                     if dist[v] < dist[w] and dist[v] + length <= dist[w] + slack:
                         preds[w].append(v)
         else:
-            residue, value = {s: 0}, {s: Fraction(0)}
-            for w in order[1:]:
+            residue, value, exact_order, i = {s: 0}, {s: Fraction(0)}, [s], 1
+            while i < len(order):
+                w = order[i]
                 window = dist[w] * (1 + 1e-11)
-                if any(v in dist and dist[v] >= dist[w] and dist[v] + length <= window for v, length, *_ in into[w]):
-                    break  # an edge too short for float64 to resolve against the path: floats cannot order its ends
+                if any(dist[v] >= dist[w] and dist[v] + length <= window for v, length, *_ in into[w] if v in dist):
+                    # an edge too short for float64 to resolve against the path: floats cannot order its ends, so
+                    # order this run of nodes that floats cannot separate in exact arithmetic
+                    j = i + 1
+                    while j < len(order) and dist[order[j]] <= dist[order[j - 1]] * (1 + 1e-11):
+                        j += 1
+                    run = set(order[i:j])
+                    close = {u: [(v, q) for v, length, q, _ in into[u]
+                                 if v in run or (v in residue and dist[v] + length <= dist[u] * (1 + 1e-11))]
+                             for u in run}
+                    start = {u: min(_exact_distance(v, preds, value) + q for v, q in edges if v not in run)
+                             for u, edges in close.items() if any(v not in run for v, _ in edges)}
+                    inside = {u: [(v, q) for v, q in edges if v in run] for u, edges in close.items()}
+                    ranked, exact_value = _rational_shortest_paths(start, inside)
+                    value.update(exact_value)
+                    for u in ranked:
+                        preds[u] = [(v, q) for v, q in close[u] if value[v] + q == value[u]]
+                        residue[u] = value[u].numerator * pow(value[u].denominator, -1, _PRIME) % _PRIME
+                    exact_order += ranked
+                    i = j
+                    continue
                 near = [(v, q, (residue[v] + r) % _PRIME) for v, length, q, r in into[w]
                         if v in dist and dist[v] < dist[w] and dist[v] + length <= window]
                 if len({r for *_, r in near}) > 1:  # candidates that really differ: keep the exactly shortest
@@ -187,10 +218,10 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
                     near = [c for c, t in zip(near, totals) if t == value[w]]
                 preds[w] = [(v, q) for v, q, _ in near]
                 residue[w] = near[0][2]
-            else:
-                preds = {w: [v for v, _ in ps] for w, ps in preds.items()}
-            if len(residue) < len(order):  # fall back to rational arithmetic throughout for this source
-                order, preds = _rational_shortest_paths(s, into)
+                exact_order.append(w)
+                i += 1
+            order = exact_order
+            preds = {w: [v for v, _ in ps] for w, ps in preds.items()}
         sigma = dict.fromkeys(order, 0.0)
         sigma[s] = 1.0
         for w in order:
@@ -230,7 +261,7 @@ def network_map(
     implementation. Node size encodes *size_by* (``"degree"``, ``"strength"``
     or ``"betweenness"``); colour encodes community.
     The layout is seeded so it is reproducible. Rows missing *source* or
-    *target* are left out. Repeated edges (including
+    *target* are left out, whatever their weight. Repeated edges (including
     B→A after A→B in an undirected graph) are merged, summing their weights;
     missing weights raise an error. Weighted betweenness uses 1/weight as edge
     length. Weights that cannot have been rounded when stored (integers, or
@@ -242,7 +273,9 @@ def network_map(
     edge (a real extra hop). float32 and float16 columns hold only ~7 and ~3
     digits, so there any difference within four machine epsilons (4.8e-7 and
     0.4%) counts as equal. The choice is made for the whole weight column,
-    and the result does not depend on row order.
+    and the result does not depend on row order. If a shortest path's length
+    (the sum of 1/weight along it) exceeds the largest float, a
+    ``ValueError`` asks for the weights to be rescaled.
     ``info["betweenness_arithmetic"]`` says which was used and
     ``info["betweenness_tolerance"]`` gives the tolerance. For directed
     graphs, communities are found on the undirected graph with reciprocal
@@ -259,13 +292,12 @@ def network_map(
     """
     nx = require("networkx", "network")
     check_dataframe(data, [source, target, weight])
+    check_distinct(source=source, target=target, weight=weight)
     check_choice("size_by", size_by, ["degree", "strength", "betweenness"])
     weighted = weight is not None  # a column may legitimately be labelled 0
     if weighted:
         check_numeric(data, weight)
     check_has_values(data, source, target, weight)
-    if weighted and (data[weight] < 0).any():
-        raise ValueError("edge weights must be non-negative")
     # Work on plain Python objects: categorical columns, non-string labels and nullable dtypes all behave the same.
     src = data[source].to_numpy(dtype=object)
     tgt = data[target].to_numpy(dtype=object)
@@ -277,6 +309,8 @@ def network_map(
         raise ValueError(f"edge weights in {weight!r} contain missing values; drop or fill them first")
     if weighted and np.isinf(wts[keep]).any():
         raise ValueError(f"edge weights in {weight!r} must be finite")
+    if weighted and (wts[keep] < 0).any():
+        raise ValueError("edge weights must be non-negative")
     # Repeated edges are combined (weights summed) instead of letting the last row win; each edge keeps the
     # orientation it was first seen with. Sums are exact when the weights are (see _exact_weights), otherwise
     # correctly rounded (math.fsum, so 9 x 73/9 == 73).
@@ -437,14 +471,20 @@ def sankey(
 ) -> VizResult:
     """Interactive Sankey diagram of flows between nodes (requires Plotly).
 
-    Repeated source→target rows are summed; missing or negative flow values
-    raise an error. The table reports each node's total inflow and outflow.
+    Repeated source→target rows are summed; a missing source, target or flow
+    value, or a negative flow, raises an error (dropping the row would
+    silently change the totals). The table reports each node's total inflow
+    and outflow.
     """
     go = require("plotly.graph_objects", "interactive")
     check_dataframe(data, [source, target, value])
     check_numeric(data, value)
     check_distinct(source=source, target=target, value=value)
     check_has_values(data, source, target, value)
+    for column in (source, target):
+        missing = int(data[column].isna().sum())
+        if missing:
+            raise ValueError(f"{missing} row(s) have no {column!r} value; drop or fill them first")
     if data[value].isna().any():
         raise ValueError(f"flow values in {value!r} contain missing values; drop or fill them first")
     if (data[value] < 0).any():

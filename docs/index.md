@@ -70,4 +70,6 @@ The core needs only NumPy, pandas, Matplotlib and SciPy.
 * [Getting started](getting-started.md) — the five-minute tour.
 * Walkthroughs — task-oriented guides with interpretation, starting with
   [comparing groups](walkthroughs/comparing-groups.md).
-* [Gallery](gallery.md) — every chart with the code that made it.
+* [Gallery](gallery.md) — charts with the code that made them (`sankey`,
+  `animated_bubble`, `profile_bars` and `profile_scatters` are covered in the
+  walkthroughs instead).

@@ -176,17 +176,22 @@ same thing everywhere. The exceptions are listed here.
   `profile_bars`), except in `timeseries_fill`, where it is a list of the two
   legend names. Other two-part legends are named in pairs: `start_label` /
   `end_label` (`dumbbell`), `left_label` / `right_label` (`divergent_bar`)
-  and `outer_name` / `inner_name` (`duration_plot`).
+  and `outer_name` / `inner_name` (`duration_plot`). In `waterfall`,
+  `start_label` and `total_label` instead name the starting and final total
+  bars (setting `start_label` makes the first row the starting total).
 * **`alpha`** is the significance level in `correlogram` and
   `compare_correlations`, but the opacity of the bars or shading in
   `histogram` and `timeseries_fill`.
 * **`level`** is the confidence level of intervals (default 0.95); `levels`
   in `likert` is the response scale.
-* **Order.** Where a function has `order=`, it fixes the order of the categories
-  (otherwise categories keep their Categorical order or first appearance). Where it applies to
-  one particular argument it is named after it: `hue_order`/`facet_order` in
-  `histogram`, `facet_order` in `percent_grid`, and
-  `group_order`/`category_order` in `stacked_percentages`.
+* **Order.** Where a function has `order=`, it fixes the order of the
+  categories; otherwise a Categorical column keeps its category order and any
+  other column is sorted (`waffle` instead puts the largest category first).
+  So `estimation_plot`'s default `reference` is the first level in sorted
+  order unless the column is Categorical or `order=` is given. Where the
+  order applies to one particular argument it is named after it:
+  `hue_order`/`facet_order` in `histogram`, `facet_order` in `percent_grid`,
+  and `group_order`/`category_order` in `stacked_percentages`.
 * **Grid width** of multi-panel figures is `col_wrap` in `histogram`,
   `percent_grid` and `donut_grid`, and `ncols` in the `profile_*` functions.
 
