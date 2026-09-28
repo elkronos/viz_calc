@@ -56,6 +56,9 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False) -> pd.Series:
             return None
         return out if pd.api.types.is_datetime64_any_dtype(out) else None
 
+    if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s):
+        raise ValueError(f"column {name!r} holds numbers, which are ambiguous as dates (years? epoch seconds?); "
+                         "convert it first, e.g. pd.to_datetime(values, unit='s') or format='%Y'")
     out = s if pd.api.types.is_datetime64_any_dtype(s) else attempt()
     if out is None:
         out = attempt(format="ISO8601")  # date-only and date-time ISO strings together
@@ -65,6 +68,9 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False) -> pd.Series:
             raise ValueError(f"column {name!r} could not be parsed as dates; use one consistent format, "
                              "ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
         if keep_tz:
+            has_zone = s.dropna().map(lambda v: pd.Timestamp(v).tzinfo is not None)
+            if not has_zone.all():  # an offset-less value would silently be read as UTC
+                raise ValueError(f"column {name!r} mixes values with and without a UTC offset; make them consistent")
             out = utc
         else:  # the strings are valid ISO 8601, so element-wise parsing is unambiguous
             out = pd.to_datetime(s.map(lambda v: pd.NaT if pd.isna(v) else pd.Timestamp(v).tz_localize(None)))
@@ -153,8 +159,8 @@ def timeseries_fill(
     check_numeric(data, a, b)
     d = data[[time, a, b]].copy()
     col = d[time]
-    if isinstance(col.dtype, pd.CategoricalDtype):  # judge a Categorical by its categories
-        col = col.astype(col.cat.categories.dtype if pd.api.types.is_numeric_dtype(col.cat.categories) else object)
+    if isinstance(col.dtype, pd.CategoricalDtype):  # judge a Categorical by its values (NaN-safe)
+        col = col.astype(object)
     if not pd.api.types.is_numeric_dtype(col) and not pd.api.types.is_datetime64_any_dtype(col):
         kind = pd.api.types.infer_dtype(col, skipna=True)
         numeric = None
@@ -166,6 +172,10 @@ def timeseries_fill(
         # Parse dates before grouping so they sort chronologically, and keep time zones so the two
         # readings in the repeated hour of a daylight-saving change are not merged.
         col = numeric if numeric is not None else _dates(col, time, keep_tz=True)
+    if pd.api.types.is_extension_array_dtype(col) and pd.api.types.is_numeric_dtype(col):
+        # nullable Int64/Float64 -> numpy, which Matplotlib 3.7 needs; keep integers exact when nothing is missing
+        col = col.astype("int64") if pd.api.types.is_integer_dtype(col) and col.notna().all() \
+            else pd.Series(col.to_numpy(dtype=float, na_value=np.nan), index=col.index)
     d[time] = col
     d = d.dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
     t = d[time]
@@ -242,7 +252,7 @@ def calendar_heatmap(
             s.set_visible(False)
         ax.set_ylabel(str(year), rotation=0, ha="right", va="center", fontsize=11, weight="bold")
     fig.colorbar(mesh, ax=axes[:, 0].tolist(), orientation="horizontal", fraction=0.04, pad=0.08,
-                 label=f"{stat}{' of ' + value if value is not None else ''} per day")
+                 label=f"{stat}{f' of {value}' if value is not None else ''} per day")
     return VizResult(fig, axes[:, 0], daily.rename("value").rename_axis("date").reset_index())
 
 
@@ -257,10 +267,15 @@ def _timeline_columns(d: pd.DataFrame, columns: Sequence[str]) -> Any:
     """Parse timeline columns keeping time zones; return the zone used to label the axis."""
     for c in columns:
         d[c] = _dates(d[c], c, keep_tz=True)
-    zones = [getattr(d[c].dt, "tz", None) for c in columns]
+    used = [c for c in columns if d[c].notna().any()]  # an all-empty column has no zone to compare
+    zones = [getattr(d[c].dt, "tz", None) for c in used]
     if any(z is None for z in zones) and any(z is not None for z in zones):
         raise ValueError(f"columns {list(columns)} mix timezone-aware and naive dates; make them consistent")
-    return zones[0]
+    tz = next((z for z in zones if z is not None), None)
+    for c in columns:
+        if c not in used and tz is not None and getattr(d[c].dt, "tz", None) is None:
+            d[c] = d[c].dt.tz_localize(tz)
+    return tz
 
 
 def _timeline(ax: Axes, labels: list[str], starts: pd.Series, ends: pd.Series, colors: list[str], height: float,
@@ -309,7 +324,8 @@ def gantt(
     if today is not None:
         t = pd.Timestamp.now(tz=tz) if today == "now" else pd.Timestamp(today)
         if tz is not None and t.tzinfo is None:
-            t = t.tz_localize(tz)  # a plain date/time means local time in the data's zone
+            # a plain date/time means local time in the data's zone; on DST-change days pick a valid instant
+            t = t.tz_localize(tz, nonexistent="shift_forward", ambiguous=False)
         elif tz is None and t.tzinfo is not None:
             t = t.tz_localize(None)
         ax.axvline(mdates.date2num(_instant(t)), color=OKABE_ITO[5], lw=1.5, ls="--")
@@ -317,7 +333,7 @@ def gantt(
         handles = [Patch(color=c, label=str(g)) for g, c in zip(groups, cols)]
         if (codes < 0).any():
             handles.append(Patch(color=NEUTRAL, label="(missing)"))
-        ax.legend(handles=handles, title=group, frameon=False,
+        ax.legend(handles=handles, title=str(group), frameon=False,
                   loc="upper left", bbox_to_anchor=(1.01, 1))
     ax.grid(axis="x", color="#eeeeee")
     ax.set_axisbelow(True)
@@ -439,7 +455,7 @@ def animated_bubble(
         stamp = stamp.strftime("%Y-%m-%d") if hasattr(stamp, "strftime") else str(stamp)
         ax.text(0.98, 0.04, stamp, transform=ax.transAxes, ha="right", fontsize=22, color=NEUTRAL, alpha=0.5)
         if color is not None:
-            ax.legend(title=color, frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
+            ax.legend(title=str(color), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
         ax.spines[["top", "right"]].set_visible(False)
         return ax.collections
 

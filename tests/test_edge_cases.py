@@ -573,3 +573,123 @@ def test_bullet_all_negative_keeps_zero_and_target_visible():
     df = pd.DataFrame({"k": ["loss"], "v": [-8.0], "t": [-5.0]})
     lo, hi = vc.bullet(df, label="k", value="v", target="t", bands=[-10.0, -6.0]).axes[0].get_xlim()
     assert lo < -8 and hi >= 0
+
+
+# --- fourth verification round -----------------------------------------------------------------------------------
+
+
+def test_abbrev_formatter_float_noise_at_huge_magnitudes_uses_offset():
+    sent = np.array([1727500000.120, 1727500000.310, 1727500000.550])
+    d = pd.DataFrame({"r": ["a", "b", "c"], "s": sent, "e": sent + [0.045, 0.080, 0.130]})
+    res = vc.dumbbell(d, label="r", start="s", end="e")
+    labels = list(_ticks(res.axes, "x").values())
+    assert len(set(labels)) == len(labels)
+
+
+def test_abbrev_formatter_absolute_never_negative():
+    d = pd.DataFrame({"age": ["0-9", "10-19"], "m": [1_200_150, 1_200_700], "f": [1_200_300, 1_200_900]})
+    res = vc.divergent_bar(d, category="age", left="m", right="f")
+    res.axes.set_xlim(-1_200_800, -1_200_100)
+    labels = list(_ticks(res.axes, "x").values())
+    offset = res.axes.xaxis.get_offset_text().get_text()
+    assert not any(t.startswith(("-", "−")) for t in labels + [offset])
+    scale = float(offset.replace("\u00d7", "")) if offset else 1.0  # Matplotlib may show a "1e6" multiplier
+    assert all(1_200_000 <= float(t.replace(",", "")) * scale <= 1_200_900 for t in labels if t)
+
+
+def test_fd_reason_is_accurate():
+    x = np.r_[np.linspace(0, 1, 999), 1e9]  # healthy IQR, one astronomical outlier
+    edges, rule = st._bin_edges(x, "fd")
+    assert rule.startswith("sturges (FD would need")
+
+
+def test_timeseries_fill_categorical_and_nullable_time_columns():
+    df = pd.DataFrame({"year": pd.Categorical([2020, 2021, None, 2022]), "a": [1.0, 3.0, 5.0, 2.0], "b": [2.0] * 4})
+    assert vc.timeseries_fill(df, time="year", series=["a", "b"]).table["year"].tolist() == [2020, 2021, 2022]
+    df = pd.DataFrame({"t": pd.array([1, 2, 3], dtype="Int64"), "a": [1.0, 3.0, 2.0], "b": [2.0, 2.0, 2.0]})
+    assert vc.timeseries_fill(df, time="t", series=["a", "b"]).info["crossovers"] == 1
+
+
+def test_keep_tz_rejects_offset_and_offsetless_mixture():
+    g = pd.DataFrame({"task": ["A", "B"], "s": ["2024-06-03 09:00-04:00", "2024-06-04 09:00-04:00"],
+                      "e": ["2024-06-03 17:00-04:00", "2024-06-04 17:00"]})
+    with pytest.raises(ValueError, match="with and without a UTC offset"):
+        vc.gantt(g, "task", "s", "e")
+
+
+def test_integer_columns_are_not_read_as_dates():
+    df = pd.DataFrame({"d": [20240101, 20240102], "v": [1.0, 2.0]})
+    with pytest.raises(ValueError, match="numbers"):
+        vc.period_bars(df, date="d", value="v")
+
+
+def test_gantt_today_on_a_dst_change_day():
+    g = pd.DataFrame({"task": ["A"], "s": [pd.Timestamp("2024-10-01", tz="America/Asuncion")],
+                      "e": [pd.Timestamp("2024-10-10", tz="America/Asuncion")]})
+    vc.gantt(g, "task", "s", "e", today="2024-10-06")  # midnight does not exist that day
+
+
+def test_duration_plot_with_an_empty_inner_column():
+    p = datasets.projects()
+    for c in ("start", "end", "work_end"):
+        p[c] = p[c].dt.tz_localize("UTC")
+    p["work_start"] = pd.NaT  # an all-empty (naive) column must not count as a zone mismatch
+    t = vc.duration_plot(p, label="task", start="start", end="end", inner_start="work_start", inner_end="work_end").table
+    assert t["inner_days"].isna().iloc[0] and t["outer_days"].notna().all()
+
+
+def test_betweenness_ties_with_decimal_weights():
+    for w in ([0.3, 0.6, 0.2], [0.15, 0.3, 0.1]):
+        e = pd.DataFrame({"s": ["A", "B", "A"], "t": ["B", "C", "C"], "w": w})
+        bc = vc.network_map(e, "s", "t", weight="w").table.set_index("node")["betweenness"]
+        assert bc["B"] == pytest.approx(0.5)
+
+
+def test_calendar_heatmap_value_column_labelled_zero():
+    d = pd.DataFrame({"when": pd.date_range("2024-01-01", periods=5), 0: [1.0, 2.0, 3.0, 4.0, 5.0]})
+    assert len(vc.calendar_heatmap(d, date="when", value=0).table) == 5
+
+
+def test_plotly_save_format_and_file_like(tmp_path):
+    pytest.importorskip("plotly")
+    from io import StringIO
+
+    res = vc.sankey(pd.DataFrame({"a": ["x"], "b": ["y"], "v": [1]}), source="a", target="b", value="v")
+    assert res.save(str(tmp_path / "flow"), format="html").endswith("flow.html")
+    buf = StringIO()
+    res.save(buf)
+    assert "<html" in buf.getvalue().lower()
+
+
+def test_directed_reciprocal_edges_are_both_visible():
+    e = pd.DataFrame({"s": ["A", "B"], "t": ["B", "A"], "w": [4.0, 1.0]})
+    res = vc.network_map(e, "s", "t", weight="w", directed=True)
+    arrows = [p for p in res.axes.patches if p.__class__.__name__ == "FancyArrowPatch"]
+    assert len(arrows) == 2
+    paths = {tuple(np.round(a.get_path().vertices.mean(axis=0), 3)) for a in arrows}
+    assert len(paths) == 2  # the two arrows follow different curves
+
+
+def test_bullet_bands_start_at_the_axis_start():
+    df = pd.DataFrame({"k": ["loss"], "v": [-8.0], "t": [-5.0]})
+    ax = vc.bullet(df, label="k", value="v", target="t", bands=[-10.0, -6.0]).axes[0]
+    band_starts = [patch.get_x() for patch in ax.patches[:2]]
+    assert band_starts == [pytest.approx(-10.0), pytest.approx(-10.0)]  # the (-10, -6] band starts at -10, not 0
+
+
+def test_quadrant_point_exactly_on_decimal_mean_is_high():
+    df = pd.DataFrame({"x": [0.1, 0.2, 0.3], "y": [1.2, 2.2, 3.2]})
+    shares = dict(zip(*vc.quadrant_plot(df, "x", "y").table[["quadrant", "n"]].T.values))
+    assert shares["high x, high y"] == 2 and shares["low x, low y"] == 1
+
+
+def test_legend_title_for_column_labelled_zero():
+    df = pd.DataFrame({0: ["a", "b"] * 10, "v": np.arange(20.0)})
+    res = vc.histogram(df, x="v", hue=0)
+    assert res.axes.flat[0].get_legend().get_title().get_text() == "0"
+
+
+def test_dumbbell_nullable_int64_stays_exact():
+    big = 2**53
+    df = pd.DataFrame({"k": ["a"], "s": pd.array([big + 1], dtype="Int64"), "e": pd.array([big + 3], dtype="Int64")})
+    assert vc.dumbbell(df, label="k", start="s", end="e").table["change"].iloc[0] == 2

@@ -318,12 +318,12 @@ def histogram_bins(x: Sequence[float], rule: Literal["fd", "sturges", "scott", "
     * ``"auto"`` – NumPy's ``"auto"`` rule, which combines FD and Sturges
       (its exact definition differs between NumPy versions).
 
-    FD breaks down on heavily tied or zero-inflated data: when the IQR is zero,
-    or zero up to floating-point noise (below 1e-9 of the range), its width
-    is zero or near zero, giving one bin or billions. In that case, and as a
-    safety limit whenever FD would need more than 100,000 bins, Sturges is
-    used instead (for ``"fd"`` and ``"auto"``). Outliers alone do not trigger
-    the switch: FD's robustness to them is why it is the default.
+    FD breaks down on heavily tied or zero-inflated data: when the IQR is zero
+    (or zero up to floating-point noise in the quartiles) its width is zero,
+    giving one bin or billions. In that case, and as a safety limit whenever
+    FD would need more than 100,000 bins, Sturges is used instead (for
+    ``"fd"`` and ``"auto"``). Outliers keep FD unless they are extreme enough
+    to push it past that limit.
 
     References
     ----------
@@ -346,8 +346,9 @@ def _bin_edges(x: Sequence[float], rule: str) -> tuple[np.ndarray, str]:
     if rule in ("fd", "auto") and np.ptp(x) > 0:
         # Decide before calling NumPy, which would try to allocate the huge bin array.
         span = float(np.ptp(x))
-        iqr = float(np.subtract(*np.percentile(x, [75, 25])))
-        if iqr <= 1e-9 * span:
+        q3, q1 = np.percentile(x, [75, 25])
+        iqr = float(q3 - q1)
+        if iqr <= 64 * np.finfo(float).eps * max(abs(q1), abs(q3)):  # zero, or ties differing by rounding only
             return np.histogram_bin_edges(x, bins="sturges"), "sturges (IQR is 0, so FD is undefined)"
         n_bins = span / (2 * iqr * x.size ** (-1 / 3))
         if n_bins > 100_000:

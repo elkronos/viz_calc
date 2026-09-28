@@ -223,7 +223,7 @@ def stacked_percentages(
         ax.set_xticks(pos, ticks)
         ax.yaxis.set_major_formatter(PercentFormatter())
         ax.set_ylim(0, 100)
-    ax.legend(title=category, frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
+    ax.legend(title=str(category), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
     ax.spines[["top", "right"]].set_visible(False)
     table = counts.stack().rename("n").reset_index()
     group_n = table.groupby(group)["n"].transform("sum")
@@ -541,7 +541,7 @@ def bullet(
         if top == bottom:
             top = 1.0
         greys = plt.get_cmap("Greys")(np.linspace(0.45, 0.15, max(len(limits), 1)))
-        prev = 0.0
+        prev = bottom  # the first band runs from the start of the axis up to its limit
         for lim, g in zip(sorted(limits), greys):
             ax.barh(0, lim - prev, left=prev, height=1, color=g)
             prev = lim

@@ -85,12 +85,14 @@ def network_map(
     table["strength"] = [G.degree(n, weight=wkey) for n in nodes]
     # Betweenness treats weights as distances; stronger ties should be shorter, so use 1/weight.
     # Zero-weight edges carry no tie and are left out of the paths.
-    # Distances are exact fractions so that equally short paths tie exactly (1/2 + 1/12 == 1/3 + 1/4);
+    # Distances are exact fractions so that equally short paths tie exactly (1/2 + 1/12 == 1/3 + 1/4, and
+    # 1/0.3 + 1/0.6 == 1/0.2);
     # with floats one path would win by rounding and take all the credit.
     if weighted:
         H = G.__class__()
         H.add_nodes_from(G)
-        H.add_edges_from((u, v, {"distance": 1 / Fraction(d[weight])}) for u, v, d in G.edges(data=True)
+        # Fractions are built from the decimal text (Fraction("0.3") == 3/10), so decimal weights tie exactly too.
+        H.add_edges_from((u, v, {"distance": 1 / Fraction(repr(d[weight]))}) for u, v, d in G.edges(data=True)
                          if d[weight] > 0)
         bc = {n: float(b) for n, b in nx.betweenness_centrality(H, weight="distance").items()}
     else:
@@ -133,7 +135,13 @@ def network_map(
         marker_px = dict(zip(nodes, np.sqrt(sizes) * 1.3))
         for (u, v), wdt in zip(G.edges(), widths):
             if directed:  # an arrow annotation, stopping at the target marker's rim
-                fig.add_annotation(x=pos[v][0], y=pos[v][1], ax=pos[u][0], ay=pos[u][1], xref="x", yref="y",
+                (x0, y0), (x1, y1) = pos[u], pos[v]
+                if G.has_edge(v, u) and u != v:  # shift reciprocal arrows to their own side so both show
+                    dx, dy = x1 - x0, y1 - y0
+                    length = float(np.hypot(dx, dy)) or 1.0
+                    ox, oy = 0.02 * dy / length, -0.02 * dx / length
+                    x0, y0, x1, y1 = x0 + ox, y0 + oy, x1 + ox, y1 + oy
+                fig.add_annotation(x=x1, y=y1, ax=x0, ay=y0, xref="x", yref="y",
                                    axref="x", ayref="y", text="", showarrow=True, arrowhead=2, arrowsize=1,
                                    arrowwidth=float(wdt), arrowcolor="#aaaaaa", standoff=float(marker_px[v]) / 2)
             else:
@@ -155,8 +163,18 @@ def network_map(
         fig, ax = plt.subplots(figsize=(8, 7))
     else:
         fig = ax.figure
-    edge_kw = {"arrows": True, "arrowsize": 14, "node_size": sizes, "arrowstyle": "-|>"} if directed else {"arrows": False}
-    nx.draw_networkx_edges(G, pos, ax=ax, width=widths, edge_color="#aaaaaa", **edge_kw)  # arrows stop at the node rim
+    if directed:  # arrows stop at the node rim; reciprocal pairs curve apart so both directions stay visible
+        edges = list(G.edges())
+        mutual = [G.has_edge(v, u) and u != v for u, v in edges]
+        for curved in (False, True):
+            chosen = [i for i, m in enumerate(mutual) if m == curved]
+            if chosen:
+                nx.draw_networkx_edges(G, pos, ax=ax, edgelist=[edges[i] for i in chosen],
+                                       width=[widths[i] for i in chosen], edge_color="#aaaaaa", arrows=True,
+                                       arrowsize=14, arrowstyle="-|>", node_size=list(sizes),
+                                       nodelist=nodes, connectionstyle="arc3,rad=0.15" if curved else "arc3")
+    else:
+        nx.draw_networkx_edges(G, pos, ax=ax, width=widths, edge_color="#aaaaaa", arrows=False)
     nx.draw_networkx_nodes(G, pos, ax=ax, node_size=sizes, node_color=node_colors, edgecolors="white")
     if labels:
         nx.draw_networkx_labels(G, pos, ax=ax, font_size=8)

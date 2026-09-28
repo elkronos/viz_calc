@@ -80,15 +80,13 @@ class VizResult:
             kwargs.setdefault("dpi", 150)
             self.figure.savefig(path, **kwargs)
             return str(path) if is_path else path
+        fmt = kwargs.pop("format", None) or (Path(path).suffix.lstrip(".").lower() if is_path else "") or "html"
         if is_path and not Path(path).suffix:
-            if "format" in kwargs:
-                path = f"{path}.{kwargs['format']}"
-            else:
-                path = f"{path}.html"
-        if is_path and str(path).lower().endswith((".html", ".htm")):
+            path = f"{path}.{fmt}"
+        if fmt in ("html", "htm"):
             self.figure.write_html(path, **kwargs)
         else:
-            self.figure.write_image(path, **kwargs)
+            self.figure.write_image(path, format=fmt, **kwargs)
         return str(path) if is_path else path
 
     def _repr_html_(self) -> str | None:  # pragma: no cover - notebook display
@@ -233,15 +231,19 @@ class AbbrevFormatter(ScalarFormatter):
 
     For evenly spaced ticks, one unit is used and the number of decimals is
     the smallest that shows every tick exactly (so a 2,500 step gives
-    ``2.5K, 5K, 7.5K``); if that needs more than three decimals (a narrow
+    ``2.5K, 5.0K, 7.5K``); if that needs more than three decimals (a narrow
     range at a large magnitude), Matplotlib's own offset notation is used
     instead. Log-scaled or unevenly spaced ticks are abbreviated one by one.
+    With ``absolute=True`` (mirrored axes) no offset is used, so no label or
+    offset ever reads as negative.
     """
 
     def __init__(self, absolute: bool = False) -> None:
         super().__init__()
         self.absolute = absolute
         self._mode: Any = None
+        if absolute:
+            self.set_useOffset(False)
 
     def set_locs(self, locs: Sequence[float]) -> None:
         self._mode = self._choose(np.asarray(locs, dtype=float))  # Formatter.locs is deprecated in Matplotlib 3.11
@@ -253,8 +255,10 @@ class AbbrevFormatter(ScalarFormatter):
             return None
         scale = self.axis.get_scale() if self.axis is not None else "linear"
         steps = np.diff(np.sort(ticks))
-        if scale != "linear" or (steps.size and not np.allclose(steps, steps[0], rtol=1e-6)):
-            return "each"
+        noise = 16 * np.spacing(np.max(np.abs(ticks)))  # float spacing at this magnitude
+        if scale != "linear" or (steps.size and not np.allclose(steps, steps[0], rtol=1e-6, atol=noise)):
+            labels = [abbreviate(abs(t) if self.absolute else t) for t in ticks]
+            return "each" if len(set(labels)) == len(labels) else None  # never repeat a label
         big = float(np.max(np.abs(ticks)))
         unit, suffix = next((t, suf) for t, suf in _SUFFIXES if big >= t)
         values = (np.abs(ticks) if self.absolute else ticks) / unit

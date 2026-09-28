@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from itertools import combinations
 from typing import Any, Literal
@@ -254,11 +255,14 @@ def quadrant_plot(
     if constant:
         raise ValueError(f"column(s) have a single value, so there are no quadrants: {constant}")
     xr, yr = d[x].to_numpy(float), d[y].to_numpy(float)
-    rx = float(np.mean(xr) if center == "mean" else np.median(xr))
-    ry = float(np.mean(yr) if center == "mean" else np.median(yr))
+    # math.fsum gives the correctly rounded mean, so a point exactly on the mean is not pushed below it.
+    rx = math.fsum(xr) / xr.size if center == "mean" else float(np.median(xr))
+    ry = math.fsum(yr) / yr.size if center == "mean" else float(np.median(yr))
     # Classify on the raw values: standardizing cannot change which side a point is on, but its rounding
     # error can move a point that sits exactly on the mean across the line.
-    right, top = xr >= rx, yr >= ry  # points exactly at the centre count as "high"
+    eps = 4 * np.finfo(float).eps
+    right = (xr >= rx) | np.isclose(xr, rx, rtol=eps, atol=0)  # points at the centre count as "high"
+    top = (yr >= ry) | np.isclose(yr, ry, rtol=eps, atol=0)
     for name, side in ((x, right), (y, top)):
         if side.all() or not side.any():
             hint = " (heavy ties); try center='mean'" if center == "median" else ""

@@ -120,7 +120,7 @@ def histogram(
     for ax in axes[:, 0]:
         ax.set_ylabel({"count": "Count", "density": "Density", "percent": "Percent"}[stat])
     if hue is not None:
-        axes.flat[0].legend(title=hue, frameon=False)
+        axes.flat[0].legend(title=str(hue), frameon=False)
     fig.suptitle(f"Distribution of {x}  (bins: {rule}, width ≈ {np.mean(width):.3g})", x=0.01, ha="left")
     fig.tight_layout()
     table = pd.DataFrame(rows).drop(columns=[c for c, used in (("facet", facet), ("hue", hue)) if used is None])

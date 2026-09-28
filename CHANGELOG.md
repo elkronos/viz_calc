@@ -26,7 +26,8 @@ dependency versions.
 ### Fixed
 - Histograms fall back from Freedman–Diaconis to Sturges when the IQR is zero
   (or zero up to floating-point noise), or FD would need over 100,000 bins
-  (previously one bin, or a MemoryError). Outliers alone keep FD.
+  (previously one bin, or a MemoryError). Outliers keep FD unless they are
+  extreme enough to hit that safety limit.
 - `network_map`: repeated edges are summed instead of the last row winning;
   categorical node columns, non-string column labels and node order work;
   directed communities use summed reciprocal weights; weighted betweenness
