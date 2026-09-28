@@ -13,9 +13,11 @@ __all__ = ["trial", "survey", "sales", "measurements", "projects", "network", "m
 
 
 def trial(n_per_group: int = 40, seed: int = 1) -> pd.DataFrame:
-    """A three-arm experiment: ``arm`` (control / low dose / high dose), ``site``, ``score``, ``baseline``.
+    """A three-arm experiment: ``arm``, ``site``, ``baseline``, ``score`` and ``improved``.
 
-    In the population the high dose raises the mean score by 6 points (about
+    ``arm`` is an ordered Categorical (control / low dose / high dose),
+    ``site`` is North or South, and ``improved`` is 1 when ``score`` exceeds
+    ``baseline``, else 0. In the population the high dose raises the mean score by 6 points (about
     half a standard deviation); the low dose by 3 points with a larger
     spread, so the group variances differ and Welch's test matters.
     """
@@ -37,7 +39,12 @@ def trial(n_per_group: int = 40, seed: int = 1) -> pd.DataFrame:
 
 
 def survey(n: int = 300, seed: int = 2) -> pd.DataFrame:
-    """Survey responses: five Likert items (1–5 labels), ``team``, ``tenure_years``, ``remote``."""
+    """Survey responses: ``team``, ``tenure_years``, ``remote`` and five Likert items.
+
+    Each item column is named after its statement (e.g. ``"Workload is
+    manageable"``) and holds one of five labels from "Strongly disagree" to
+    "Strongly agree"; ``remote`` is boolean.
+    """
     rng = np.random.default_rng(seed)
     levels = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"]
     leanings = {"Workload is manageable": -0.6, "My manager supports me": 0.8, "Tools are adequate": 0.1,
@@ -52,7 +59,11 @@ def survey(n: int = 300, seed: int = 2) -> pd.DataFrame:
 
 
 def sales(seed: int = 3) -> pd.DataFrame:
-    """Two years of daily sales for two channels, with weekly and yearly seasonality."""
+    """Two years of daily sales for two channels, with weekly and yearly seasonality.
+
+    Columns: ``date``, ``online`` and ``store`` (the two channels' sales) and
+    ``region`` (East or West).
+    """
     rng = np.random.default_rng(seed)
     days = pd.date_range("2023-01-01", "2024-12-31", freq="D")
     t = np.arange(days.size)
@@ -65,7 +76,11 @@ def sales(seed: int = 3) -> pd.DataFrame:
 
 
 def measurements(seed: int = 4) -> pd.DataFrame:
-    """Numeric features for three species-like groups (for PCA, correlations, profiling)."""
+    """Numeric features for three species-like groups (for PCA, correlations, profiling).
+
+    Columns: ``group`` (alpha / beta / gamma), the numeric ``length``,
+    ``width``, ``depth`` and ``mass``, and ``grade`` (A, B or C).
+    """
     rng = np.random.default_rng(seed)
     specs = {"alpha": (5.0, 3.4, 1.5, 0.3), "beta": (5.9, 2.8, 4.3, 1.3), "gamma": (6.6, 3.0, 5.6, 2.0)}
     frames = []

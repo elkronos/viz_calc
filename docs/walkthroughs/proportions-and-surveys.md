@@ -25,14 +25,16 @@ res.table
 
 ![Percent grid](../images/percent_grid.png)
 
-| arm | n | successes | % | 95% CI |
-|---|---|---|---|---|
-| control | 40 | 21 | 52.5 | 37.5–67.1 |
-| low dose | 40 | 26 | 65.0 | 49.5–77.9 |
-| high dose | 40 | 26 | 65.0 | 49.5–77.9 |
+| facet | n | successes | percent | ci_low | ci_high |
+|---|---|---|---|---|---|
+| control | 40 | 21 | 52.5 | 37.5 | 67.1 |
+| low dose | 40 | 26 | 65.0 | 49.5 | 77.9 |
+| high dose | 40 | 26 | 65.0 | 49.5 | 77.9 |
 
-The intervals are about ±15 points wide. A 12.5-point gap between arms of
-40 people is well within noise.
+The `facet` column holds the levels of the `facet=` column (`arm` here);
+`ci_low` and `ci_high` are the 95% Wilson limits, in percent. The intervals
+are about ±15 points wide. A 12.5-point gap between arms of 40 people is
+well within noise.
 
 For non-0/1 columns pass the value to count, e.g.
 `percent_grid(df, column="answer", success="yes")`.
@@ -65,13 +67,17 @@ res.table[["item", "n", "net"]]
 
 ![Likert](../images/likert.png)
 
-| item | net agreement (%) |
-|---|---|
-| My manager supports me | +50.3 |
-| I see a future here | +21.0 |
-| Tools are adequate | +13.0 |
-| Workload is manageable | −42.7 |
-| Meetings are useful | −54.3 |
+| item | n | net |
+|---|---|---|
+| Meetings are useful | 300 | −54.3 |
+| Workload is manageable | 300 | −42.7 |
+| Tools are adequate | 300 | +13.0 |
+| I see a future here | 300 | +21.0 |
+| My manager supports me | 300 | +50.3 |
+
+`net` is the percentage who agree minus the percentage who disagree. The
+table runs from least to most agreement; the chart puts the most agreed-with
+item at the top.
 
 `levels` must list **every** response option from most negative to most
 positive. Unlisted responses raise an error instead of being silently

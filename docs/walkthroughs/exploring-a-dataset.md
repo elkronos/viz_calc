@@ -34,18 +34,19 @@ res.table
 
 ![Profile boxes](../images/profile_boxes.png)
 
-| categorical | numeric | η² |
-|---|---|---|
-| group | depth | 0.94 |
-| group | mass | 0.88 |
-| group | length | 0.65 |
-| group | width | 0.42 |
-| grade | length | 0.03 |
-| … | … | … |
+| categorical | numeric | n | eta_squared |
+|---|---|---|---|
+| group | depth | 150 | 0.94 |
+| group | mass | 150 | 0.89 |
+| group | length | 150 | 0.65 |
+| group | width | 150 | 0.42 |
+| grade | length | 150 | 0.03 |
+| … | … | … | … |
 
-Pairs are ranked by **η²** (eta-squared), the share of the numeric column's
-variance explained by the grouping. `group` separates the specimens almost
-completely on depth; `grade` explains practically nothing.
+Pairs are ranked by **η²** (eta-squared, column `eta_squared`), the share
+of the numeric column's variance explained by the grouping. `group`
+separates the specimens almost completely on depth; `grade` explains
+practically nothing.
 
 The original `all_boxes` script chose columns by whether their *maximum
 value* was below 100 and paired numeric columns with each other. The
@@ -59,14 +60,14 @@ res = vc.profile_scatters(df, method="pearson", p_adjust="holm")
 res.table[["x", "y", "r", "ci_low", "ci_high", "p_adjusted"]]
 ```
 
-| x | y | r | 95% CI |
-|---|---|---|---|
-| depth | mass | 0.96 | 0.94–0.97 |
-| length | mass | 0.90 | 0.87–0.93 |
-| length | depth | 0.87 | 0.82–0.90 |
-| width | depth | −0.44 | −0.56 to −0.30 |
-| width | mass | −0.41 | −0.53 to −0.27 |
-| length | width | −0.31 | −0.45 to −0.16 |
+| x | y | r | ci_low | ci_high | p_adjusted |
+|---|---|---|---|---|---|
+| depth | mass | 0.96 | 0.94 | 0.97 | < .001 |
+| length | mass | 0.90 | 0.87 | 0.93 | < .001 |
+| length | depth | 0.87 | 0.82 | 0.90 | < .001 |
+| width | depth | −0.44 | −0.56 | −0.30 | < .001 |
+| width | mass | −0.41 | −0.53 | −0.27 | < .001 |
+| length | width | −0.31 | −0.45 | −0.16 | < .001 |
 
 Titles show *r* and the Holm-adjusted p-value. For large data the panels
 draw a random sample of `max_points` rows, but the statistics use all rows.
@@ -74,7 +75,7 @@ draw a random sample of `max_points` rows, but the statistics use all rows.
 ## 4. Export
 
 ```python
-res.save("scatter.png")                     # scatter_1.png, scatter_2.png, …
+res.save("scatter.png")   # one file per page: scatter_1.png, scatter_2.png, … (here all six pairs fit on one)
 vc.to_pptx([vc.profile_bars(df), vc.profile_boxes(df), res],
            "first-look.pptx",
            titles=["Counts", "Numeric by category", "Numeric pairs"])

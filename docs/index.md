@@ -1,7 +1,7 @@
 # viz_calc
 
-**Visual calculators for pandas data.** Every function draws a chart *and*
-returns the numbers behind it, computed with published, citable methods.
+**Visual calculators for pandas data.** Every chart function draws a chart
+*and* returns the numbers behind it, computed with published, citable methods.
 
 ```python
 import viz_calc as vc
@@ -54,9 +54,13 @@ The core needs only NumPy, pandas, Matplotlib and SciPy.
   your DataFrame is never modified.
 * **One calling convention.** `func(data, column=..., ...)` returns a
   [`VizResult`](api.md#viz_calc.VizResult) with `.figure`, `.axes`, `.table`,
-  `.info` and `.save()`.
-* **Composable.** Single-panel functions accept `ax=` so they can go into
-  your own subplot layouts.
+  `.info` and `.save()`. What `x`, `group`, `value` and other shared argument
+  names mean is summarized under
+  [Conventions](getting-started.md#conventions).
+* **Composable.** Functions that draw a single chart accept `ax=` so they can
+  go into your own subplot layouts (`radar` and `circular_bar` need a polar
+  Axes). Multi-panel charts create their own figure; see
+  [Putting charts into your own layouts](getting-started.md#putting-charts-into-your-own-layouts).
 * **Reproducible.** Anything random (jitter, bootstrap, layouts) is seeded.
 * **Clear errors.** A missing column raises `KeyError` naming the column and
   listing what exists; a bad option raises `ValueError` listing valid ones.
@@ -66,4 +70,6 @@ The core needs only NumPy, pandas, Matplotlib and SciPy.
 * [Getting started](getting-started.md) — the five-minute tour.
 * Walkthroughs — task-oriented guides with interpretation, starting with
   [comparing groups](walkthroughs/comparing-groups.md).
-* [Gallery](gallery.md) — every chart with the code that made it.
+* [Gallery](gallery.md) — charts with the code that made them (`sankey`,
+  `animated_bubble`, `profile_bars` and `profile_scatters` are covered in the
+  walkthroughs instead).

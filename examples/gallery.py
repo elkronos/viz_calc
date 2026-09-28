@@ -55,7 +55,7 @@ EXAMPLES = {
     "waffle": lambda: vc.waffle(survey, category="team"),
     "percent_grid": lambda: vc.percent_grid(trial, column="improved", facet="arm"),
     "stacked_percentages": lambda: vc.stacked_percentages(survey, group="team", category="Meetings are useful",
-                                                          category_order_=levels, colors="RdBu", horizontal=True),
+                                                          category_order=levels, colors="RdBu", horizontal=True),
     "donut_grid": lambda: vc.donut_grid(pd.crosstab(survey["team"], survey["work_mode"])),
     "nested_pie": lambda: vc.nested_pie(survey, outer="team", inner="work_mode"),
     "circular_bar": lambda: vc.circular_bar(monthly.assign(year=monthly["month"].str[:4]), label="month",

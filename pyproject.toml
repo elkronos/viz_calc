@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "viz_calc"
-version = "1.0.0"
+version = "1.1.0"
 description = "Visual calculators: statistically sound, citable charts for pandas data that return the numbers behind the picture."
 readme = "README.md"
 license = "MIT"
@@ -40,13 +40,15 @@ Source = "https://github.com/elkronos/viz_calc"
 [tool.hatch.build.targets.wheel]
 packages = ["src/viz_calc"]
 
+[tool.hatch.build.targets.sdist]
+include = ["src/viz_calc", "tests", "docs", "examples", "README.md", "CHANGELOG.md", "LICENSE", "mkdocs.yml"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = [
     "error::FutureWarning",
     "error::DeprecationWarning:viz_calc.*",
-    "ignore:Animation was deleted without rendering:UserWarning",
 ]
 
 [tool.ruff]

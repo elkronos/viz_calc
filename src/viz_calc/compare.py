@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from numbers import Real
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
@@ -16,14 +17,27 @@ from . import stats as st
 from ._core import (
     NEUTRAL,
     OKABE_ITO,
+    AbbrevFormatter,
     VizResult,
     abbreviate,
     category_order,
     check_choice,
+    check_count,
     check_dataframe,
+    check_distinct,
+    check_has_values,
+    check_not_reserved,
     check_numeric,
+    cleanup_on_error,
+    column_list,
+    exact_mean,
     get_ax,
+    level_label,
+    level_percent,
     palette,
+    safe_sum,
+    select_columns,
+    slot_colors,
     text_color,
 )
 
@@ -34,6 +48,55 @@ def _jitter(n: int, width: float, rng: np.random.Generator) -> np.ndarray:
     return rng.uniform(-width, width, n) if n > 1 else np.zeros(n)
 
 
+_TIE = 4 * np.finfo(float).eps  # a floating-point rounding difference, relative to the data's scale
+
+
+def _threshold(data: pd.DataFrame, y: str, threshold: Any) -> tuple[float, float]:
+    """``(value, tie tolerance)`` for a *threshold* option: a number, or ``"mean"``/``"median"`` of *y*.
+
+    ``"mean"`` is the correctly rounded mean, and the tolerance is the rounding
+    error the data can carry, so a value that equals the mean in decimal is
+    not pushed to one side of it by floating-point arithmetic.
+    """
+    values = data[y].to_numpy(dtype=float, na_value=np.nan)
+    values = values[~np.isnan(values)]
+    if values.size == 0:
+        raise ValueError(f"column {y!r} has no non-missing values")
+    if isinstance(threshold, str) and threshold in ("mean", "median"):
+        if threshold == "median":
+            return float(np.median(values)), 0.0
+        thr, scale = exact_mean(values), float(np.mean(np.abs(values)))
+        return thr, (_TIE * scale if np.isfinite(thr) and np.isfinite(scale) else 0.0)
+    if isinstance(threshold, Real) and not isinstance(threshold, bool) and np.isfinite(float(threshold)):
+        return float(threshold), 0.0
+    raise ValueError(f"threshold must be a finite number, 'mean' or 'median', got {threshold!r}")
+
+
+def _threshold_text(thr: float, tol: float, compared: Any) -> str:
+    """*thr* as a label that cannot contradict how the *compared* values were classified against it.
+
+    A threshold with at most 6 significant digits (such as a number the
+    caller gave) is shown exactly. A longer one (such as a mean) is rounded
+    to 6 significant digits, or more if a *compared* value lies between the
+    rounded and the exact threshold (so ``0.9999995`` is not shown as ``1``
+    when a value between the two is classified). Numbers from 1e-4 to 1e16
+    are written out in full, with thousands separators (``1,234.5``, not
+    ``1.23e+03``).
+    """
+    compared = np.asarray(compared, dtype=float)
+    compared = compared[np.isfinite(compared)]
+    for digits in range(1, 18):
+        shown = float(f"{thr:.{digits}g}")
+        if shown == thr:
+            break
+        low, high = min(shown, thr - tol), max(shown, thr + tol)
+        if digits >= 6 and not ((compared >= low) & (compared <= high)).any():
+            break
+    text = f"{shown:,}"
+    return text[:-2] if text.endswith(".0") else text
+
+
+@cleanup_on_error
 def estimation_plot(
     data: pd.DataFrame,
     x: str,
@@ -69,18 +132,22 @@ def estimation_plot(
     y
         Numeric outcome column.
     reference
-        Group the others are compared with. Defaults to the first group in
-        *order*.
+        Group the others are compared with. Defaults to the first group on
+        the axis.
     order
-        Order of the groups on the axis.
+        Order of the groups on the axis. Defaults to the categories of a
+        ``Categorical`` column, and to sorted order otherwise.
     level
-        Confidence level for every interval.
+        Confidence level for every interval, strictly between 0 and 1
+        (``0.95``, not ``95``).
     n_resamples
         Bootstrap resamples for the difference CI.
     p_adjust
-        Multiple-comparison correction for the Welch p-values.
+        Multiple-comparison correction for the Welch p-values: ``"holm"``,
+        ``"fdr_bh"``, ``"bonferroni"`` or ``"none"``.
     colors
-        One colour per group (defaults to the Okabe–Ito palette).
+        A colormap name or a list of colours, one per group (a shorter list
+        is cycled). Defaults to the Okabe–Ito palette.
     seed
         Seed for jitter and bootstrap, so the figure is reproducible.
 
@@ -101,13 +168,20 @@ def estimation_plot(
     """
     check_dataframe(data, [x, y])
     check_numeric(data, y)
+    check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
+    check_not_reserved(["n", "mean", "sd", "ci_low", "ci_high"], x=x)
+    st._check_level(level)
+    check_count("n_resamples", n_resamples)
+    check_has_values(data, y)
     groups = category_order(data[x], order)
     if len(groups) < 2:
         raise ValueError("estimation_plot needs at least two groups")
     reference = groups[0] if reference is None else reference
     if reference not in groups:
         raise ValueError(f"reference {reference!r} is not one of the groups {groups}")
-    samples = {g: data.loc[data[x] == g, y].dropna().to_numpy(float) for g in groups}
+    # The matching group itself: on NumPy 1.x a numpy.datetime64 and the equal Timestamp hash differently.
+    reference = groups[groups.index(reference)]
+    samples = {g: data[y][data[x] == g].dropna().to_numpy(float) for g in groups}
     small = [g for g, s in samples.items() if s.size < 2]
     if small:
         raise ValueError(f"groups need at least two observations: {small}")
@@ -122,9 +196,9 @@ def estimation_plot(
         ax_raw.scatter(i - 0.08 + _jitter(s.size, 0.12, rng), s, s=14, color=cols[i], alpha=0.6, linewidths=0)
         m, lo, hi = st.mean_ci(s, level)
         ax_raw.errorbar(i + 0.22, m, yerr=[[m - lo], [hi - m]], fmt="o", color="black", ms=5, capsize=0, lw=1.5)
-        rows.append({x: g, "n": s.size, "mean": m, "sd": s.std(ddof=1), "ci_low": lo, "ci_high": hi})
+        rows.append({x: g, "n": s.size, "mean": m, "sd": st._sd(s), "ci_low": lo, "ci_high": hi})
     ax_raw.set_ylabel(y)
-    ax_raw.set_title(f"{y} by {x}: raw data with mean and {level:.0%} CI", loc="left")
+    ax_raw.set_title(f"{y} by {x}: raw data with mean and {level_percent(level)} CI", loc="left")
 
     comps = []
     ref = samples[reference]
@@ -133,8 +207,11 @@ def estimation_plot(
         if g == reference:
             ax_diff.plot(i, 0, marker="_", color="black", ms=14)
             continue
-        est, lo, hi, dist = st._bootstrap((ref, samples[g]), lambda a, b: np.mean(b) - np.mean(a),
+        # Resample the data divided by a power of two (exact), so BCa's sums of powers neither overflow nor underflow.
+        s = st._unit_scale(ref, samples[g])
+        est, lo, hi, dist = st._bootstrap((ref / s, samples[g] / s), lambda a, b: st._mean(b) - st._mean(a),
                                           level, n_resamples, "BCa", seed)
+        est, lo, hi, dist = est * s, lo * s, hi * s, dist * s
         dens = _half_violin(dist)
         if dens is not None:
             grid, width = dens
@@ -147,10 +224,10 @@ def estimation_plot(
                       "welch_t": w["t"], "df": w["df"], "p": w["p"]})
     comps_df = pd.DataFrame(comps)
     comps_df["p_adjusted"] = st.adjust_pvalues(comps_df["p"], p_adjust)
-    ax_diff.set_ylabel(f"Difference from\n{reference}")
-    ax_diff.set_xticks(range(len(groups)), [str(g) for g in groups])
+    ax_diff.set_ylabel(f"Difference from\n{level_label(reference)}")
+    ax_diff.set_xticks(range(len(groups)), [level_label(g) for g in groups])
     ax_diff.set_xlabel(x)
-    ax_diff.set_title(f"Mean difference with bootstrap {level:.0%} CI (BCa)", loc="left", fontsize="medium")
+    ax_diff.set_title(f"Mean difference with bootstrap {level_percent(level)} CI (BCa)", loc="left", fontsize="medium")
     for ax in (ax_raw, ax_diff):
         ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
@@ -164,12 +241,13 @@ def _half_violin(values: np.ndarray, points: int = 200):
     values = values[np.isfinite(values)]
     if values.size < 3 or np.ptp(values) == 0:
         return None
-    kde = gaussian_kde(values)
+    s = st._unit_scale(values)  # an exact power of two, so the KDE's covariance neither overflows nor underflows
     grid = np.linspace(values.min(), values.max(), points)
-    dens = kde(grid)
+    dens = gaussian_kde(values / s)(grid / s)
     return grid, dens / dens.max()
 
 
+@cleanup_on_error
 def benchmark_bar(
     data: pd.DataFrame,
     x: str,
@@ -200,13 +278,20 @@ def benchmark_bar(
     ----------
     threshold
         A number, or ``"mean"``/``"median"`` of all observations of *y*.
+        ``"mean"`` is correctly rounded, and group means or CI limits that
+        differ from the threshold only by floating-point rounding count as
+        equal to it.
     error
         What the error bars show: ``"ci"``, ``"se"`` or ``"sd"``.
     classify
         ``"ci"`` colours by whether the CI excludes the threshold; ``"mean"``
-        by which side the mean falls on.
+        by which side the mean falls on (a mean equal to the threshold counts
+        as *above*).
+    level
+        Confidence level of the CIs, strictly between 0 and 1 (``0.95``, not
+        ``95``).
     colors
-        ``(below, above, indistinguishable)`` colours.
+        A tuple of three colours: ``(below, above, indistinguishable)``.
 
     References
     ----------
@@ -217,25 +302,27 @@ def benchmark_bar(
     check_numeric(data, y)
     check_choice("error", error, ["ci", "se", "sd"])
     check_choice("classify", classify, ["ci", "mean"])
-    if threshold == "mean":
-        thr = float(data[y].mean())
-    elif threshold == "median":
-        thr = float(data[y].median())
-    elif isinstance(threshold, (int, float, np.number)) and not isinstance(threshold, bool):
-        thr = float(threshold)
-    else:
-        raise ValueError("threshold must be a number, 'mean' or 'median'")
+    check_not_reserved(["n", "mean", "sd", "se", "ci_low", "ci_high", "status"], x=x)
+    st._check_level(level)
+    colors = slot_colors(colors, ("below", "above", "indistinguishable"))
+    thr, tol = _threshold(data, y, threshold)
 
     groups = category_order(data[x], order)
     rows = []
     for g in groups:
-        s = data.loc[data[x] == g, y].dropna().to_numpy(float)
+        s = data[y][data[x] == g].dropna().to_numpy(float)
         m, lo, hi = st.mean_ci(s, level)
-        sd = s.std(ddof=1) if s.size > 1 else np.nan
-        if classify == "ci":
-            status = "above" if lo > thr else "below" if hi < thr else "indistinguishable"
+        sd = st._sd(s)
+        if s.size == 0:
+            status = "no data"
         else:
-            status = "above" if m >= thr else "below"
+            # A group mean carries its own rounding error, so widen the tie tolerance by the group's scale.
+            scale = float(np.mean(np.abs(s)))
+            tie = tol + (_TIE * scale if np.isfinite(scale) else 0.0)
+            if classify == "ci":
+                status = "above" if lo > thr + tie else "below" if hi < thr - tie else "indistinguishable"
+            else:
+                status = "above" if exact_mean(s) >= thr - tie else "below"
         rows.append({x: g, "n": s.size, "mean": m, "sd": sd, "se": sd / np.sqrt(s.size) if s.size else np.nan,
                      "ci_low": lo, "ci_high": hi, "status": status})
     table = pd.DataFrame(rows)
@@ -244,12 +331,12 @@ def benchmark_bar(
 
     if error == "ci":
         err = np.vstack([table["mean"] - table["ci_low"], table["ci_high"] - table["mean"]])
-        err_text = f"{level:.0%} CI"
+        err_text = f"{level_percent(level)} CI"
     else:
         err = table[error].to_numpy()
         err_text = "±1 SE" if error == "se" else "±1 SD"
 
-    color_for = {"below": colors[0], "above": colors[1], "indistinguishable": colors[2]}
+    color_for = {"below": colors[0], "above": colors[1], "indistinguishable": colors[2], "no data": colors[2]}
     fig, ax = get_ax(ax)
     pos = np.arange(len(table))
     ax.bar(pos, table["mean"], color=[color_for[s] for s in table["status"]], width=0.65, zorder=2)
@@ -257,20 +344,22 @@ def benchmark_bar(
     if show_points:
         rng = np.random.default_rng(0)
         for p, g in zip(pos, table[x]):
-            s = data.loc[data[x] == g, y].dropna().to_numpy(float)
+            s = data[y][data[x] == g].dropna().to_numpy(float)
             ax.scatter(p + _jitter(s.size, 0.18, rng), s, s=8, color="black", alpha=0.35, lw=0, zorder=4)
     ax.axhline(thr, color="black", ls="--", lw=1, zorder=5)
-    ax.set_xticks(pos, [str(g) for g in table[x]])
+    ax.set_xticks(pos, [level_label(g) for g in table[x]])
     ax.set_xlabel(x)
     ax.set_ylabel(f"Mean {y}")
-    ax.set_title(f"Mean {y} by {x} vs benchmark {thr:.3g} (bars: {err_text})", loc="left")
-    present = [s for s in ("above", "below", "indistinguishable") if s in set(table["status"])]
+    shown = _threshold_text(thr, tol, table[["mean", "ci_low", "ci_high"]].to_numpy())
+    ax.set_title(f"Mean {y} by {x} vs benchmark {shown} (bars: {err_text})", loc="left")
+    present = [s for s in ("above", "below", "indistinguishable") if s in set(table["status"])]  # "no data" draws nothing
     ax.legend(handles=[Patch(color=color_for[s], label=s) for s in present], frameon=False, loc="upper left",
               bbox_to_anchor=(1.01, 1))
     ax.spines[["top", "right"]].set_visible(False)
     return VizResult(fig, ax, table, {"threshold": thr, "error": error, "classify": classify, "level": level})
 
 
+@cleanup_on_error
 def lollipop(
     data: pd.DataFrame,
     x: str,
@@ -288,7 +377,12 @@ def lollipop(
     Dot plots are read more accurately than bars for comparing values on a
     common scale, and horizontal labels stay legible (Cleveland & McGill,
     1984). Stems start at zero so lengths stay honest. Values below
-    *threshold* are faded.
+    *threshold* are faded. *sort* is ``"descending"``, ``"ascending"`` or
+    ``None`` (keep the order of the categories).
+
+    ``stat="count"`` counts the non-missing values of *y* in each category,
+    or the rows when *y* is not given. The aggregated values are in the
+    table's ``value`` column, so *x* cannot be named ``"value"``.
 
     References
     ----------
@@ -297,15 +391,23 @@ def lollipop(
     """
     check_dataframe(data, [x, y])
     check_choice("stat", stat, ["mean", "median", "sum", "count"])
+    check_choice("sort", sort, ["descending", "ascending", None])
+    check_not_reserved(["value"], x=x)
+    check_has_values(data, x, y)
     if stat != "count":
         if y is None:
             raise ValueError(f"stat={stat!r} needs a y column")
         check_numeric(data, y)
-        agg = data.groupby(x, observed=True)[y].agg(stat)
+        if stat == "sum":  # in float where an int64 sum could wrap around
+            agg = safe_sum(data[y], data[x], sort=True)
+        else:
+            agg = data.groupby(x, observed=True)[y].agg(stat)
+    elif y is not None:
+        agg = data.groupby(x, observed=True)[y].count()
     else:
         agg = data.groupby(x, observed=True).size()
     table = agg.rename("value").reset_index()
-    if sort:
+    if sort is not None:
         table = table.sort_values("value", ascending=(sort == "ascending"), ignore_index=True)
 
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)) if horizontal else (8, 5))
@@ -328,9 +430,9 @@ def lollipop(
             else:
                 ax.annotate(abbreviate(v), (p, v), xytext=(0, 8 if v >= 0 else -8), textcoords="offset points",
                             ha="center", va="bottom" if v >= 0 else "top", fontsize=9)
-    ticks = [str(v) for v in table[x]]
+    ticks = [level_label(v) for v in table[x]]
     label = f"{stat} of {y}" if stat != "count" else "count"
-    fmt = FuncFormatter(lambda v, _: abbreviate(v))
+    fmt = AbbrevFormatter()
     if horizontal:
         ax.set_yticks(pos, ticks)
         ax.set_xlabel(label)
@@ -351,6 +453,7 @@ def lollipop(
     return VizResult(fig, ax, table, {"stat": stat, "threshold": threshold})
 
 
+@cleanup_on_error
 def dumbbell(
     data: pd.DataFrame,
     label: str,
@@ -366,14 +469,43 @@ def dumbbell(
     """Before/after (or A/B) values per item, connected to show the change.
 
     Rows are sorted by the change so the largest movers are easy to find. The
-    table reports absolute and percentage change.
+    table reports absolute and percentage change. Integer columns give an
+    exact int64 change, unless a change could leave the int64 range; then the
+    change is a float.
+
+    Parameters
+    ----------
+    label
+        Column naming each item. It may be *start* or *end* itself. The
+        names ``"change"`` and ``"pct_change"`` are taken by the table's own
+        columns.
+    colors
+        A tuple of two colours: ``(start, end)``.
     """
     check_dataframe(data, [label, start, end])
+    check_distinct(start=start, end=end)
+    check_not_reserved(["change", "pct_change"], label=label, start=start, end=end)
     check_numeric(data, start, end)
-    table = data[[label, start, end]].copy()
+    check_has_values(data, start, end)
+    colors = slot_colors(colors, ("start", "end"))
+    table = data[list(dict.fromkeys([label, start, end]))].copy()
+    for c in dict.fromkeys((start, end)):
+        # Subtract in a safe dtype: complete integer columns (any width, signed or not, nullable or not) become
+        # int64, which neither wraps nor loses precision; anything else becomes float64 with NaN for missing.
+        s = table[c]
+        if (pd.api.types.is_integer_dtype(s) and not pd.api.types.is_bool_dtype(s) and s.notna().all()
+                and (s.size == 0 or int(s.max()) < 2**63)):
+            table[c] = s.astype("int64")
+        elif s.dtype != np.float64:
+            table[c] = s.to_numpy(dtype=float, na_value=np.nan)
     table["change"] = table[end] - table[start]
+    first, last = (table[c].to_numpy(dtype=float) for c in (start, end))
+    if (table["change"].dtype == np.int64 and len(table)
+            and np.max(np.abs(last - first)) >= 2.0**62):  # an int64 change past 2**63 would wrap around
+        table["change"] = last - first
     with np.errstate(divide="ignore", invalid="ignore"):
-        table["pct_change"] = np.where(table[start] != 0, table["change"] / table[start].abs() * 100, np.nan)
+        # In float: abs() of the smallest int64 wraps around to itself.
+        table["pct_change"] = np.where(first != 0, table["change"].to_numpy(dtype=float) / np.abs(first) * 100, np.nan)
     if sort:
         table = table.sort_values("change", ignore_index=True)
     else:
@@ -390,10 +522,10 @@ def dumbbell(
             ax.annotate(abbreviate(left), (left, p), xytext=(-8, 0), textcoords="offset points", ha="right", va="center", fontsize=8)
             ax.annotate(abbreviate(right), (right, p), xytext=(8, 0), textcoords="offset points", ha="left", va="center", fontsize=8)
         ax.margins(x=0.1)
-    ax.set_yticks(pos, [str(v) for v in table[label]])
+    ax.set_yticks(pos, [level_label(v) for v in table[label]])
     ax.set_ylabel(label)
     ax.set_xlabel("Value")
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: abbreviate(v)))
+    ax.xaxis.set_major_formatter(AbbrevFormatter())
     ax.legend(frameon=False, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2)
     ax.spines[["top", "right"]].set_visible(False)
     ax.grid(axis="x", color="#eeeeee")
@@ -401,6 +533,7 @@ def dumbbell(
     return VizResult(fig, ax, table)
 
 
+@cleanup_on_error
 def divergent_bar(
     data: pd.DataFrame,
     category: str,
@@ -416,23 +549,39 @@ def divergent_bar(
 
     *left* values are drawn to the left of zero, *right* values to the right.
     Axis labels show absolute values, so nothing reads as negative.
-    Rows with a repeated category are summed.
+    Rows with a repeated category are summed; a category whose values in a
+    column are all missing keeps a missing value there (and no bar), rather
+    than a 0. Categories are drawn bottom to
+    top in the order of a ``Categorical`` column, and in the order they
+    first appear otherwise.
+
+    Parameters
+    ----------
+    colors
+        A tuple of two colours: ``(left, right)``.
     """
     check_dataframe(data, [category, left, right])
+    check_distinct(category=category, left=left, right=right)
     check_numeric(data, left, right)
-    if (data[[left, right]] < 0).any().any():
+    check_has_values(data, category, left, right)
+    colors = slot_colors(colors, ("left", "right"))
+    values = select_columns(data, [category, left, right])
+    if (values[left] < 0).any() or (values[right] < 0).any():
         raise ValueError("divergent_bar expects non-negative values in both columns")
-    table = data.groupby(category, sort=False, observed=True)[[left, right]].sum().reset_index()
-    if sort:
-        table["total"] = table[left] + table[right]
-        table = table.sort_values("total", ignore_index=True).drop(columns="total")
+    by_levels = isinstance(data[category].dtype, pd.CategoricalDtype)  # grouping sorts a Categorical by its categories
+    # By position; safe_sum sums in float where int64 could wrap, and gives NaN (not pd.NA) for an all-missing category.
+    sums = [safe_sum(values.iloc[:, i], values.iloc[:, 0], sort=by_levels, min_count=1) for i in (1, 2)]
+    table = pd.concat(sums, axis=1, keys=[left, right]).rename_axis(category).reset_index()
+    if sort:  # by a separate key, so a column named "total" cannot be overwritten
+        total = table[left].fillna(0) + table[right].fillna(0)
+        table = table.iloc[np.argsort(total.to_numpy(), kind="stable")].reset_index(drop=True)
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)))
     pos = np.arange(len(table))
     ax.barh(pos, -table[left], color=colors[0], label=left_label or left)
     ax.barh(pos, table[right], color=colors[1], label=right_label or right)
     ax.axvline(0, color="black", lw=0.8)
-    ax.set_yticks(pos, [str(v) for v in table[category]])
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: abbreviate(abs(v))))
+    ax.set_yticks(pos, [level_label(v) for v in table[category]])
+    ax.xaxis.set_major_formatter(AbbrevFormatter(absolute=True))
     lim = max(table[left].max(), table[right].max()) * 1.1
     ax.set_xlim(-lim, lim)
     ax.set_ylabel(category)
@@ -441,6 +590,20 @@ def divergent_bar(
     return VizResult(fig, ax, table)
 
 
+def _share_label(p: float) -> str:
+    """A share (0 to 1) as a percentage that never reads 0% unless it is 0, nor 100% unless it is 1."""
+    if np.isnan(p):
+        return ""
+    x = 100 * p
+    if 0 < x < 1:
+        return f"{abbreviate(x)}%"
+    digits = 0  # whole percent, but a share just short of 100% never reads 100%
+    while x != 100 and float(f"{x:.{digits}f}") == 100:
+        digits += 1
+    return f"{x:.{digits}f}%"
+
+
+@cleanup_on_error
 def centered_bar(
     data: pd.DataFrame,
     x: str,
@@ -457,41 +620,59 @@ def centered_bar(
     Error bars are Wilson score intervals for the at-or-above proportion
     (Wilson, 1927), which behave well for small groups and extreme
     proportions (Brown, Cai & DasGupta, 2001).
+
+    Parameters
+    ----------
+    threshold
+        A number, or ``"mean"``/``"median"`` of all observations of *y*.
+        ``"mean"`` is correctly rounded, and values that differ from it only
+        by floating-point rounding count as on it (so at-or-above).
+    level
+        Confidence level of the Wilson intervals, strictly between 0 and 1
+        (``0.95``, not ``95``).
+    colors
+        A tuple of two colours: ``(at_or_above, below)``.
     """
     check_dataframe(data, [x, y])
     check_numeric(data, y)
-    thr = float(data[y].mean()) if threshold == "mean" else float(data[y].median()) if threshold == "median" else float(threshold)
+    check_not_reserved(["n", "n_above", "p_above", "ci_low", "ci_high", "p_below"], x=x)
+    st._check_level(level)
+    colors = slot_colors(colors, ("at_or_above", "below"))
+    thr, tol = _threshold(data, y, threshold)
     groups = category_order(data[x], order)
     rows = []
     for g in groups:
-        s = data.loc[data[x] == g, y].dropna()
-        n, k = int(s.size), int((s >= thr).sum())
+        s = data[y][data[x] == g].dropna().to_numpy(float)
+        n, k = int(s.size), int((s >= thr - tol).sum())
         lo, hi = st.wilson_ci(k, n, level)
         rows.append({x: g, "n": n, "n_above": k, "p_above": k / n if n else np.nan,
                      "ci_low": float(lo), "ci_high": float(hi), "p_below": (n - k) / n if n else np.nan})
     table = pd.DataFrame(rows)
 
+    shown = _threshold_text(thr, tol, data[y].to_numpy(dtype=float, na_value=np.nan))
     fig, ax = get_ax(ax)
     pos = np.arange(len(table))
-    up = ax.bar(pos, table["p_above"], color=colors[0], label=f"≥ {thr:.3g}")
-    down = ax.bar(pos, -table["p_below"], color=colors[1], label=f"< {thr:.3g}")
-    ax.errorbar(pos, table["p_above"], yerr=[table["p_above"] - table["ci_low"], table["ci_high"] - table["p_above"]],
+    up = ax.bar(pos, table["p_above"], color=colors[0], label=f"≥ {shown}")
+    down = ax.bar(pos, -table["p_below"], color=colors[1], label=f"< {shown}")
+    ax.errorbar(pos, table["p_above"], yerr=[np.clip(table["p_above"] - table["ci_low"], 0, None),
+                                             np.clip(table["ci_high"] - table["p_above"], 0, None)],
                 fmt="none", ecolor="black", capsize=3, lw=1)
     if labels:
-        ax.bar_label(up, labels=[f"{v:.0%}" for v in table["p_above"]], padding=2, fontsize=8, label_type="center", color="white")
-        ax.bar_label(down, labels=[f"{v:.0%}" for v in table["p_below"]], padding=2, fontsize=8, label_type="center", color="black")
+        ax.bar_label(up, labels=[_share_label(v) for v in table["p_above"]], padding=2, fontsize=8, label_type="center", color="white")
+        ax.bar_label(down, labels=[_share_label(v) for v in table["p_below"]], padding=2, fontsize=8, label_type="center", color="black")
     ax.axhline(0, color="black", lw=0.8)
     ax.set_ylim(-1.05, 1.05)
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{abs(v):.0%}"))
-    ax.set_xticks(pos, [str(g) for g in table[x]])
+    ax.set_xticks(pos, [level_label(g) for g in table[x]])
     ax.set_xlabel(x)
     ax.set_ylabel(f"Share of {y}")
-    ax.set_title(f"Share of {y} above/below {thr:.3g} (error bars: {level:.0%} Wilson CI)", loc="left")
+    ax.set_title(f"Share of {y} above/below {shown} (error bars: {level_percent(level)} Wilson CI)", loc="left")
     ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1, 1))
     ax.spines[["top", "right"]].set_visible(False)
     return VizResult(fig, ax, table, {"threshold": thr, "level": level})
 
 
+@cleanup_on_error
 def likert(
     data: pd.DataFrame,
     items: Sequence[str],
@@ -515,9 +696,12 @@ def likert(
     items
         Columns to plot, each holding responses from *levels*.
     levels
-        Response options ordered from most negative to most positive.
+        Response options ordered from most negative to most positive, each
+        listed once. The
+        names ``"item"``, ``"n"`` and ``"net"`` are taken by the table's own
+        columns, so levels with those names must be renamed.
     colors
-        A diverging colormap name or one colour per level.
+        A diverging colormap name or a list of exactly one colour per level.
 
     References
     ----------
@@ -525,24 +709,39 @@ def likert(
     scales. *Proceedings of the 2011 Joint Statistical Meeting*, Section on
     Survey Research Methods, 1058–1066.
     """
+    items = column_list("items", items, distinct=True)
     check_dataframe(data, items)
+    check_has_values(data, *items)
+    if isinstance(levels, str):
+        raise TypeError("levels must be a list of response options, not a str")
     levels = list(levels)
     if len(levels) < 2:
         raise ValueError("levels needs at least two response options")
+    repeated = [lv for i, lv in enumerate(levels) if lv in levels[:i]]
+    if repeated:
+        raise ValueError(f"levels repeats response option(s): {list(dict.fromkeys(repeated))}")
+    reserved = [lv for lv in levels if isinstance(lv, str) and lv in ("item", "n", "net")]
+    if reserved:
+        raise ValueError(f"rename level(s) {reserved}: 'item', 'n' and 'net' are the names of the table's own columns")
+    if colors is not None and not isinstance(colors, str):
+        colors = list(colors)
+        if len(colors) != len(levels):
+            raise ValueError(f"colors must be a colormap name or {len(levels)} colours (one per level), "
+                             f"got {len(colors)}")
     unknown = sorted({str(v) for c in items for v in data[c].dropna().unique() if v not in levels})
     if unknown:
         raise ValueError(f"responses not listed in levels: {unknown}")
     k = len(levels)
     half = k // 2
     neutral = levels[half] if k % 2 else None
-    neg, pos_levels = levels[:half], levels[k - half:]
+    neg = levels[:half]
 
     rows = []
     for item in items:
         s = data[item].dropna()
         shares = s.value_counts(normalize=True).reindex(levels, fill_value=0.0) * 100
         rows.append({"item": item, "n": int(s.size), **shares.to_dict(),
-                     "net": shares[pos_levels].sum() - shares[neg].sum()})
+                     "net": shares.iloc[k - half:].sum() - shares.iloc[:half].sum()})
     table = pd.DataFrame(rows)
     if sort:
         table = table.sort_values("net", ignore_index=True)
@@ -550,17 +749,17 @@ def likert(
     cols = palette(k, colors)
     fig, ax = get_ax(ax, figsize=(9, max(3, 0.5 * len(table) + 1.5)))
     ypos = np.arange(len(table))
-    start = -(table[neg].sum(axis=1) + (table[neutral] / 2 if neutral is not None else 0))
+    start = -(select_columns(table, neg).sum(axis=1) + (table[neutral] / 2 if neutral is not None else 0))
     left = start.to_numpy(dtype=float).copy()
     for lvl, col in zip(levels, cols):
         width = table[lvl].to_numpy(float)
-        bars = ax.barh(ypos, width, left=left, color=col, label=str(lvl), edgecolor="white", lw=0.5)
+        bars = ax.barh(ypos, width, left=left, color=col, label=level_label(lvl), edgecolor="white", lw=0.5)
         if labels:
             ax.bar_label(bars, labels=[f"{w:.0f}" if w >= 6 else "" for w in width], label_type="center", fontsize=8,
                          color=text_color(col))
         left += width
     ax.axvline(0, color="black", lw=0.8)
-    ax.set_yticks(ypos, [f"{i} (n={n})" for i, n in zip(table["item"], table["n"])])
+    ax.set_yticks(ypos, [f"{level_label(i)} (n={n})" for i, n in zip(table["item"], table["n"])])
     ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{abs(v):.0f}%"))
     ax.set_xlim(-max(float((-start).max()), 1) * 1.05, max(float(left.max()), 1) * 1.05)
     ax.set_xlabel("Share of responses")

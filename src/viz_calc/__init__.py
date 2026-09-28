@@ -32,7 +32,7 @@ from .multivariate import pca, pca_plot, radar
 from .network import network_map, sankey
 from .timeseries import animated_bubble, calendar_heatmap, duration_plot, gantt, period_bars, timeseries_fill
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 __all__ = [
     "VizResult", "OKABE_ITO", "palette", "stats", "datasets",

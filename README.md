@@ -1,7 +1,7 @@
 # viz_calc
 
-**Visual calculators for pandas data.** Each function draws a chart *and*
-returns the numbers behind it, computed with published, citable methods:
+**Visual calculators for pandas data.** Each chart function draws a chart
+*and* returns the numbers behind it, computed with published, citable methods:
 Welch tests and bootstrap effect sizes, Wilson intervals for percentages,
 multiplicity-adjusted correlation matrices, Fisher z-tests for group
 differences in correlation, and more.
@@ -60,7 +60,7 @@ Every choice is referenced on the [Methodology](https://elkronos.github.io/viz_c
 | Exploring a dataset | `profile_bars`, `profile_boxes`, `profile_scatters`, `to_pptx` |
 | Statistics only | `viz_calc.stats`: `wilson_ci`, `mean_ci`, `welch_test`, `hedges_g`, `bootstrap_ci`, `adjust_pvalues`, `correlation_test`, `compare_correlations_test`, `histogram_bins`, `largest_remainder` |
 
-See the [gallery](https://elkronos.github.io/viz_calc/gallery/) for every chart with its code.
+See the [gallery](https://elkronos.github.io/viz_calc/gallery/) for charts with the code that made them; `sankey`, `animated_bubble`, `profile_bars` and `profile_scatters` are not in it but are covered in the walkthroughs.
 
 ## Upgrading from the old scripts
 
