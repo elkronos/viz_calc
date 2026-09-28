@@ -1,6 +1,7 @@
 """Networks, flows and the documentation's claims about them."""
 
 import re
+import warnings
 from fractions import Fraction
 from pathlib import Path
 
@@ -135,3 +136,85 @@ def test_gallery_claims_match_its_contents():
         assert "every chart" not in text
         line = next(par for par in text.split("\n\n") if "allery" in par and "every" not in par and "`" in par)
         assert all(f"`{n}`" in line for n in missing), (page, missing)
+
+
+@pytest.mark.parametrize("rows,expected", [
+    # the middle edge (1e-17) is too short for float64 to add to a path of length 10
+    ([("s", "a", 0.1), ("a", "b", 1e17), ("b", "c", 0.1)], {"s": 0, "a": 2 / 3, "b": 2 / 3, "c": 0}),
+    # a second, even shorter edge inside the same float-tied run
+    ([("s", "a", 0.1), ("a", "b", 1e17), ("b", "x", 1e300), ("x", "c", 0.1)],
+     {"s": 0, "a": 0.5, "b": 2 / 3, "x": 0.5, "c": 0}),
+])
+def test_tolerant_paths_through_a_too_short_edge_still_count(rows, expected):
+    pytest.importorskip("networkx")
+    df = pd.DataFrame(rows, columns=["s", "t", "w"])
+    res = vc.network_map(df, "s", "t", weight="w", communities=False)
+    assert res.info["betweenness_arithmetic"] == "tolerant floating-point"
+    bc = res.table.set_index("node")["betweenness"]
+    truth = _truth([(u, v, Fraction(repr(w))) for u, v, w in rows])
+    assert truth == pytest.approx(expected)
+    assert all(bc[k] == pytest.approx(v, abs=1e-12) for k, v in truth.items())
+
+
+@pytest.mark.parametrize("directed", [False, True])
+def test_tolerant_float_tied_runs_keep_every_path_on_trees(directed):
+    pytest.importorskip("networkx")
+    rng = np.random.default_rng(7)
+    for _ in range(30):
+        n = int(rng.integers(4, 12))
+        # a tree has one path per pair, so the answer only depends on no path being lost
+        edges = [(str(i), str(int(rng.integers(0, i)))) for i in range(1, n)]
+        if directed:
+            edges = [(v, u) if rng.random() < 0.5 else (u, v) for u, v in edges]
+        rows = [(u, v, float(rng.choice([0.1, 0.3, 0.7, 1.1]) * rng.choice([1, 1e17, 1e30, 1e300])))
+                for u, v in edges]
+        res = vc.network_map(pd.DataFrame(rows, columns=["s", "t", "w"]), "s", "t", weight="w",
+                             directed=directed, communities=False)
+        plt.close(res.figure)
+        bc = res.table.set_index("node")["betweenness"]
+        truth = _truth([(u, v, 1) for u, v, _ in rows], directed)
+        assert all(bc[k] == pytest.approx(v, abs=1e-12) for k, v in truth.items())
+
+
+def test_very_large_weights_do_not_overflow_communities_or_layout():
+    pytest.importorskip("networkx")
+    rows = [("a", "b", 2), ("b", "c", 1), ("c", "a", 3), ("d", "e", 2), ("e", "f", 1), ("f", "d", 3), ("c", "d", 0.01)]
+    df = pd.DataFrame(rows, columns=["s", "t", "w"])
+    small = vc.network_map(df, "s", "t", weight="w")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        big = vc.network_map(df.assign(w=df["w"] * 2.0**600), "s", "t", weight="w")
+    assert big.table["community"].tolist() == small.table["community"].tolist()
+    assert big.info["n_communities"] == 2
+    assert big.info["graph"]["a"]["b"]["w"] == 2 * 2.0**600  # the returned graph keeps the real weights
+    assert np.isfinite(np.array(list(big.info["positions"].values()))).all()
+
+
+def test_node_strength_past_the_largest_float_raises():
+    pytest.importorskip("networkx")
+    df = pd.DataFrame({"s": list("abcd"), "t": list("bcda"), "w": [1e308] * 4})
+    with pytest.raises(ValueError, match="weights at node 'a' add up to more than the largest float"):
+        vc.network_map(df, "s", "t", weight="w", communities=False)
+
+
+def test_dataset_docstrings_name_every_column():
+    from viz_calc import datasets
+
+    for make in (datasets.trial, datasets.sales, datasets.measurements, datasets.projects, datasets.network):
+        for column in make().columns:
+            assert f"``{column}``" in make.__doc__, (make.__name__, column)
+    survey = datasets.survey()
+    assert all(f"``{c}``" in datasets.survey.__doc__ for c in ("team", "tenure_years", "remote"))
+    assert survey.shape[1] == 3 + 5
+
+
+def test_conventions_name_the_order_exceptions():
+    text = (ROOT / "docs/getting-started.md").read_text(encoding="utf-8")
+    order = text.split("* **Order.**")[1].split("\n* ")[0]
+    for name in ("waffle", "divergent_bar", "nested_pie", "funnel", "waterfall", "bullet", "lollipop", "dumbbell",
+                 "likert", "circular_bar", "gantt", "duration_plot", "benchmark_bar"):
+        assert f"`{name}`" in order, name
+    frame = pd.DataFrame({"c": ["zeta", "alpha", "mid"], "l": [1, 2, 3], "r": [3, 2, 1]})
+    assert vc.divergent_bar(frame, category="c", left="l", right="r").table["c"].tolist() == ["zeta", "alpha", "mid"]
+    nested = vc.nested_pie(pd.DataFrame({"o": ["z", "a"], "i": ["y", "b"]}), outer="o", inner="i")
+    assert nested.table["o"].tolist() == ["z", "a"]

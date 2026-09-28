@@ -186,7 +186,16 @@ same thing everywhere. The exceptions are listed here.
   in `likert` is the response scale.
 * **Order.** Where a function has `order=`, it fixes the order of the
   categories; otherwise a Categorical column keeps its category order and any
-  other column is sorted (`waffle` instead puts the largest category first).
+  other column is sorted. The exceptions: `waffle` puts the largest category
+  first; `divergent_bar` and `nested_pie` keep the order in which categories
+  first appear (`divergent_bar` keeps a Categorical's category order);
+  `funnel`, `waterfall` and `bullet` keep row order. Functions with `sort=`
+  order by value while it is on: by default `lollipop` (descending value),
+  `dumbbell` (change), `likert` (net agreement), `circular_bar` (value within
+  each group), and `gantt` and `duration_plot` (start date); only with
+  `sort=True`, `benchmark_bar` (mean) and `divergent_bar` (total). With it
+  off, `dumbbell`, `gantt` and `duration_plot` keep row order and `likert`
+  the order of *items*. `upset` orders by `sort_by`.
   So `estimation_plot`'s default `reference` is the first level in sorted
   order unless the column is Categorical or `order=` is given. Where the
   order applies to one particular argument it is named after it:

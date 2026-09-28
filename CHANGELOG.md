@@ -41,8 +41,9 @@ versions.
   "viridis")` drew every bar red). `likert` needs one colour per level.
 - Column-list arguments accept any list-like (a pandas Index, array, tuple)
   and reject a single string instead of splitting it into one-letter columns.
-- All-missing columns raise "column ... has no non-missing values" instead of
-  an internal error or an empty chart; one column passed for two roles (for
+- An all-missing column raises "column ... has no non-missing values" in
+  every function that needs values from it, instead of an internal error or
+  an empty chart; one column passed for two roles (for
   example `dumbbell(start="a", end="a")`) raises a clear error.
 - A plotting call that raises closes the figures it opened, so no half-drawn
   chart is left for `plt.show()` or Jupyter.

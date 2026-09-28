@@ -136,7 +136,11 @@ uses the covariance of the mean (divided by *n*).
 ### Networks
 Repeated edges are merged by summing their weights. Louvain community
 detection (Blondel et al., 2008) via NetworkX, seeded, on the undirected graph
-(reciprocal directed weights are summed). Betweenness centrality (Brandes, 2001) uses
+(reciprocal directed weights are summed). Louvain squares sums of
+strengths and the spring layout multiplies weights, so for weights above
+2²⁵⁶ both get the weights divided by a power of two (exact, and modularity
+does not depend on scale); a node strength above the largest float raises an
+error. Betweenness centrality (Brandes, 2001) uses
 1/weight as edge length, so strong ties are short paths; zero-weight edges
 are left out. Two paths of equal length must share the credit, but
 floating-point rounding can make one of them look shorter, so how path
@@ -159,7 +163,13 @@ lengths are compared depends on whether the weights are stored exactly:
   shortest as equal, the tolerance igraph uses (Csárdi & Nepusz, 2006),
   except that the slack never exceeds a quarter of the edge being added, so
   a real extra hop is not a tie (edges more than 10¹³ times shorter than the
-  path, below the rounding of float64 sums, are the exception). float32 and
+  path, below the rounding of float64 sums, are the exception). An edge
+  too short for float64 to add to the path length at all (about 10¹⁶ times
+  shorter) leaves its two ends at the same floating-point distance; such
+  runs of nodes are ordered in rational arithmetic from where the run is
+  entered, with the same rule on that scale, so paths through the edge
+  still count (a path s–a–b–c with weights 0.1, 10¹⁷, 0.1 gives a and b
+  each 2/3, as the exact lengths do). float32 and
   float16 hold only about 7 and 3 significant digits; a value entered and
   then rescaled can be off by one machine epsilon, and two equal paths by
   two, so for them the tolerance is four epsilons (4.8 × 10⁻⁷ and 0.4%), and

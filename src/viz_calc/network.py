@@ -143,7 +143,11 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
       equally short (0.3, 73/9, count/total shares), but that slack never
       exceeds a quarter of the edge being tested, so a real extra hop is not a
       tie. Only differences within the weights' own *rounding* error, which
-      low-precision floats cannot resolve, always tie.
+      low-precision floats cannot resolve, always tie. An edge too short for
+      float64 to add to ``dist[v]`` leaves its ends at the same float
+      distance; each such run of nodes is ordered by Dijkstra in rational
+      arithmetic over those edges, from the nodes entered from outside the
+      run, and the same rule on that scale picks the predecessors inside it.
 
     A path longer than the largest float raises :class:`ValueError`. The
     result does not depend on row order or on edges elsewhere. Normalized as
@@ -172,18 +176,42 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
                 if w not in dist or d + length < dist[w]:
                     dist[w] = d + length
                     heapq.heappush(heap, (dist[w], next(counter), w))
-        order = sorted(dist, key=dist.get)  # predecessors are always strictly closer, so this is topological
+        order = sorted(dist, key=dist.get)  # predecessors are closer (or ordered within a float-tied run below)
         if math.isinf(dist[order[-1]]):  # every overflowed length would tie with every other
             raise ValueError("a shortest path is longer than the largest float (its 1/weight edge lengths add up "
                              "past it); multiply the weights by a constant, which leaves betweenness unchanged")
         preds = {v: [] for v in dist}  # 2. predecessors on the shortest paths
         if exact is None:
+            runs: dict = {}  # nodes at the same float distance, per distance
             for v in dist:
+                runs.setdefault(dist[v], []).append(v)
                 for w, length in out[v]:
                     # beyond the data's own rounding, the slack never exceeds a quarter of the edge being tested
                     slack = max(rounding * dist[w], min(rel_tol * dist[w], 0.25 * length))
                     if dist[v] < dist[w] and dist[v] + length <= dist[w] + slack:
                         preds[w].append(v)
+            rank: dict = {}
+            for run in runs.values():
+                inside = {u: [] for u in run}
+                members = set(run)
+                for v in run:
+                    for w, length in out[v]:
+                        if w in members and dist[v] + length == dist[w]:  # too short to change the float sum
+                            inside[w].append((v, Fraction(length)))
+                if not any(inside.values()):
+                    continue
+                # an edge too short for float64 to add to the path length: floats cannot order its ends, so order
+                # the run by exact distances from where it is entered, with the same tie rule on that scale
+                start = {u: Fraction(0) for u in run if preds[u]}
+                ranked, offset = _rational_shortest_paths(start, inside)
+                for u in ranked:
+                    for v, q in inside[u]:
+                        slack = max(Fraction(rounding) * offset[u], min(Fraction(rel_tol) * offset[u], q / 4))
+                        if v in offset and offset[v] < offset[u] and offset[v] + q <= offset[u] + slack:
+                            preds[u].append(v)
+                rank.update((u, i) for i, u in enumerate(ranked))
+            if rank:
+                order = sorted(dist, key=lambda v: (dist[v], rank.get(v, -1)))
         else:
             residue, value, exact_order, i = {s: 0}, {s: Fraction(0)}, [s], 1
             while i < len(order):
@@ -275,7 +303,10 @@ def network_map(
     0.4%) counts as equal. The choice is made for the whole weight column,
     and the result does not depend on row order. If a shortest path's length
     (the sum of 1/weight along it) exceeds the largest float, a
-    ``ValueError`` asks for the weights to be rescaled.
+    ``ValueError`` asks for the weights to be rescaled, as does a node
+    strength above the largest float. Weights above 2**256 are divided by a
+    power of two for community detection and the layout, which would
+    otherwise overflow; this is exact and does not change modularity.
     ``info["betweenness_arithmetic"]`` says which was used and
     ``info["betweenness_tolerance"]`` gives the tolerance. For directed
     graphs, communities are found on the undirected graph with reciprocal
@@ -346,6 +377,15 @@ def network_map(
     table = pd.DataFrame({"node": nodes})
     table["degree"] = [G.degree(n) for n in nodes]
     table["strength"] = [G.degree(n, weight=wkey) for n in nodes]
+    if weighted and np.isinf(table["strength"]).any():
+        node = table["node"][np.isinf(table["strength"])].iloc[0]
+        raise ValueError(f"the {weight!r} weights at node {node!r} add up to more than the largest float; divide "
+                         "the weights by a constant")
+    # Louvain squares sums of strengths and the spring layout multiplies weights, so both overflow long before
+    # the weights do. Very large weights are divided by a power of two for them: exact, modularity is unchanged,
+    # and the layout no longer changes with the weights' scale at that size.
+    exponent = math.frexp(max(G[u][v][weight] for u, v in G.edges()))[1] if weighted else 0
+    scale = math.ldexp(1.0, 256 - exponent) if exponent > 256 else 1.0
     # Betweenness treats weights as distances; stronger ties should be shorter, so use 1/weight; zero-weight
     # edges carry no tie and are left out. Weights stored exactly are compared exactly, so equally short paths
     # always tie; other floats, whose intended exact value cannot be known, use a tolerance that absorbs rounding
@@ -378,7 +418,7 @@ def network_map(
         U = nx.Graph()
         U.add_nodes_from(G)
         for u, v, d in G.edges(data=True):
-            w = d[weight] if weighted else 1.0
+            w = d[weight] * scale if weighted else 1.0
             if U.has_edge(u, v):
                 U[u][v]["w"] += w
             else:
@@ -391,7 +431,12 @@ def network_map(
             table["community"] = 0
     else:
         table["community"] = 0
-    pos = nx.spring_layout(G, weight=wkey, seed=None if seed is None else int(seed))
+    layout = G
+    if scale != 1.0:
+        layout = G.copy()
+        for _, _, d in layout.edges(data=True):
+            d[weight] *= scale
+    pos = nx.spring_layout(layout, weight=wkey, seed=None if seed is None else int(seed))
     metric = table[size_by].to_numpy(float)
     sizes = 150 + 850 * (metric - metric.min()) / (np.ptp(metric) or 1)
     ncomm = int(table["community"].max()) + 1
