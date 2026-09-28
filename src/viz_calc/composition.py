@@ -227,7 +227,7 @@ def percent_grid(
         ax.set_aspect("equal")
         ax.axis("off")
         head = f"{level_label(f)}: " if f is not None else ""
-        stat = f"{p:.1%}\n{level:.0%} CI {float(lo):.1%}–{float(hi):.1%}, n={n}" if n else "no data (n=0)"
+        stat = f"{p:.1%}\n{level * 100:.10g}% CI {float(lo):.1%}–{float(hi):.1%}, n={n}" if n else "no data (n=0)"
         ax.set_title(f"{head}{stat}", fontsize="medium")
         rows.append({"facet": f, "n": n, "successes": k, "percent": 100 * p,
                      "ci_low": 100 * float(lo), "ci_high": 100 * float(hi)})
@@ -403,10 +403,16 @@ def nested_pie(
     columns, each with at least one non-missing value. Rows with a missing
     *outer* or *inner* category are not dropped: they are drawn in grey as
     "(missing)" (a missing *outer* last) and count towards the total.
+    Neither category column may be named ``"value"``, ``"percent_of_total"``
+    or ``"percent_of_parent"``, as those name the table's output columns.
     """
     check_dataframe(data, [outer, inner, value])
     if outer == inner:
         raise ValueError(f"outer and inner must be different columns; both are {outer!r}")
+    reserved = [c for c in (outer, inner) if c in ("value", "percent_of_total", "percent_of_parent")]
+    if reserved:
+        raise ValueError(f"rename column(s) {reserved}: 'value', 'percent_of_total' and 'percent_of_parent' are the "
+                         "names of the output columns")
     check_has_values(data, outer, inner)  # an all-missing value column is a zero total, reported below
     # dropna=False: rows with a missing category keep their share of the total
     grouped = data.groupby([outer, inner], sort=False, observed=True, dropna=False)
@@ -474,7 +480,8 @@ def circular_bar(
     not precise comparison. Values must be non-negative; a missing value
     leaves an empty (labelled) slot, but *label* and *value* each need at
     least one non-missing value. Rows with a missing *group* are drawn in
-    grey as a final "(missing)" cluster, not dropped.
+    grey as a final "(missing)" cluster, not dropped (all of them, if the
+    *group* column has no values).
 
     Parameters
     ----------
@@ -496,7 +503,8 @@ def circular_bar(
         raise ValueError("circular_bar values must be non-negative")
     # dict.fromkeys: one column may play two roles (label="city", group="city"), but must be selected once
     d = data[list(dict.fromkeys([label, value] + ([group] if group is not None else [])))].copy()
-    groups = _levels(d[group]) if group is not None else [None]
+    # a group column with no values: every row goes to the "(missing)" cluster below
+    groups = (_levels(d[group]) if d[group].notna().any() else []) if group is not None else [None]
     cols = palette(len(groups), colors)
     # Match rows to groups by value (as codes), which also works for nullable dtypes; -1 marks a missing group.
     codes = pd.Index(groups).get_indexer(d[group]) if group is not None else np.zeros(len(d), dtype=int)
@@ -878,7 +886,7 @@ def upset(
     counts = combo.value_counts()
     table = pd.DataFrame(list(counts.index), columns=names)
     table["size"] = counts.to_numpy()
-    table["degree"] = table[names].sum(axis=1)
+    table["degree"] = select_columns(table, names).sum(axis=1)  # by label: False/True set names are not a mask
     table = table[table["size"] >= min_size]
     table = table.sort_values(["size", "degree"], ascending=[False, False], ignore_index=True)
     if max_intersections is not None:  # keep the largest intersections, then apply the requested display order
@@ -899,8 +907,8 @@ def upset(
     ax_bar.set_ylabel("Intersection size")
     ax_bar.spines[["top", "right", "bottom"]].set_visible(False)
     ax_bar.tick_params(axis="x", bottom=False, labelbottom=False)
-    for j, row in table.iterrows():
-        on = [i for i, nme in enumerate(names) if row[nme]]
+    for j, row in enumerate(select_columns(table, names).to_numpy()):
+        on = [i for i, member in enumerate(row) if member]
         ax_mat.scatter([j] * k, range(k), s=60, color="#dddddd", zorder=1)
         ax_mat.scatter([j] * len(on), on, s=60, color=color, zorder=2)
         if len(on) > 1:

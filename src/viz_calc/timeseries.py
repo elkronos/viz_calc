@@ -400,7 +400,9 @@ def gantt(
     The date axis adapts its tick spacing to the range. Pass ``today`` (a date
     or ``"now"``) to draw a reference line. *start* and *end* must be two
     different columns, each different from *task* and *group* (which may be
-    the same column, to colour each task by its own name).
+    the same column, to colour each task by its own name). Tasks with a
+    missing *group* are drawn in grey as "(missing)" (all of them, if the
+    *group* column has no values).
     """
     check_dataframe(data, [task, start, end, group])
     _check_distinct(task=task, start=start, end=end)
@@ -425,7 +427,8 @@ def gantt(
             t = t.tz_localize(None)
     if sort:
         d = d.sort_values(start, kind="stable")
-    groups = category_order(d[group]) if group is not None else [None]
+    # a group column with no values: every task is drawn as "(missing)" below
+    groups = (category_order(d[group]) if d[group].notna().any() else []) if group is not None else [None]
     cols = palette(len(groups), colors)
     # An Index matches datetime-like groups by value; a missing group (-1) is drawn grey.
     codes = pd.Index(groups).get_indexer(d[group]) if group is not None else np.zeros(len(d), dtype=int)
@@ -620,7 +623,9 @@ def animated_bubble(
     Returns a :class:`VizResult` whose ``info["animation"]`` is a Matplotlib
     ``FuncAnimation`` (kept alive by the figure, so ``plt.show()`` plays it)
     and ``info["frames"]`` the time values in playing order; the table has
-    one row per frame, in the same order. Save the animation with
+    one row per frame, in the same order, with the mean of *x*, *y* and
+    *size* (a column used for two of these appears once). *time* must be a
+    different column from *x*, *y* and *size*. Save the animation with
     ``anim.save("out.gif")`` or show it in a notebook with
     ``IPython.display.HTML(anim.to_jshtml())``.
 
@@ -633,6 +638,8 @@ def animated_bubble(
         Delay between frames in milliseconds; a positive number.
     """
     check_dataframe(data, [time, x, y, size, color, label])
+    for role, column in (("x", x), ("y", y), ("size", size)):  # the table averages these per time value
+        _check_distinct(time=time, **{role: column})
     check_numeric(data, x, y, size)
     check_has_values(data, time, x, y, size)
     _check_positive("max_area", max_area)
@@ -690,6 +697,6 @@ def animated_bubble(
     # is shown and is deleted only with it. A caller who wants just the table then needs no warning.
     fig.canvas.mpl_connect("close_event", lambda _event, _keep=anim: None)
     anim._draw_was_started = True  # what Animation.save() also sets to silence the warning
-    table = data.groupby(time, observed=True)[[x, y, size]].mean()
+    table = data.groupby(time, observed=True)[list(dict.fromkeys([x, y, size]))].mean()  # a shared column once
     table = table.iloc[table.index.get_indexer(frames)].reset_index()  # rows in playing order
     return VizResult(fig, ax, table, {"animation": anim, "frames": frames, "area_scale": max_area / smax})
