@@ -392,3 +392,27 @@ def test_public_plotting_functions_clean_up_on_error(module):
             continue
         assert hasattr(func, "__wrapped__"), name
         assert inspect.signature(func) == inspect.signature(func.__wrapped__)
+
+
+def test_constant_groups_report_zero_sd_and_difference():
+    df = pd.DataFrame({"g": ["a"] * 3 + ["b"] * 10, "v": [0.1] * 13})
+    res = vc.estimation_plot(df, x="g", y="v")
+    assert (res.table["sd"] == 0).all()
+    assert res.info["comparisons"]["difference"].iloc[0] == 0
+    assert (vc.benchmark_bar(df, x="g", y="v", threshold=0.1).table["sd"] == 0).all()
+
+
+def test_sankey_rejects_one_column_for_two_roles():
+    pytest.importorskip("plotly")
+    with pytest.raises(ValueError, match="different columns"):
+        vc.sankey(pd.DataFrame({"a": ["x"], "v": [1.0]}), "a", "a", "v")
+
+
+def test_bootstrap_of_constant_samples_is_the_estimate():
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        from viz_calc import stats
+
+        assert stats.bootstrap_ci([0.1] * 3, [0.1] * 10) == (0.0, 0.0, 0.0)

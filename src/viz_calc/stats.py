@@ -226,7 +226,7 @@ def hedges_g(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> dic
 
 def bootstrap_ci(
     *samples: Sequence[float],
-    statistic: Callable[..., float] = lambda a, b: np.mean(b) - np.mean(a),
+    statistic: Callable[..., float] = lambda a, b: _mean(b) - _mean(a),
     level: float = 0.95,
     n_resamples: int = 5000,
     method: Literal["BCa", "percentile", "basic"] = "BCa",
@@ -259,6 +259,8 @@ def _bootstrap(samples, statistic, level, n_resamples, method, seed):
     if any(d.size < 2 for d in data):
         raise ValueError("each sample needs at least two non-missing values")
     estimate = float(statistic(*data))
+    if all(np.ptp(d) == 0 for d in data):  # every resample equals the data: the interval is the estimate itself
+        return estimate, estimate, estimate, np.full(n_resamples, estimate)
     kwargs = dict(n_resamples=n_resamples, confidence_level=level, method=method, vectorized=False)
     try:
         res = _st.bootstrap(data, statistic, rng=np.random.default_rng(seed), **kwargs)

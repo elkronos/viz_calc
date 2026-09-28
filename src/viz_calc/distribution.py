@@ -32,7 +32,8 @@ __all__ = ["histogram", "ridgeplot", "raincloud"]
 
 def _describe(s: pd.Series) -> dict[str, float]:
     s = s.dropna()
-    return {"n": int(s.size), "mean": s.mean(), "median": s.median(), "sd": s.std(ddof=1),
+    sd = np.sqrt(st._var(s.to_numpy(float))) if s.size > 1 else np.nan
+    return {"n": int(s.size), "mean": s.mean(), "median": s.median(), "sd": sd,
             "q1": s.quantile(0.25), "q3": s.quantile(0.75)}
 
 

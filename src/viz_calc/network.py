@@ -19,6 +19,7 @@ from ._core import (
     VizResult,
     check_choice,
     check_dataframe,
+    check_distinct,
     check_has_values,
     check_numeric,
     cleanup_on_error,
@@ -442,6 +443,7 @@ def sankey(
     go = require("plotly.graph_objects", "interactive")
     check_dataframe(data, [source, target, value])
     check_numeric(data, value)
+    check_distinct(source=source, target=target, value=value)
     check_has_values(data, source, target, value)
     if data[value].isna().any():
         raise ValueError(f"flow values in {value!r} contain missing values; drop or fill them first")

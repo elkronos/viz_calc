@@ -42,8 +42,8 @@ versions.
 - Column-list arguments accept any list-like (a pandas Index, array, tuple)
   and reject a single string instead of splitting it into one-letter columns.
 - All-missing columns raise "column ... has no non-missing values" instead of
-  an internal error or an empty chart; one column passed for two roles raises
-  a clear error.
+  an internal error or an empty chart; one column passed for two roles (for
+  example `dumbbell(start="a", end="a")`) raises a clear error.
 - A plotting call that raises closes the figures it opened, so no half-drawn
   chart is left for `plt.show()` or Jupyter.
 - Spearman p-values for up to 9 pairs are exact permutation p-values (the t
@@ -124,6 +124,26 @@ versions.
   categories.
 - Datetime category orders work on NumPy 1.x, and date groups read
   `2024-01-01` in labels, legends and titles.
+- Two identical constant groups (`[0.1] * 3` and `[0.1] * 10`) are no longer
+  called different: `welch_test` gives t = nan and p = 1, the bootstrap
+  difference and its interval are exactly 0, and result tables report SD 0.
+  `adjust_pvalues` rejects p-values outside [0, 1], and the statistics
+  functions treat `pd.NA` in plain lists as missing.
+- Histogram FD bins keep the 100,000-bin limit after rounding to whole-number
+  widths, and a real IQR at large magnitudes (integers near 1e15) is no longer
+  taken for zero.
+- `nested_pie`, `waffle` and `pca_plot` show rows with a missing category or
+  group as a grey "(missing)" entry instead of silently dropping them.
+- `profile_boxes` orders numeric and Categorical levels naturally (1, 2, 10,
+  not 1, 10, 2); `divergent_bar` follows Categorical order.
+- `funnel` shows an undefined conversion rate as "–" instead of "nan%";
+  `period_bars` no longer wraps around when summing very large integers;
+  `bullet` reads integer band labels as column names when they are columns;
+  `sankey` rejects missing flow values; `network_map` accepts a NumPy seed.
+- Number labels beyond 999T use scientific notation; time-zone-aware
+  midnight dates read `2024-01-01`; `quadrant_plot(standardize=True)` works
+  at very large and very small magnitudes; `to_pptx` accepts a single title
+  string.
 
 ### Documentation
 - Getting started lists which functions take `colors=` (and in what form),

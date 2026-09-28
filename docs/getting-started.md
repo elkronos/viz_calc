@@ -182,7 +182,8 @@ same thing everywhere. The exceptions are listed here.
   `histogram` and `timeseries_fill`.
 * **`level`** is the confidence level of intervals (default 0.95); `levels`
   in `likert` is the response scale.
-* **Order.** `order=` fixes the order of the categories. Where it applies to
+* **Order.** Where a function has `order=`, it fixes the order of the categories
+  (otherwise categories keep their Categorical order or first appearance). Where it applies to
   one particular argument it is named after it: `hue_order`/`facet_order` in
   `histogram`, `facet_order` in `percent_grid`, and
   `group_order`/`category_order` in `stacked_percentages`.

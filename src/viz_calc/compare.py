@@ -161,7 +161,7 @@ def estimation_plot(
         ax_raw.scatter(i - 0.08 + _jitter(s.size, 0.12, rng), s, s=14, color=cols[i], alpha=0.6, linewidths=0)
         m, lo, hi = st.mean_ci(s, level)
         ax_raw.errorbar(i + 0.22, m, yerr=[[m - lo], [hi - m]], fmt="o", color="black", ms=5, capsize=0, lw=1.5)
-        rows.append({x: g, "n": s.size, "mean": m, "sd": s.std(ddof=1), "ci_low": lo, "ci_high": hi})
+        rows.append({x: g, "n": s.size, "mean": m, "sd": np.sqrt(st._var(s)) if s.size > 1 else np.nan, "ci_low": lo, "ci_high": hi})
     ax_raw.set_ylabel(y)
     ax_raw.set_title(f"{y} by {x}: raw data with mean and {level:.0%} CI", loc="left")
 
@@ -172,7 +172,7 @@ def estimation_plot(
         if g == reference:
             ax_diff.plot(i, 0, marker="_", color="black", ms=14)
             continue
-        est, lo, hi, dist = st._bootstrap((ref, samples[g]), lambda a, b: np.mean(b) - np.mean(a),
+        est, lo, hi, dist = st._bootstrap((ref, samples[g]), lambda a, b: st._mean(b) - st._mean(a),
                                           level, n_resamples, "BCa", seed)
         dens = _half_violin(dist)
         if dens is not None:
@@ -273,7 +273,7 @@ def benchmark_bar(
     for g in groups:
         s = data.loc[data[x] == g, y].dropna().to_numpy(float)
         m, lo, hi = st.mean_ci(s, level)
-        sd = s.std(ddof=1) if s.size > 1 else np.nan
+        sd = np.sqrt(st._var(s)) if s.size > 1 else np.nan
         if s.size == 0:
             status = "no data"
         else:
