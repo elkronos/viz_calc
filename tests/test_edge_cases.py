@@ -884,6 +884,7 @@ def test_weighted_betweenness_matches_exact_rational_ground_truth():
     # integer count weights: 1/w distances are exact rationals, so Fraction arithmetic gives the true ties
     from fractions import Fraction
 
+    import matplotlib.pyplot as plt
     import networkx as nx
 
     rng = np.random.default_rng(3)
@@ -895,5 +896,6 @@ def test_weighted_betweenness_matches_exact_rational_ground_truth():
         H.add_weighted_edges_from(((u, v, Fraction(1, int(w))) for u, v, w in e.itertuples(index=False)), weight="d")
         exact = {k: float(v) for k, v in nx.betweenness_centrality(H, weight="d").items()}
         for dtype in ("float32", "float64", "int64"):
-            got = vc.network_map(e.astype({"w": dtype}), "s", "t", weight="w", communities=False).table
-            assert all(r.betweenness == pytest.approx(exact[r.node], abs=1e-9) for r in got.itertuples())
+            res = vc.network_map(e.astype({"w": dtype}), "s", "t", weight="w", communities=False)
+            plt.close(res.figure)
+            assert all(r.betweenness == pytest.approx(exact[r.node], abs=1e-9) for r in res.table.itertuples())
