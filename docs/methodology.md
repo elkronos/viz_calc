@@ -99,25 +99,31 @@ are left out. Two paths of equal length must share the credit, but
 floating-point rounding can make one of them look shorter, so how path
 lengths are compared depends on whether the weights are stored exactly:
 
-* **Exact weights.** Integers, `Decimal`/`Fraction` values and floats that
-  equal the decimal they display (`2.0`, `0.125`, `1001.5`) are compared in
-  exact rational arithmetic.
-* **Other floats** (`0.3`, `73/9`, shares such as count/438) stand for a
-  value the type cannot hold, and which value was meant cannot be known
-  (`0.98989898989899` may be a typed decimal or 98/99). Brandes' algorithm
-  then treats path lengths within a relative 1e-10 of the shortest as equal,
-  the tolerance igraph uses (Csárdi & Nepusz, 2006), except that the slack
-  never exceeds a quarter of the edge being added, so a real extra hop is
-  never a tie. float32 and float16 hold only about 7 and 3 significant
-  digits; for them the tolerance is four machine epsilons (4.8 × 10⁻⁷ and
-  0.4%); smaller differences cannot be resolved at that precision. In
-  simulations, the largest gap between truly equal float32 paths (entered
-  decimals, ratios and rescaled shares) was half an epsilon.
+* **Exact weights.** Integers, and floats that cannot have been rounded
+  when stored (they print exactly as stored, and are integers the type holds
+  exactly or have no more digits than its precision: `2.0`, `0.125`,
+  `1001.5`), are compared exactly. Floating point orders the paths; any two
+  that come within 10⁻¹¹ of each other are then compared exactly, through
+  their residues modulo the prime 2¹²⁷ − 1 and, if those differ, in rational
+  arithmetic. Unlike rational arithmetic throughout, whose denominators grow
+  along every path, this costs about as much as floating point.
+* **Other floats** (`0.3`, `73/9`, shares such as count/438, float32 counts
+  above 2²⁴) may stand for a value the type cannot hold, and which value was
+  meant cannot be known (`0.98989898989899` may be a typed decimal or 98/99).
+  Brandes' algorithm then treats path lengths within a relative 10⁻¹⁰ of the
+  shortest as equal, the tolerance igraph uses (Csárdi & Nepusz, 2006),
+  except that the slack never exceeds a quarter of the edge being added, so
+  a real extra hop is not a tie (edges more than 10¹³ times shorter than the
+  path, below the rounding of float64 sums, are the exception). float32 and
+  float16 hold only about 7 and 3 significant digits; a value entered and
+  then rescaled can be off by one machine epsilon, and two equal paths by
+  two, so for them the tolerance is four epsilons (4.8 × 10⁻⁷ and 0.4%), and
+  smaller differences cannot be resolved.
 
-Either way the result does not depend on row order.
-`info["betweenness_arithmetic"]` and `info["betweenness_tolerance"]`
-record which comparison was used; graphs with more than 2,000 edges always
-use the tolerant one, for speed.
+The choice is made for the whole weight column, so one inexact weight makes
+every comparison tolerant. Either way the result does not depend on row
+order. `info["betweenness_arithmetic"]` and `info["betweenness_tolerance"]`
+record which comparison was used.
 
 ## Visual design decisions
 

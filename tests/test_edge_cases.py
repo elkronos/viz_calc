@@ -999,14 +999,12 @@ def test_exactly_stored_float32_differences_are_kept():
 
 
 def test_betweenness_arithmetic_choice():
-    from viz_calc.network import EXACT_EDGE_LIMIT
-
     rng = np.random.default_rng(0)
-    m = EXACT_EDGE_LIMIT + 200
+    m = 2200
     big = pd.DataFrame({"s": rng.integers(0, 400, m), "t": rng.integers(400, 800, m), "w": rng.integers(1, 9, m)})
-    big = big.drop_duplicates(["s", "t"]).head(EXACT_EDGE_LIMIT + 50)
+    big = big.drop_duplicates(["s", "t"]).head(2050)
     res = vc.network_map(big, "s", "t", weight="w", communities=False, labels=False)
-    assert res.info["betweenness_arithmetic"] == "tolerant floating-point"  # integers, but too many edges
+    assert res.info["betweenness_arithmetic"] == "exact"  # exact at any size
     small = big.head(50)
     assert vc.network_map(small, "s", "t", weight="w", communities=False).info["betweenness_arithmetic"] == "exact"
     floats = small.assign(w=small["w"] / 7)

@@ -36,13 +36,16 @@ dependency versions.
   categorical node columns, non-string column labels and node order work;
   directed communities use summed reciprocal weights; repeated rows are
   summed exactly (or correctly rounded); weighted betweenness no longer
-  lets rounding hand one of two equally short paths all the credit: exactly
-  stored weights (integers, 0.125) are compared in rational arithmetic and
-  other floats within igraph's relative tolerance of 1e-10 (four machine
-  epsilons for float32/float16), never merging a real extra hop, and results
-  do not depend on row order (`info["betweenness_arithmetic"]`,
-  `info["betweenness_tolerance"]`); directed graphs draw arrowheads
-  (Matplotlib and Plotly).
+  lets rounding hand one of two equally short paths all the credit: weights
+  that cannot have been rounded when stored (integers, 0.125) are compared
+  exactly at any graph size, with floating point ordering the paths and
+  near-ties settled exactly, and other floats within igraph's relative
+  tolerance of 1e-10 (four machine epsilons for float32/float16), never
+  merging a real extra hop; results do not depend on row order
+  (`info["betweenness_arithmetic"]`, `info["betweenness_tolerance"]`);
+  weights too small to invert, or repeated rows summing past the largest
+  float, raise a clear error; directed graphs draw arrowheads (Matplotlib
+  and Plotly).
 - Dates: calendar views (`calendar_heatmap`, `period_bars`) place
   timezone-aware values by their local day, including mixed UTC offsets
   across DST; `gantt`, `duration_plot` and `timeseries_fill` keep time zones,
