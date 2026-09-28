@@ -7,7 +7,8 @@ worked examples.
 
 ## Statistical methods
 
-`pd.NA` in nullable `Int64`/`Float64` columns is treated exactly like `NaN`:
+`pd.NA` in nullable `Int64`/`Float64` columns (or in a plain list passed to a
+`viz_calc.stats` function) is treated exactly like `NaN`:
 missing values are dropped (pairwise for correlations). Every `level=` is a
 proportion strictly between 0 and 1 (`0.95`, not `95`); anything else raises
 a `ValueError` instead of producing `NaN` intervals.
@@ -22,7 +23,8 @@ Welch–Satterthwaite degrees of freedom. The default because it keeps the
 nominal error rate when variances or group sizes differ and costs almost no
 power when they are equal (Welch, 1947; Delacre, Lakens & Leys, 2017).
 If both groups are constant the standard error is zero and $t = \pm\infty$
-with the sign of the difference. Used by `estimation_plot`.
+with the sign of the difference ($p = 0$); two identical constants have no
+difference, so $t$ is `NaN` and $p = 1$. Used by `estimation_plot`.
 
 ### Hedges' *g*
 Cohen's *d* with pooled SD, times the small-sample correction
@@ -31,7 +33,9 @@ $\frac{n_A+n_B}{n_A n_B} + \frac{g^2}{2(n_A+n_B)}$ (Hedges & Olkin, 1985).
 Undefined (`NaN`) when both groups are constant.
 
 A group counts as constant when all its values are identical, so `[0.1] * 3`
-behaves like `[1.0] * 3` even though its floating-point mean is off by an ulp.
+behaves like `[1.0] * 3` even though its floating-point mean is off by an ulp:
+its mean is taken to be its common value, so `[0.1] * 3` and `[0.1] * 10`
+are identical groups and the mean CI of `[0.1] * 3` is exactly 0.1.
 The mean CI, Welch's test and *g* rescale the data by a power of two before
 squaring deviations; the rescaling is exact, so ordinary results are
 unchanged and magnitudes beyond about $10^{\pm 154}$ no longer overflow or
@@ -55,6 +59,8 @@ or extreme proportions (Wilson, 1927; Brown, Cai & DasGupta, 2001). Used by
 * **Benjamini–Hochberg** (1995): controls the false discovery rate. Better
   for screening many correlations.
 * **Bonferroni** and **none** are available.
+
+P-values outside $[0, 1]$ raise a `ValueError`.
 
 Used by `estimation_plot` (across comparisons with the reference),
 `correlogram` (across the *k(k−1)/2* unique pairs), `compare_correlations`
@@ -89,7 +95,8 @@ Used by `compare_correlations`.
 ### Histogram bin width
 Freedman–Diaconis by default: width $= 2\,\mathrm{IQR}\,n^{-1/3}$, which is
 robust to outliers (Freedman & Diaconis, 1981). On heavily tied or
-zero-inflated data the IQR can be zero (or zero up to floating-point noise),
+zero-inflated data the IQR can be zero (or zero up to a few ulps of
+floating-point noise in the quartiles),
 which would give one bin or billions; then, or if FD would need more than
 100,000 bins, Sturges' rule is used instead and `info["bin_rule"]` records
 why. Outliers keep FD unless they are extreme enough to hit that safety
@@ -98,7 +105,9 @@ that can hold no value (a comb of empty bars), and a fractional width makes
 bins span different numbers of values (a sawtooth). There the width is
 rounded to the nearest whole number (at least 1) and the edges sit on
 half-integers from $\min(x) - 0.5$; `info["bin_rule"]` then reads
-`fd (whole-number widths for integer data)`. Scott (1979) and
+`fd (whole-number widths for integer data)`. The 100,000-bin limit is
+checked again after rounding, since a width rounded down (1.4 to 1) adds
+bins. Scott (1979) and
 Sturges (1926) are also available and used as published. Bins are computed
 once on all data so groups and facets are directly comparable.
 

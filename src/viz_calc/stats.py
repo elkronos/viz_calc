@@ -39,7 +39,11 @@ def _as_float(x: Any) -> np.ndarray:
     if isinstance(x, (pd.Series, pd.Index, pd.DataFrame, pd.api.extensions.ExtensionArray)):
         # np.asarray(x, dtype=float) raises for nullable dtypes holding pd.NA on pandas 2.0
         return x.to_numpy(dtype=float, na_value=np.nan)
-    return np.asarray(x, dtype=float)
+    try:
+        return np.asarray(x, dtype=float)
+    except TypeError:  # a list or object array holding pd.NA
+        obj = np.asarray(x, dtype=object)
+        return np.where(pd.isna(obj), np.nan, obj).astype(float)
 
 
 def _clean(x: Sequence[float] | np.ndarray | pd.Series) -> np.ndarray:
@@ -75,6 +79,15 @@ def _var(x: np.ndarray) -> float:
     1e-34 and turn a zero-variance case into an astronomically large *t* or *g*.
     """
     return 0.0 if np.ptp(x) == 0 else float(x.var(ddof=1))
+
+
+def _mean(x: np.ndarray) -> float:
+    """Mean of a non-empty sample, exactly its common value for a constant sample.
+
+    ``mean([0.1] * 3)`` is ``0.10000000000000002``; without this, two identical
+    constant groups of different sizes would differ by an ulp.
+    """
+    return float(x[0]) if np.ptp(x) == 0 else float(x.mean())
 
 
 def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0.95) -> tuple[Any, Any]:
@@ -126,7 +139,7 @@ def mean_ci(x: Sequence[float], level: float = 0.95) -> tuple[float, float, floa
         return (np.nan, np.nan, np.nan)
     s = _unit_scale(x)
     x = x / s  # exact; see _unit_scale
-    m = float(x.mean() * s)
+    m = _mean(x) * s
     if n < 2:
         return (m, np.nan, np.nan)
     se = np.sqrt(_var(x)) / np.sqrt(n) * s
@@ -144,7 +157,9 @@ def welch_test(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> d
     Returns a dict with ``difference``, ``ci_low``, ``ci_high``, ``t``,
     ``df`` (Welch–Satterthwaite) and ``p``. When both groups are constant the
     standard error is zero: ``t`` is then ``±inf`` with the sign of the
-    difference (``nan`` if there is none) and ``p`` is 0 (1).
+    difference and ``p`` is 0; if the two constants are identical there is no
+    difference, so ``t`` is ``nan`` and ``p`` is 1. A constant group's mean is
+    its common value, so ``[0.1] * 3`` and ``[0.1] * 10`` count as identical.
 
     References
     ----------
@@ -161,7 +176,7 @@ def welch_test(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> d
     s = _unit_scale(a, b)
     a, b = a / s, b / s  # exact; see _unit_scale
     va, vb = _var(a) / a.size, _var(b) / b.size
-    diff = b.mean() - a.mean()
+    diff = _mean(b) - _mean(a)
     se = np.sqrt(va + vb)
     if se == 0:
         return {"difference": float(diff * s), "ci_low": float(diff * s), "ci_high": float(diff * s),
@@ -203,7 +218,7 @@ def hedges_g(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> dic
     if sp == 0:
         return {"g": np.nan, "ci_low": np.nan, "ci_high": np.nan}
     j = 1 - 3 / (4 * df - 1)
-    g = j * (b.mean() - a.mean()) / sp
+    g = j * (_mean(b) - _mean(a)) / sp
     se = np.sqrt((n1 + n2) / (n1 * n2) + g**2 / (2 * (n1 + n2)))
     z = _st.norm.ppf(1 - (1 - level) / 2)
     return {"g": float(g), "ci_low": float(g - z * se), "ci_high": float(g + z * se)}
@@ -263,6 +278,8 @@ def adjust_pvalues(p: Sequence[float], method: Literal["holm", "fdr_bh", "bonfer
     * ``"bonferroni"`` – multiply by the number of tests.
     * ``"none"`` – return the input unchanged.
 
+    P-values outside ``[0, 1]`` raise ``ValueError``.
+
     References
     ----------
     Holm, S. (1979). A simple sequentially rejective multiple test procedure.
@@ -277,6 +294,8 @@ def adjust_pvalues(p: Sequence[float], method: Literal["holm", "fdr_bh", "bonfer
     out = np.full_like(p, np.nan)
     mask = ~np.isnan(p)
     q = p[mask]
+    if np.any((q < 0) | (q > 1)):
+        raise ValueError(f"p-values must be between 0 and 1, got {q[(q < 0) | (q > 1)].tolist()}")
     m = q.size
     if m == 0 or method == "none":
         out[mask] = q
@@ -451,8 +470,8 @@ def histogram_bins(x: Sequence[float], rule: Literal["fd", "sturges", "scott", "
     sawtooth). There ``"fd"`` rounds the width to the nearest whole number
     (at least 1) and puts the edges on half-integers, starting at
     ``min(x) - 0.5``, so every value sits inside a bin and every bin spans
-    the same number of possible values. The other rules are used as
-    published.
+    the same number of possible values. The 100,000-bin limit applies to
+    the rounded width too. The other rules are used as published.
 
     References
     ----------
@@ -477,7 +496,7 @@ def _bin_edges(x: Sequence[float], rule: str) -> tuple[np.ndarray, str]:
         span = float(np.ptp(x))
         q3, q1 = np.percentile(x, [75, 25])
         iqr = float(q3 - q1)
-        if iqr <= 64 * np.finfo(float).eps * max(abs(q1), abs(q3)):  # zero, or ties differing by rounding only
+        if iqr <= 4 * np.spacing(max(abs(q1), abs(q3))):  # zero, or ties differing by rounding only (a few ulps)
             return np.histogram_bin_edges(x, bins="sturges"), "sturges (IQR is 0, so FD is undefined)"
         width = 2 * iqr * x.size ** (-1 / 3)
         n_bins = span / width
@@ -487,6 +506,8 @@ def _bin_edges(x: Sequence[float], rule: str) -> tuple[np.ndarray, str]:
         if rule == "fd" and np.max(np.abs(x)) < 2**50 and np.all(x == np.round(x)):
             width = max(1.0, float(np.floor(width + 0.5)))
             count = int(np.ceil((span + 1) / width))
+            if count > 100_000:  # rounding a width in [1, 1.5) down to 1 adds bins
+                return np.histogram_bin_edges(x, bins="sturges"), f"sturges (FD would need {count:,} bins)"
             return x.min() - 0.5 + width * np.arange(count + 1), "fd (whole-number widths for integer data)"
     return np.histogram_bin_edges(x, bins=rule), rule
 
