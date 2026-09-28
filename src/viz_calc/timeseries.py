@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import datetime
 import numbers
+import warnings
 from collections.abc import Sequence
 from typing import Any, Literal
 
@@ -46,7 +48,6 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False) -> pd.Series:
     ``keep_tz=True`` time zones are kept (mixed offsets become UTC), so
     elapsed times and instants stay exact.
     """
-    import warnings
 
     def attempt(**kwargs):
         try:
@@ -76,8 +77,9 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False) -> pd.Series:
             raise ValueError(f"column {name!r} could not be parsed as dates; use one consistent format, "
                              "ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
         if keep_tz:
-            has_zone = s[utc.notna()].map(lambda v: pd.Timestamp(v).tzinfo is not None)  # blanks don't count
-            if not has_zone.all():  # an offset-less value would silently be read as UTC
+            # A list, not s.map(): mapping a Categorical can return a Categorical, which has no .all().
+            has_zone = [pd.Timestamp(v).tzinfo is not None for v in s[utc.notna()]]  # blanks don't count
+            if not all(has_zone):  # an offset-less value would silently be read as UTC
                 raise ValueError(f"column {name!r} mixes values with and without a UTC offset; make them consistent")
             out = utc
         else:  # the strings are valid ISO 8601, so element-wise parsing is unambiguous
@@ -92,6 +94,19 @@ def _date_axis(ax: Axes, axis: str = "x", tz: Any = None) -> None:
     target = ax.xaxis if axis == "x" else ax.yaxis
     target.set_major_locator(locator)
     target.set_major_formatter(mdates.ConciseDateFormatter(locator, tz=tz))
+
+
+def _numpy_numbers(s: pd.Series) -> pd.Series:
+    """Nullable numbers (Int64, Float64, ...) -> NumPy with NaN for missing values, which Matplotlib 3.7 needs.
+
+    Integers stay exact (int64) when nothing is missing. Other columns are
+    returned unchanged.
+    """
+    if not (pd.api.types.is_extension_array_dtype(s) and pd.api.types.is_numeric_dtype(s)):
+        return s
+    if pd.api.types.is_integer_dtype(s) and s.notna().all():
+        return s.astype("int64")
+    return pd.Series(s.to_numpy(dtype=float, na_value=np.nan), index=s.index, name=s.name)
 
 
 def period_bars(
@@ -110,12 +125,17 @@ def period_bars(
     average of the bars over *trend_window* periods. Periods with no data are
     kept (as zero for sums/counts, a gap otherwise), so the time axis is
     honest. Calendar periods are used (a month is a month, not 30 days).
+
+    The table has one row per period: ``value`` (the statistic), ``n`` (the
+    number of non-missing values behind it, which is what ``count`` counts),
+    ``trend`` and ``period_start``.
     """
     check_dataframe(data, [date, value])
     check_numeric(data, value)
     check_choice("freq", freq, list(_PERIOD))
     check_choice("stat", stat, ["sum", "mean", "median", "count", "max", "min"])
-    d = pd.DataFrame({"period": _dates(data[date], date).dt.to_period(_PERIOD[freq]), "v": data[value]}).dropna(subset=["period"])
+    d = pd.DataFrame({"period": _dates(data[date], date).dt.to_period(_PERIOD[freq]),
+                      "v": _numpy_numbers(data[value])}).dropna(subset=["period"])  # empty periods: NaN, not pd.NA
     if d.empty:
         raise ValueError("no dated rows")
     grouped = d.groupby("period")["v"]
@@ -180,11 +200,7 @@ def timeseries_fill(
         # Parse dates before grouping so they sort chronologically, and keep time zones so the two
         # readings in the repeated hour of a daylight-saving change are not merged.
         col = numeric if numeric is not None else _dates(col, time, keep_tz=True)
-    if pd.api.types.is_extension_array_dtype(col) and pd.api.types.is_numeric_dtype(col):
-        # nullable Int64/Float64 -> numpy, which Matplotlib 3.7 needs; keep integers exact when nothing is missing
-        col = col.astype("int64") if pd.api.types.is_integer_dtype(col) and col.notna().all() \
-            else pd.Series(col.to_numpy(dtype=float, na_value=np.nan), index=col.index)
-    d[time] = col
+    d[time] = _numpy_numbers(col)
     d = d.dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
     t = d[time]
     ya = d[a].to_numpy(dtype=float, na_value=np.nan)  # nullable dtypes with NA on pandas 2.0
@@ -224,6 +240,8 @@ def calendar_heatmap(
     with zero. One colour scale is shared across years.
     """
     check_dataframe(data, [date, value])
+    check_choice("stat", stat, ["sum", "mean", "count", "max", "min"])
+    cm = plt.get_cmap(cmap).with_extremes(bad=missing_color)  # an unknown cmap fails before any work is done
     d = pd.DataFrame({"day": _dates(data[date], date).dt.normalize()})  # tz-aware dates: local calendar day
     if value is None:
         daily = d.groupby("day").size().astype(float)
@@ -240,7 +258,6 @@ def calendar_heatmap(
     years = list(range(daily.index.min().year, daily.index.max().year + 1))
     vmin, vmax = float(np.nanmin(daily)), float(np.nanmax(daily))
     fig, axes = plt.subplots(len(years), 1, figsize=(12, 2.1 * len(years) + 0.4), squeeze=False)
-    cm = plt.get_cmap(cmap).with_extremes(bad=missing_color)
     for ax, year in zip(axes[:, 0], years):
         days = pd.date_range(f"{year}-01-01", f"{year}-12-31", freq="D")
         vals = daily.reindex(days)
@@ -321,6 +338,18 @@ def gantt(
     bad = d[d[end] < d[start]]
     if len(bad):
         raise ValueError(f"end is before start for task(s): {bad[task].tolist()}")
+    if today is not None:  # parsed before drawing, so a bad value fails early with a clear message
+        try:
+            t = pd.Timestamp.now(tz=tz) if isinstance(today, str) and today == "now" else pd.Timestamp(today)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"today must be a date or 'now', got {today!r}") from exc
+        if pd.isna(t):
+            raise ValueError(f"today must be a date or 'now', got {today!r}")
+        if tz is not None and t.tzinfo is None:
+            # a plain date/time means local time in the data's zone; on DST-change days pick a valid instant
+            t = t.tz_localize(tz, nonexistent="shift_forward", ambiguous=False)
+        elif tz is None and t.tzinfo is not None:
+            t = t.tz_localize(None)
     if sort:
         d = d.sort_values(start, kind="stable")
     groups = category_order(d[group]) if group is not None else [None]
@@ -334,12 +363,6 @@ def gantt(
     ax.xaxis_date()
     _date_axis(ax, tz=tz)
     if today is not None:
-        t = pd.Timestamp.now(tz=tz) if today == "now" else pd.Timestamp(today)
-        if tz is not None and t.tzinfo is None:
-            # a plain date/time means local time in the data's zone; on DST-change days pick a valid instant
-            t = t.tz_localize(tz, nonexistent="shift_forward", ambiguous=False)
-        elif tz is None and t.tzinfo is not None:
-            t = t.tz_localize(None)
         ax.axvline(mdates.date2num(_instant(t)), color=OKABE_ITO[5], lw=1.5, ls="--")
     if group is not None:
         handles = [Patch(color=c, label=str(g)) for g, c in zip(groups, cols)]
@@ -371,11 +394,16 @@ def duration_plot(
     """Each row's overall window with an inner duration drawn inside it.
 
     Example: a contract period with the time actually worked. The table
-    reports both lengths in days and the inner share of the window.
+    reports both lengths in days and the inner share of the window. Like
+    :func:`gantt`, it raises if a window ends before it starts.
     """
     check_dataframe(data, [label, start, end, inner_start, inner_end])
     d = data.copy()
     tz = _timeline_columns(d, [start, end, inner_start, inner_end])
+    for s, e in ((start, end), (inner_start, inner_end)):
+        bad = d[d[e] < d[s]]  # missing dates compare False, so empty inner windows pass
+        if len(bad):
+            raise ValueError(f"{e!r} is before {s!r} for row(s): {bad[label].tolist()}")
     if sort:
         d = d.sort_values(start, kind="stable")
     names = d[label].astype(str).tolist()
@@ -397,6 +425,66 @@ def duration_plot(
     return VizResult(fig, ax, table)
 
 
+def _frames(s: pd.Series, name: str) -> list[Any]:
+    """Distinct non-missing values of an animation's time column, in playing order.
+
+    An ordered Categorical plays in category order. Otherwise text that
+    reads as numbers or dates (see :func:`_dates`) plays in numeric or
+    chronological order, keeping its labels, and other values play in sorted
+    order (category order for a Categorical).
+    """
+    if isinstance(s.dtype, pd.CategoricalDtype):
+        frames = category_order(s)  # raises if there are no values
+        if s.cat.ordered:
+            return frames
+    else:
+        frames = sorted(pd.unique(s.dropna()))
+        if not frames:
+            raise ValueError(f"column {name!r} has no non-missing values")
+    if all(isinstance(f, str) for f in frames):  # "2" plays before "10", and "9/1/2020" before "10/1/2020"
+        labels = pd.Series(frames, dtype=object)
+        when = pd.to_numeric(labels, errors="coerce")
+        if when.isna().any():
+            with warnings.catch_warnings():
+                # Plain labels such as "Phase A" are fine here, so pandas' hint about the format is noise.
+                warnings.filterwarnings("ignore", "Could not infer format", UserWarning)
+                try:
+                    when = _instant(_dates(labels, name, keep_tz=True))  # UTC offsets: order by the true instant
+                except ValueError:
+                    return frames
+        frames = [frames[i] for i in np.argsort(when.to_numpy(), kind="stable")]
+    return frames
+
+
+def _stamps(frames: list[Any]) -> list[str]:
+    """Readable labels for animation frames.
+
+    Dates read ``2024-01-05``, plus the time of day to the precision the
+    values need and the zone when there is one; durations read
+    ``1 days 06:00:00``; whole-number floats (years with a gap) drop the
+    ``.0``; anything else, text included, is shown as is.
+    """
+    if all(isinstance(f, (datetime.timedelta, np.timedelta64)) for f in frames):  # pd.Timedelta is a timedelta
+        return [str(pd.Timedelta(f)) for f in frames]
+    if all(isinstance(f, (datetime.date, np.datetime64)) for f in frames):  # a pd.Timestamp is a datetime.date too
+        try:
+            ts = pd.DatetimeIndex(frames)
+        except (TypeError, ValueError):  # e.g. several time zones in an object column: plain text below
+            ts = None
+        if ts is not None:
+            fmt = "%Y-%m-%d"
+            if (ts.microsecond != 0).any() or (ts.nanosecond != 0).any():
+                fmt += " %H:%M:%S.%f"
+            elif (ts.second != 0).any():
+                fmt += " %H:%M:%S"
+            elif (ts.hour != 0).any() or (ts.minute != 0).any():
+                fmt += " %H:%M"
+            if ts.tz is not None:
+                fmt += " %Z"
+            return [t.strftime(fmt).rstrip() for t in ts]
+    return [str(int(f)) if isinstance(f, (float, np.floating)) and float(f).is_integer() else str(f) for f in frames]
+
+
 def animated_bubble(
     data: pd.DataFrame,
     time: str,
@@ -416,9 +504,21 @@ def animated_bubble(
     and the axes limits are fixed across frames. Colours map to *color*
     categories consistently.
 
+    Frames play in time order: numbers and datetimes sorted, text that reads
+    as numbers or dates in numeric or chronological order (``"9/1/2020"``
+    before ``"10/1/2020"``), an ordered Categorical in category order, and
+    other labels sorted (a Categorical's in category order). To play labels
+    such as ``"Q4 2019"`` in your own order, make *time* an ordered
+    Categorical. Each frame is stamped with its time: dates as
+    ``2024-01-05``, with the time of day (``2024-01-05 14:00``) and the zone
+    when the data has them; text as written.
+
     Returns a :class:`VizResult` whose ``info["animation"]`` is a Matplotlib
-    ``FuncAnimation``. Save it with ``anim.save("out.gif")`` or show it in a
-    notebook with ``IPython.display.HTML(anim.to_jshtml())``.
+    ``FuncAnimation`` (kept alive by the figure, so ``plt.show()`` plays it)
+    and ``info["frames"]`` the time values in playing order; the table has
+    one row per frame, in the same order. Save the animation with
+    ``anim.save("out.gif")`` or show it in a notebook with
+    ``IPython.display.HTML(anim.to_jshtml())``.
     """
     check_dataframe(data, [time, x, y, size, color, label])
     check_numeric(data, x, y, size)
@@ -431,7 +531,8 @@ def animated_bubble(
         raise ValueError("size must be non-negative")
     if data[size].notna().sum() == 0:
         raise ValueError(f"{size!r} has no non-missing values, so no bubble can be drawn")
-    frames = sorted(pd.unique(data[time].dropna()))
+    frames = _frames(data[time], time)
+    stamps = _stamps(frames)
     cats = category_order(data[color]) if color is not None else [None]
     cols = palette(len(cats), colors)
     if color is not None and data[color].isna().any():  # rows without a colour category are drawn grey, not dropped
@@ -463,9 +564,7 @@ def animated_bubble(
         ax.set_ylim(*ylim)
         ax.set_xlabel(x)
         ax.set_ylabel(y)
-        stamp = frames[i]
-        stamp = stamp.strftime("%Y-%m-%d") if hasattr(stamp, "strftime") else str(stamp)
-        ax.text(0.98, 0.04, stamp, transform=ax.transAxes, ha="right", fontsize=22, color=NEUTRAL, alpha=0.5)
+        ax.text(0.98, 0.04, stamps[i], transform=ax.transAxes, ha="right", fontsize=22, color=NEUTRAL, alpha=0.5)
         if color is not None:
             ax.legend(title=str(color), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
         ax.spines[["top", "right"]].set_visible(False)
@@ -474,5 +573,12 @@ def animated_bubble(
     draw(0)
     fig.tight_layout()
     anim = FuncAnimation(fig, draw, frames=len(frames), interval=interval, repeat=False)
-    table = data.groupby(time)[[x, y, size]].mean().reset_index()
+    # Matplotlib holds an animation only weakly and warns when one is deleted unrendered, because the usual cause
+    # is a dropped reference (plt.show() then shows a still). Tie it to its figure instead: the figure's callback
+    # registry keeps plain functions alive (and does not pickle them), so the animation plays whenever the figure
+    # is shown and is deleted only with it. A caller who wants just the table then needs no warning.
+    fig.canvas.mpl_connect("close_event", lambda _event, _keep=anim: None)
+    anim._draw_was_started = True  # what Animation.save() also sets to silence the warning
+    table = data.groupby(time, observed=True)[[x, y, size]].mean()
+    table = table.iloc[table.index.get_indexer(frames)].reset_index()  # rows in playing order
     return VizResult(fig, ax, table, {"animation": anim, "frames": frames, "area_scale": max_area / smax})

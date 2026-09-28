@@ -28,7 +28,8 @@ res.table.head(3)
 * Periods with no data are kept: zero for `sum`/`count`, a gap for other
   statistics. The time axis is never silently compressed.
 * The line is a trailing moving average of the bars over `trend_window`
-  periods; `n` counts the rows behind each bar.
+  periods; `n` counts the non-missing values behind each bar (rows whose
+  value is missing are left out, as they are by `stat="count"`).
 
 ## 2. Two series and who leads
 
@@ -75,8 +76,8 @@ res.table[["task", "outer_days", "inner_days", "inner_share"]]
 ![Duration plot](../images/duration_plot.png)
 
 Date ticks adapt to the range (days, months or years) through Matplotlib's
-concise date formatter. `gantt` raises a clear error if any task ends before
-it starts.
+concise date formatter. `gantt` and `duration_plot` raise a clear error if
+any task (or inner window) ends before it starts.
 
 ## 5. Animated bubbles
 
@@ -93,3 +94,14 @@ Two details keep frames comparable: bubble **area** is proportional to
 across frames. The original script rescaled sizes within every frame and
 colour group, and let the axes rescale each frame, so the same bubble size
 or position meant different values in different frames.
+
+Frames play in time order, and `res.info["frames"]` and `res.table` list
+them in that order: numbers and dates ascending, text that reads as numbers
+or dates in numeric or date order (`"9/1/2020"` before `"10/1/2020"`), and
+other labels alphabetically (a `Categorical` in its category order). An
+ordered `Categorical` always plays in its category order, so use one for
+labels such as `"Q4 2019"` and `"Q1 2020"`. Each frame is stamped with its
+time: `2024-01-05`, with the time of day (`2024-01-05 14:00`) and the zone
+when the data has them; text labels are shown as written. The animation
+stays attached to its figure, so `plt.show()` plays it, and using only
+`res.table` raises no Matplotlib warning.
