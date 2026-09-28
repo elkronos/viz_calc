@@ -84,24 +84,32 @@ def waffle(
     each need at least one non-missing value. Categories are drawn largest
     first unless *order* is given. *order* must list every category that
     occurs and may add unused ones (drawn with zero tiles); unused categories
-    of a ``Categorical`` are left out otherwise. *rows* and *columns* (the
-    grid size) must be positive integers.
+    of a ``Categorical`` are left out otherwise. Rows with a missing
+    *category* are not dropped: they are drawn last, in grey, as
+    "(missing)", and count towards the total. *rows* and *columns* (the grid
+    size) must be positive integers.
     """
     check_dataframe(data, [category, value])
     _check_count("rows", rows)
     _check_count("columns", columns)
     check_has_values(data, category, value)
     totals = _aggregate(data, category, value)
-    if not (totals > 0).any():  # not totals.sum(), which can overflow
+    unknown = data[category].isna()  # rows without a category still count towards the total
+    unknown_total = int(unknown.sum()) if value is None else data.loc[unknown, value].sum()
+    if not ((totals > 0).any() or unknown_total > 0):  # not totals.sum(), which can overflow
         raise ValueError("waffle needs a positive total; every value is zero")
     if order is not None:  # must list every category, or the shares would be renormalized over a subset
         levels = _levels(data[category], order, complete=True, allow_absent=True)
     else:
         levels = list(totals.sort_values(ascending=False, kind="stable").index)
-    totals = totals.reindex(levels).fillna(0)
-    n_tiles = rows * columns
-    tiles = st.largest_remainder(totals.to_numpy(float), n_tiles)
+    values = totals.reindex(levels).fillna(0).to_numpy()
     cols = palette(len(levels), colors)
+    names = [level_label(lvl) for lvl in levels]
+    if unknown.any():
+        levels, names, cols = levels + [np.nan], names + ["(missing)"], cols + [NEUTRAL]
+        values = np.append(values, unknown_total)
+    n_tiles = rows * columns
+    tiles = st.largest_remainder(values.astype(float), n_tiles)
 
     fig, ax = get_ax(ax, figsize=(columns * 0.45 + 3, rows * 0.45 + 1))
     idx = 0
@@ -115,13 +123,13 @@ def waffle(
     ax.set_aspect("equal")
     ax.axis("off")
     # Rescale by a power of two (exact, as largest_remainder does) so the sum cannot overflow, e.g. near 1e308.
-    scaled = np.ldexp(totals.to_numpy(float), -int(np.frexp(float(totals.max()))[1]))
-    share = pd.Series(scaled / scaled.sum() * 100, index=totals.index)
-    ax.legend(handles=[Patch(color=cols[i], label=f"{level_label(lvl)}: {abbreviate(totals[lvl])} ({share[lvl]:.1f}%)")
-                       for i, lvl in enumerate(levels)],
+    scaled = np.ldexp(values.astype(float), -int(np.frexp(float(values.max()))[1]))
+    share = scaled / scaled.sum() * 100
+    ax.legend(handles=[Patch(color=c, label=f"{name}: {abbreviate(v)} ({p:.1f}%)")
+                       for name, c, v, p in zip(names, cols, values, share)],
               frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
     ax.set_title(f"1 tile ≈ {100 / n_tiles:.2g}% of total", loc="left", fontsize="small", color=NEUTRAL)
-    table = pd.DataFrame({category: levels, "value": totals.to_numpy(), "percent": share.to_numpy(), "tiles": tiles})
+    table = pd.DataFrame({category: levels, "value": values, "percent": share, "tiles": tiles})
     return VizResult(fig, ax, table)
 
 
@@ -377,47 +385,58 @@ def nested_pie(
     directly outside it, so the hierarchy is visible. With *value* omitted,
     rows are counted. Values must be non-negative, with a positive total;
     missing values count as zero. *outer* and *inner* must be different
-    columns, each with at least one non-missing value.
+    columns, each with at least one non-missing value. Rows with a missing
+    *outer* or *inner* category are not dropped: they are drawn in grey as
+    "(missing)" (a missing *outer* last) and count towards the total.
     """
     check_dataframe(data, [outer, inner, value])
     if outer == inner:
         raise ValueError(f"outer and inner must be different columns; both are {outer!r}")
     check_has_values(data, outer, inner)  # an all-missing value column is a zero total, reported below
+    # dropna=False: rows with a missing category keep their share of the total
+    grouped = data.groupby([outer, inner], sort=False, observed=True, dropna=False)
     if value is None:
-        agg = data.groupby([outer, inner], sort=False, observed=True).size().rename("value")
+        agg = grouped.size().rename("value")
     else:
         check_numeric(data, value)
         if (data[value] < 0).any():
             raise ValueError("nested_pie values must be non-negative")
-        agg = data.groupby([outer, inner], sort=False, observed=True)[value].sum().rename("value")
+        agg = grouped[value].sum().rename("value")
     agg = agg.reset_index()
     if not agg["value"].sum() > 0:
         raise ValueError("nested_pie needs a positive total; every value is zero or missing")
-    parents = list(pd.unique(agg[outer]))
-    parent_tot = agg.groupby(outer, sort=False, observed=True)["value"].sum().reindex(parents)
+    parents = list(pd.unique(agg[outer].dropna()))
     base_cols = palette(len(parents), colors)
+    # Match rows to parents by value (as codes), which also works for nullable dtypes; -1 marks a missing parent.
+    codes = pd.Index(parents).get_indexer(agg[outer])
+    if (codes < 0).any():  # drawn grey, after the others
+        parents, base_cols = parents + [np.nan], base_cols + [NEUTRAL]
+        codes = np.where(codes < 0, len(parents) - 1, codes)
+    rank = np.argsort(codes, kind="stable")
+    agg, codes = agg.iloc[rank].reset_index(drop=True), codes[rank]
+    parent_tot = agg["value"].groupby(codes).sum()
     child_cols = []
-    for p, c in zip(parents, base_cols):
-        k = int((agg[outer] == p).sum())
+    for i, c in enumerate(base_cols):
         rgb = np.array(to_rgb(c))
-        child_cols += [tuple(rgb + (1 - rgb) * t) for t in np.linspace(0.25, 0.65, k)]
-    agg = pd.concat([agg[agg[outer] == p] for p in parents], ignore_index=True)
+        child_cols += [tuple(rgb + (1 - rgb) * t) for t in np.linspace(0.25, 0.65, int((codes == i).sum()))]
+    child_cols = [NEUTRAL if gap else c for c, gap in zip(child_cols, agg[inner].isna())]
+
+    def name(v: Any) -> str:
+        return "(missing)" if pd.isna(v) else level_label(v)
 
     fig, ax = get_ax(ax, figsize=(7, 7))
     wedges, texts = ax.pie(parent_tot, radius=0.7, colors=base_cols,
-                           labels=[level_label(p) for p in parents] if labels else None,
+                           labels=[name(p) for p in parents] if labels else None,
                            labeldistance=0.75, wedgeprops={"width": 0.35, "edgecolor": "white"}, startangle=90,
                            counterclock=False, textprops={"weight": "bold", "ha": "center", "fontsize": 9})
     for t, c in zip(texts, base_cols):
         t.set_color(text_color(c))
-    ax.pie(agg["value"], radius=1.0, colors=child_cols, labels=[level_label(v) for v in agg[inner]] if labels else None,
+    ax.pie(agg["value"], radius=1.0, colors=child_cols, labels=[name(v) for v in agg[inner]] if labels else None,
            labeldistance=1.06, wedgeprops={"width": 0.3, "edgecolor": "white"}, startangle=90, counterclock=False,
            textprops={"fontsize": 8})
     ax.set_aspect("equal")
     agg["percent_of_total"] = agg["value"] / agg["value"].sum() * 100
-    # transform, not agg[outer].map(parent_tot): mapping a Categorical can return a Categorical, which cannot divide
-    parent_sum = agg.groupby(outer, sort=False, observed=True)["value"].transform("sum")
-    agg["percent_of_parent"] = agg["value"] / parent_sum * 100
+    agg["percent_of_parent"] = agg["value"] / agg["value"].groupby(codes).transform("sum") * 100
     return VizResult(fig, ax, agg)
 
 
@@ -610,7 +629,8 @@ def funnel(
     ``pct_of_previous`` (step conversion) and the ``drop_off`` count, so
     *stage* and *value* may not use those names; they must also be different
     columns. Every stage needs a non-negative, non-missing value, and *stage*
-    needs at least one non-missing name.
+    needs at least one non-missing name. A rate after a zero stage is
+    undefined: it is ``NaN`` in the table and shown as "–" on the chart.
     """
     check_dataframe(data, [stage, value])
     reserved = [c for c in (stage, value) if c in ("pct_of_first", "pct_of_previous", "drop_off")]
@@ -635,15 +655,19 @@ def funnel(
     fig, ax = get_ax(ax, figsize=(8, 0.7 * len(t) + 1.5))
     pos = np.arange(len(t))[::-1]
     ax.barh(pos, v, left=-v / 2, color=color, height=0.75)
+
+    def pct(x: float) -> str:  # a rate after a zero stage is undefined
+        return "–" if np.isnan(x) else f"{x:.0f}%"
+
     for p, row in zip(pos, t.itertuples(index=False)):
         vv, pf, pp = row[1], row[2], row[3]
-        text = f"{abbreviate(vv)}  ({pf:.0f}%)"
+        text = f"{abbreviate(vv)}  ({pct(pf)})"
         if vv >= 0.3 * vmax:
             ax.text(0, p, text, ha="center", va="center", color=text_color(color), weight="bold", fontsize=9)
         else:  # too narrow to hold the label: put it beside the bar
             ax.text(vv / 2 + vmax * 0.02, p, text, ha="left", va="center", color="black", weight="bold", fontsize=9)
         if p != pos[0]:
-            ax.text(vmax / 2 * 1.02, p + 0.5, f"↓ {pp:.0f}% of previous", va="center", fontsize=8, color=NEUTRAL)
+            ax.text(vmax / 2 * 1.02, p + 0.5, f"↓ {pct(pp)} of previous", va="center", fontsize=8, color=NEUTRAL)
     ax.set_yticks(pos, t[stage].astype(str))
     ax.set_xlim(-vmax / 2 * 1.05, vmax / 2 * 1.6)
     ax.set_xticks([])
@@ -679,7 +703,8 @@ def bullet(
         Either a list of column names holding each row's band upper limits,
         or a list of finite numeric limits shared by every row; not a mix of
         the two, and not a lone string (use ``["good"]`` for one column).
-        Ascending order.
+        Ascending order. Entries that are all labels in ``data.columns``
+        (e.g. ``[2, 3]`` for integer-labelled columns) are column names.
     ax
         An Axes to draw into. Only for single-row *data* (one bullet graph);
         with more rows it raises ``ValueError``, since each row needs its own
@@ -689,21 +714,26 @@ def bullet(
     -------
     VizResult
         ``axes`` is an array with one Axes per row (the given *ax* for a
-        single row); ``table`` has the value, target and ``pct_of_target``
-        per row.
+        single row); ``table`` has *label* and the ``value``, ``target`` and
+        ``pct_of_target`` per row, so *label* may not use those names.
 
     References
     ----------
     Few, S. (2013). *Bullet Graph Design Specification*. Perceptual Edge.
     """
     bands = [] if bands is None else column_list("bands", bands)  # also accepts NumPy arrays and Series
-    band_cols = [b for b in bands if isinstance(b, str)]
+    data = check_dataframe(data)
+    names = [b for b in bands if isinstance(b, str) or b in data.columns]  # numbers may label columns too
+    band_cols = names if len(names) == len(bands) else [b for b in bands if isinstance(b, str)]
     if band_cols and len(band_cols) < len(bands):
         raise ValueError("bands must be a list of column names or a list of numbers, not a mix of both; "
                          f"got {bands!r}")
     if not band_cols and not all(isinstance(b, numbers.Real) and math.isfinite(b) for b in bands):
         raise ValueError(f"bands must be a list of column names or of finite numbers, got {bands!r}")
     check_dataframe(data, [label, value, target, *band_cols])
+    reserved = ["value"] + (["target", "pct_of_target"] if target is not None else [])
+    if label in reserved:
+        raise ValueError(f"rename the label column {label!r}: the table uses {reserved} for its output columns")
     check_numeric(data, value, *([target] if target is not None else []), *band_cols)
     check_has_values(data, label, value)
     n = len(data)

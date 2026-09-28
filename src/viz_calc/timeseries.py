@@ -156,6 +156,11 @@ def period_bars(
         raise ValueError(f"no row has both a date in {date!r} and a value in {value!r}")
     grouped = d.groupby("period")["v"]
     agg = pd.DataFrame({"value": grouped.agg(stat), "n": grouped.count()})
+    if stat == "sum" and pd.api.types.is_integer_dtype(d["v"]):
+        # int64 sums wrap around silently; past 2**62 (a margin for float rounding) sum in float instead
+        floats = d["v"].astype(float).groupby(d["period"]).sum()
+        if (floats.abs() >= 2.0**62).any():
+            agg["value"] = floats
     full = pd.period_range(agg.index.min(), agg.index.max(), freq=agg.index.freq)
     agg = agg.reindex(full)
     agg["n"] = agg["n"].fillna(0).astype(int)
@@ -339,6 +344,17 @@ def _instant(t: Any) -> Any:
     return t.tz_convert("UTC").tz_localize(None) if t.tzinfo is not None else t
 
 
+def _check_distinct(**roles: Any) -> None:
+    """Raise unless each role (keyword) names a different column; ``None`` roles are skipped."""
+    seen: dict[Any, str] = {}
+    for role, column in roles.items():
+        if column is None:
+            continue
+        if column in seen:
+            raise ValueError(f"{seen[column]} and {role} must be different columns; both are {column!r}")
+        seen[column] = role
+
+
 def _timeline_columns(d: pd.DataFrame, columns: Sequence[str]) -> Any:
     """Parse timeline columns keeping time zones; return the zone used to label the axis."""
     for c in columns:
@@ -382,9 +398,13 @@ def gantt(
 
     Tasks are sorted by start date (set ``sort=False`` to keep row order).
     The date axis adapts its tick spacing to the range. Pass ``today`` (a date
-    or ``"now"``) to draw a reference line.
+    or ``"now"``) to draw a reference line. *start* and *end* must be two
+    different columns, each different from *task* and *group* (which may be
+    the same column, to colour each task by its own name).
     """
     check_dataframe(data, [task, start, end, group])
+    _check_distinct(task=task, start=start, end=end)
+    _check_distinct(group=group, start=start, end=end)
     check_has_values(data, start, end)
     d = data.copy()
     tz = _timeline_columns(d, [start, end])
@@ -427,7 +447,8 @@ def gantt(
     ax.grid(axis="x", color="#eeeeee")
     ax.set_axisbelow(True)
     ax.spines[["top", "right"]].set_visible(False)
-    table = d[[task, start, end] + ([group] if group is not None else [])].reset_index(drop=True)
+    table = d[list(dict.fromkeys([task, start, end, group] if group is not None else [task, start, end]))]
+    table = table.reset_index(drop=True)
     table["duration_days"] = (table[end] - table[start]).dt.total_seconds() / 86400
     return VizResult(fig, ax, table)
 
@@ -451,7 +472,9 @@ def duration_plot(
     Example: a contract period with the time actually worked. The table
     reports both lengths in days and the inner share of the window. Like
     :func:`gantt`, it raises if a window ends before it starts. Rows whose
-    inner window is missing get no inner bar.
+    inner window is missing get no inner bar. The date columns must differ
+    from *label*, and each window needs two different columns; an inner
+    window may reuse *start* and *end* (active for the whole period).
 
     Parameters
     ----------
@@ -459,10 +482,16 @@ def duration_plot(
         A tuple of two colours: ``(outer, inner)``.
     """
     check_dataframe(data, [label, start, end, inner_start, inner_end])
+    _check_distinct(label=label, start=start, end=end)
+    _check_distinct(label=label, inner_start=inner_start, inner_end=inner_end)
+    _check_distinct(start=start, inner_end=inner_end)
+    _check_distinct(end=end, inner_start=inner_start)
     colors = slot_colors(colors, ("outer", "inner"))
     check_has_values(data, start, end)
     d = data.copy()
-    tz = _timeline_columns(d, [start, end, inner_start, inner_end])
+    # dict.fromkeys: the inner window may reuse the outer window's columns, which must be selected once
+    columns = list(dict.fromkeys([label, start, end, inner_start, inner_end]))
+    tz = _timeline_columns(d, columns[1:])
     for s, e in ((start, end), (inner_start, inner_end)):
         bad = d[d[e] < d[s]]  # missing dates compare False, so empty inner windows pass
         if len(bad):
@@ -481,7 +510,7 @@ def duration_plot(
     ax.grid(axis="x", color="#eeeeee")
     ax.set_axisbelow(True)
     ax.spines[["top", "right"]].set_visible(False)
-    table = d[[label, start, end, inner_start, inner_end]].reset_index(drop=True)
+    table = d[columns].reset_index(drop=True)
     table["outer_days"] = (table[end] - table[start]).dt.total_seconds() / 86400
     table["inner_days"] = (table[inner_end] - table[inner_start]).dt.total_seconds() / 86400
     table["inner_share"] = table["inner_days"] / table["outer_days"].replace(0, np.nan)
