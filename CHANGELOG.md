@@ -3,8 +3,8 @@
 ## 1.1.0
 
 Fixes from an adversarial review of 1.0.0, each covered by a regression test
-(`tests/test_edge_cases.py`) and run on the newest and the oldest supported
-dependency versions.
+in `tests/` and run on the newest and the oldest supported dependency
+versions.
 
 ### Changed
 - `stacked_percentages(category_order_=...)` is renamed `category_order=...`;
@@ -26,6 +26,35 @@ dependency versions.
   offset notation for narrow ranges at large magnitudes.
 - Optional column arguments are compared with `None`, so columns labelled `0`
   (e.g. from a headerless CSV) are no longer ignored.
+- `level=` must be strictly between 0 and 1 (`0.95`); `level=95` raises
+  instead of giving NaN intervals and misclassified `benchmark_bar` groups.
+- Options and counts are checked before anything is drawn, and a bad value
+  raises a `ValueError` listing the valid ones: `lollipop(sort=...)` (`"asc"`
+  used to sort descending; use `None` for no sorting), `network_map(size_by=)`,
+  `histogram(ref_line=, bins=, col_wrap=)`, `calendar_heatmap(stat=)` (mean,
+  max and min need a value column), `p_adjust`, `per_page`, `rows`,
+  `col_wrap`, `trend_window`, `upset(min_size=, max_intersections=)` and more.
+- Fixed-role `colors` (`benchmark_bar`, `centered_bar`, `dumbbell`,
+  `divergent_bar`, `waterfall`, `percent_grid`, `timeseries_fill`,
+  `duration_plot`) must be a tuple of the documented roles; a colormap name
+  raises instead of being read letter by letter (`benchmark_bar(colors=
+  "viridis")` drew every bar red). `likert` needs one colour per level.
+- Column-list arguments accept any list-like (a pandas Index, array, tuple)
+  and reject a single string instead of splitting it into one-letter columns.
+- All-missing columns raise "column ... has no non-missing values" instead of
+  an internal error or an empty chart; one column passed for two roles raises
+  a clear error.
+- A plotting call that raises closes the figures it opened, so no half-drawn
+  chart is left for `plt.show()` or Jupyter.
+- Spearman p-values for up to 9 pairs are exact permutation p-values (the t
+  approximation gave p = 0, and a star, for any perfect rank agreement at
+  n = 3–5).
+- Freedman–Diaconis bins on whole-number data use whole-number widths with
+  edges on half-integers instead of a comb of empty bins.
+- `radar` and `circular_bar` raise a clear error for a non-polar `ax`;
+  `bullet` draws into `ax=` for a single row.
+- Number labels choose K/M/B/T after rounding (999,999 reads `1M`, not
+  `1000K`).
 
 ### Fixed
 - Histograms fall back from Freedman–Diaconis to Sturges when the IQR is zero
@@ -67,7 +96,42 @@ dependency versions.
   standardizes; `donut_grid` skips boolean columns.
 - `to_pptx` keeps each image's true aspect ratio and puts one title per item
   on every page of multi-page results; `VizResult.save` returns the real path
-  when no extension is given and accepts file-like objects.
+  when no extension is given, accepts file-like objects and writes a
+  multi-page result to one as a PDF.
+- Nullable `Int64`/`Float64` columns holding `pd.NA` work on pandas 2.0 in the
+  statistics functions, `correlogram`, `compare_correlations`,
+  `profile_scatters`, `period_bars` (empty periods), `funnel`, `donut_grid`
+  and `circular_bar`.
+- `welch_test` gives t = −inf for a negative difference between constant
+  groups, and groups such as `[0.1] * 3` count as constant; `mean_ci`,
+  `welch_test` and `hedges_g` no longer overflow beyond about 1e154, and
+  `largest_remainder`/`waffle` fill the grid (with correct percentages) when
+  the values' sum overflows.
+- `threshold="mean"` (`centered_bar`, `benchmark_bar`) and
+  `quadrant_plot(center="mean")` use the correctly rounded mean, so a value
+  on the mean is no longer counted below it.
+- `nested_pie` works with a Categorical outer column; `stacked_percentages`
+  works with repeated index labels on pandas 3; `upset` draws a single set and
+  rejects the set names `size` and `degree`; `circular_bar` keeps rows with a
+  missing group as "(missing)"; `funnel` and `waterfall` reject missing values
+  (`waterfall` returned a NaN total) and `funnel` negative ones; `waffle`
+  rejects negative rows and leaves out unused Categorical levels whether it
+  counts or sums; `percent_grid` titles an empty group "no data (n=0)".
+- `animated_bubble` plays text dates and ordered Categoricals in time or
+  category order, with readable frame stamps and no "Animation was deleted"
+  warning; `duration_plot` rejects windows that end before they start;
+  `gantt` no longer warns on pandas 3 for Categorical groups with unused
+  categories.
+- Datetime category orders work on NumPy 1.x, and date groups read
+  `2024-01-01` in labels, legends and titles.
+
+### Documentation
+- Getting started lists which functions take `colors=` (and in what form),
+  `color=` or `cmap=`, which have no `ax=` and why, and that `radar` and
+  `circular_bar` need a polar Axes; a new Conventions section explains the
+  shared argument names.
+- Walkthrough numbers match the code and every code block runs as written;
+  a test runs each page and compares its tables.
 
 ## 1.0.0
 

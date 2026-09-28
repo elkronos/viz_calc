@@ -1,4 +1,4 @@
-"""Regressions for the part-to-whole charts found in review round 13."""
+"""Part-to-whole charts: edge cases (nullable and Categorical columns, missing values, reserved names)."""
 
 import io
 

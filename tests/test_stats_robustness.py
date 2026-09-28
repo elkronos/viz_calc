@@ -1,4 +1,4 @@
-"""Regressions for the statistics findings of the thirteenth review round."""
+"""Statistical helpers on small, nullable, constant, extreme and integer-valued input."""
 
 import itertools
 import math

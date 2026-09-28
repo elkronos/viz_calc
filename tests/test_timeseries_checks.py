@@ -1,4 +1,4 @@
-"""Regression tests for the thirteenth review round, integration pass: time charts use the shared checks."""
+"""Time charts: input validation, colour roles, date labels and figure cleanup."""
 
 import inspect
 import re

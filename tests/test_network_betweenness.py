@@ -1,4 +1,4 @@
-"""Regression tests for the thirteenth review round: weighted betweenness."""
+"""Weighted betweenness: exact and tolerant tie handling, checked against rational NetworkX."""
 
 from fractions import Fraction
 

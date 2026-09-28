@@ -1,4 +1,4 @@
-"""Regressions for the part-to-whole charts: shared validation helpers applied in the round-13 integration pass."""
+"""Part-to-whole charts: input validation, colour roles, date labels and figure cleanup."""
 
 import inspect
 import warnings

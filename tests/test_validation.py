@@ -1,4 +1,4 @@
-"""Regression tests for the thirteenth review round: compare, distribution, multivariate, explore and _core."""
+"""Shared validation, thresholds, colours, labels and saving (compare, distribution, multivariate, explore, _core)."""
 
 import inspect
 from fractions import Fraction

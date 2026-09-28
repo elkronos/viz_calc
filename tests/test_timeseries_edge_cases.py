@@ -1,4 +1,4 @@
-"""Regression tests for the thirteenth review round: time charts."""
+"""Time charts: edge cases (nullable values, time order, frame stamps, reversed windows)."""
 
 import gc
 import pickle

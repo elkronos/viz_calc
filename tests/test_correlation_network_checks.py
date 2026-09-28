@@ -1,4 +1,4 @@
-"""Regression tests for the thirteenth review round, integration pass: correlation, network and the rest."""
+"""Correlation and network charts: input validation, level checks and figure cleanup."""
 
 import inspect
 import math

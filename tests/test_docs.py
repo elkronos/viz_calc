@@ -1,4 +1,4 @@
-"""Regression tests for the thirteenth review round: the documentation matches the code.
+"""The documentation matches the code.
 
 Every Python block on the pages below is run in page order, and each results
 table shown after a block is compared with what that block computes.
@@ -169,7 +169,7 @@ def test_documented_table_matches_code(page, call, source, keys, ordered):
 
 
 def test_correlogram_spearman_ci_and_percent_grid_facet_column():
-    # the two cells reported in review round 13
+    # the two cells that used to disagree with the code
     meas, trial = datasets.measurements(), datasets.trial()
     t = vc.correlogram(meas, method="spearman").table.set_index(["var1", "var2"])
     assert f"{t.loc[('length', 'depth'), 'ci_low']:.2f}" == "0.84"
