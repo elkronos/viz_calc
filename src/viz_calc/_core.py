@@ -425,6 +425,7 @@ def abbreviate(num: float, digits: int = 1) -> str:
       small rates and proportions never collapse to ``0``.
     * Beyond the T range (a rounded 1,000T and above): scientific notation
       with *digits* decimals (``2.5e18``).
+    * Infinite values: ``inf`` and ``-inf``.
 
     The unit is chosen after rounding, so 999,999 reads ``1M`` (not
     ``1000K``) and 9,999.96 reads ``10K``.
@@ -435,8 +436,10 @@ def abbreviate(num: float, digits: int = 1) -> str:
     num = abs(float(num))
     if num == 0:
         return "0"
-    if num < 1:
-        return f"{sign}{float(f'{num:.{digits + 1}g}'):g}"
+    if math.isinf(num):
+        return f"{sign}inf"
+    if num < 1:  # formatted once: reading the rounded text back as a float re-expands a subnormal to six digits
+        return f"{sign}{num:.{digits + 1}g}"
     if float(f"{num:.{digits}f}") < 1e4:
         return f"{sign}{_strip(f'{num:,.{digits}f}')}"
     # The first of K, M, B, T in which the rounded value stays below 1000.
