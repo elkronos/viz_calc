@@ -296,6 +296,16 @@ def test_the_callers_own_text_keeps_its_mathtext(parsed):
     assert set(parsed) == {r"$\alpha$ = 0.05"}
 
 
+def test_a_legend_entry_for_the_callers_own_artist_keeps_its_mathtext(parsed):
+    fig, ax = plt.subplots()
+    ax.axvline(2.5, label=r"$\mu$ (target)")
+    data, kwargs = _with_dollars("dumbbell")  # the legend also holds the start and end column names
+    _run("dumbbell", data, ax=ax, **kwargs)
+    _save([fig])
+    assert set(parsed) == {r"$\mu$ (target)"}
+    assert sum("$" in t.get_text() for t in ax.get_legend().get_texts()) == 3
+
+
 def test_text_set_after_the_call_follows_matplotlib(parsed):
     data = pd.DataFrame({"band": [MONEY, BAD, "$10-$20"], "sales": [3.0, 5.0, 4.0]})
     res = vc.lollipop(data, x="band", y="sales")
