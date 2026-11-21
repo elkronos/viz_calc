@@ -247,7 +247,8 @@ same thing everywhere. The exceptions are listed here.
   `ridgeplot`, `category` and `value` in `waffle`, `outer` or `inner` and
   `value` in `nested_pie`, `group` and `value` in `circular_bar`, a column in
   both the `categorical` and the `numeric` list of `profile_boxes`, and a
-  `group` that is also one of the `features` of `pca_plot`. So does one column
+  `group` that is also one of the `features` of `pca_plot` or the `metrics`
+  of `radar`. So does one column
   for both ends of a change (`start` and `end`, `left` and `right`), and for
   both the outcome and the panels of `percent_grid` (`column` and `facet`).
   Roles that read naturally together may share a column: a `label` may also be

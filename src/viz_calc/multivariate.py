@@ -21,6 +21,7 @@ from ._core import (
     check_choice,
     check_count,
     check_dataframe,
+    check_distinct,
     check_not_reserved,
     check_numeric,
     cleanup_on_error,
@@ -252,10 +253,11 @@ def radar(
       differences and always puts one group at the centre.
     * ``"none"``: raw values (only sensible when metrics share a unit).
 
-    A group with no data on a metric is left as a gap on that axis. Raw and
-    scaled values are in the returned table. Radar charts are best
-    for spotting profile *shapes*; the enclosed area depends on the order of
-    the metrics and should not be compared.
+    A group with no data on a metric is left as a gap on that axis. *group*
+    cannot be one of the *metrics*. Raw and scaled values are in the
+    returned table. Radar charts are best for spotting profile *shapes*; the
+    enclosed area depends on the order of the metrics and should not be
+    compared.
 
     An *ax* passed in must be a polar Axes, for example from
     ``plt.subplots(subplot_kw={"projection": "polar"})`` or
@@ -264,6 +266,8 @@ def radar(
     """
     metrics = column_list("metrics", metrics, distinct=True)
     check_dataframe(data, [*metrics, group])
+    for m in metrics:
+        check_distinct(group=group, metrics=m)
     check_numeric(data, *metrics)
     check_choice("normalize", normalize, ["data", "groups", "none"])
     check_choice("stat", stat, ["mean", "median"])
