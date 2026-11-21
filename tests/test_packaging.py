@@ -1,8 +1,12 @@
-"""The package metadata in pyproject.toml agrees with the code and with the CI workflow."""
+"""The package metadata in pyproject.toml agrees with the code and with the CI and publish workflows."""
 
 import ast
+import os
 import re
+import shutil
+import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -13,7 +17,10 @@ except ModuleNotFoundError:  # Python 3.10; pytest depends on tomli there
     tomllib = pytest.importorskip("tomli")
 
 ROOT = Path(__file__).resolve().parents[1]
-CI = ROOT / ".github" / "workflows" / "ci.yml"
+WORKFLOWS = ROOT / ".github" / "workflows"
+CI = WORKFLOWS / "ci.yml"
+PUBLISH = WORKFLOWS / "publish.yml"
+TAG_CHECK = "Check the release tag against the package version"  # a step of publish.yml
 RUNTIME_EXTRAS = ("network", "interactive", "pptx")  # "all" combines these; "dev" and "docs" are tooling
 DISTRIBUTIONS = {"dateutil": "python-dateutil", "PIL": "pillow", "pptx": "python-pptx"}  # import name -> package
 REQUIREMENT = re.compile(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*(.*)")
@@ -152,3 +159,61 @@ def test_readme_images_load_from_the_package_page():
         match = url.fullmatch(src)
         assert match, f"README.md image {src!r} is not a raw.githubusercontent.com URL of this repository"
         assert (ROOT / match.group(1)).is_file(), f"README.md image {src!r} is not in the repository"
+
+
+def _publish_workflow() -> str:
+    if not WORKFLOWS.is_dir():
+        pytest.skip("the workflows are not next to the tests")
+    assert PUBLISH.is_file(), "no workflow uploads a release to PyPI"
+    return PUBLISH.read_text(encoding="utf-8")
+
+
+def _jobs(workflow: str) -> dict[str, str]:
+    """{job id: the lines below it} for each job of a workflow file."""
+    return dict(re.findall(r"^  ([\w-]+):\n((?:    .*\n|\n)*)", workflow.split("\njobs:\n", 1)[1], re.M))
+
+
+def _step_script(workflow: str, name: str) -> str:
+    """The ``run`` script of the workflow step with this name."""
+    step = re.search(rf"^( +)- name: {re.escape(name)}\n((?:\1  .*\n)*)", workflow, re.M)
+    assert step, f"{PUBLISH.name} has no step named {name!r}"
+    run = re.search(r"^( +)run: \|\n((?:\1  .*\n|\n)*)", step.group(2), re.M)
+    assert run, f"the step {name!r} has no run script"
+    return textwrap.dedent(run.group(2))
+
+
+def test_publish_workflow_uploads_a_release_from_the_pypi_environment_only():
+    # PyPI's trusted publisher names this workflow file and environment, and RELEASING.md tells the owner both.
+    workflow = _publish_workflow()
+    assert re.search(r"^on:\n  release:\n    types: \[published\]\n", workflow, re.M)
+    assert re.search(r"^permissions:\n  contents: read\n", workflow, re.M)
+    jobs = _jobs(workflow)
+    signing = [job for job, lines in jobs.items() if "id-token: write" in lines]
+    assert len(signing) == 1, "one job, the upload, may request the token PyPI accepts"
+    upload = jobs[signing[0]]
+    assert "pypa/gh-action-pypi-publish@" in upload
+    assert "actions/checkout" not in upload, "the upload job uploads what the build job made"
+    environment = re.search(r"^    environment:\n      name: (\S+)\n", upload, re.M)
+    needs = re.search(r"^    needs: (\S+)\n", upload, re.M)
+    assert environment and needs
+    build = jobs[needs.group(1)]
+    assert "python -m build" in build and "twine check --strict dist/*" in build and TAG_CHECK in build
+    releasing = (ROOT / "RELEASING.md").read_text(encoding="utf-8")
+    assert f"`{PUBLISH.name}`" in releasing and f"`{environment.group(1)}`" in releasing
+
+
+@pytest.mark.parametrize(("tag", "passes"), [("v2.3.4", True), ("v2.3.5", False), ("2.3.4", False)])
+def test_publish_workflow_stops_when_the_tag_is_not_v_and_the_version(tmp_path, tag, passes):
+    workflow = _publish_workflow()
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is not installed")
+    (tmp_path / "dist").mkdir()
+    (tmp_path / "dist" / "viz_calc-2.3.4-py3-none-any.whl").touch()
+    (tmp_path / "dist" / "viz_calc-2.3.4.tar.gz").touch()
+    # GitHub runs a step's script with these bash options.
+    result = subprocess.run([bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", _step_script(workflow, TAG_CHECK)],
+                            cwd=tmp_path, env={**os.environ, "TAG": tag}, capture_output=True, text=True)
+    assert (result.returncode == 0) is passes, result.stdout + result.stderr
+    if not passes:
+        assert "v2.3.4" in result.stdout
