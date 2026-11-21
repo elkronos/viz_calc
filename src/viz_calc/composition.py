@@ -30,6 +30,7 @@ from ._core import (
     check_numeric,
     cleanup_on_error,
     column_list,
+    foreground,
     get_ax,
     level_label,
     level_percent,
@@ -650,7 +651,7 @@ def waterfall(
                                for k, c, e in zip(table["kind"], table["change"], table["end"])], fontsize=8, padding=2)
     for i in range(len(table) - 1):
         ax.plot([i + 0.33, i + 1 - 0.33], [table["end"][i]] * 2, color=NEUTRAL, lw=0.8)
-    ax.axhline(0, color="black", lw=0.8)
+    ax.axhline(0, color=foreground(ax), lw=0.8)
     ax.set_xticks(pos, table["label"], rotation=30, ha="right")
     ax.yaxis.set_major_formatter(AbbrevFormatter())
     ax.set_ylabel(value)
@@ -719,7 +720,8 @@ def funnel(
         if vv >= 0.3 * vmax:
             ax.text(0, p, text, ha="center", va="center", color=text_color(color), weight="bold", fontsize=9)
         else:  # too narrow to hold the label: put it beside the bar
-            ax.text(vv / 2 + vmax * 0.02, p, text, ha="left", va="center", color="black", weight="bold", fontsize=9)
+            ax.text(vv / 2 + vmax * 0.02, p, text, ha="left", va="center", color=foreground(ax), weight="bold",
+                    fontsize=9)
         if p != pos[0]:
             ax.text(vmax / 2 * 1.02, p + 0.5, f"↓ {pct(pp)} of previous", va="center", fontsize=8, color=NEUTRAL)
     ax.set_yticks(pos, t[stage].astype(str))
@@ -736,7 +738,7 @@ def bullet(
     value: str,
     target: str | None = None,
     bands: Sequence[str] | Sequence[float] | None = None,
-    bar_color: str = "#222222",
+    bar_color: str | None = None,
     ax: Axes | None = None,
 ) -> VizResult:
     """Bullet graphs: a measure against a target and qualitative ranges.
@@ -753,6 +755,12 @@ def bullet(
 
     Parameters
     ----------
+    bar_color
+        Colour of the measure. ``None`` is ``"#222222"``, as Few specifies.
+        The target line is black. Both stay dark on the bands, which are
+        light greys in any style; in a panel without bands they sit on the
+        axes face, so on a dark face (``dark_background``) they are
+        ``"#dddddd"`` and white instead.
     bands
         Either a list of column names holding each row's band upper limits,
         or a list of finite numeric limits shared by every row; not a mix of
@@ -820,13 +828,15 @@ def bullet(
         for lim, g in zip(sorted(limits), greys):
             ax.barh(0, lim - prev, left=prev, height=1, color=g)
             prev = lim
-        ax.barh(0, vals[i], height=0.35, color=bar_color)
+        # The bands are light greys in any style; without them the bar and target sit on the axes face.
+        ink, bar = ("black", "#222222") if limits else (foreground(ax), foreground(ax, "#222222"))
+        ax.barh(0, vals[i], height=0.35, color=bar if bar_color is None else bar_color)
         if target is not None:
-            ax.plot([targets[i]] * 2, [-0.35, 0.35], color="black", lw=2.5)
+            ax.plot([targets[i]] * 2, [-0.35, 0.35], color=ink, lw=2.5)
         pad = 0.02 * (top - bottom)
         ax.set_xlim(bottom - (pad if bottom < 0 else 0), top + pad)
         if bottom < 0:
-            ax.axvline(0, color="black", lw=0.8)
+            ax.axvline(0, color=ink, lw=0.8)
         ax.set_yticks([0], [level_label(row[label])])
         ax.set_ylim(-0.5, 0.5)
         ax.spines[["top", "right", "left"]].set_visible(False)
@@ -845,7 +855,7 @@ def upset(
     min_size: int = 1,
     max_intersections: int | None = 20,
     sort_by: Literal["size", "degree"] = "size",
-    color: str = "#333333",
+    color: str | None = None,
 ) -> VizResult:
     """UpSet plot of set intersections — a scalable replacement for Venn diagrams.
 
@@ -870,6 +880,12 @@ def upset(
     sort_by
         Display order: ``"size"`` (largest first) or ``"degree"`` (number of
         sets involved, then size).
+    color
+        Colour of the intersection bars and of the member dots and their
+        links. ``None`` is ``"#333333"`` on a light axes face and
+        ``"#cccccc"`` on a dark one (``dark_background``). The dots of sets
+        that do not take part are ``"#dddddd"``, or ``"#222222"`` on a dark
+        face, so they stay fainter than the member dots.
 
     References
     ----------
@@ -923,6 +939,7 @@ def upset(
     ax_mat = fig.add_subplot(gs[1, 1], sharex=ax_bar)
     ax_set = fig.add_subplot(gs[1, 0], sharey=ax_mat)
     xs = np.arange(m)
+    color = foreground(ax_bar, "#333333") if color is None else color
     bars = ax_bar.bar(xs, table["size"], color=color, width=0.6)
     ax_bar.bar_label(bars, fontsize=8, padding=1)
     ax_bar.set_ylabel("Intersection size")
@@ -930,7 +947,7 @@ def upset(
     ax_bar.tick_params(axis="x", bottom=False, labelbottom=False)
     for j, row in enumerate(select_columns(table, names).to_numpy()):
         on = [i for i, member in enumerate(row) if member]
-        ax_mat.scatter([j] * k, range(k), s=60, color="#dddddd", zorder=1)
+        ax_mat.scatter([j] * k, range(k), s=60, color=foreground(ax_mat, "#dddddd"), zorder=1)
         ax_mat.scatter([j] * len(on), on, s=60, color=color, zorder=2)
         if len(on) > 1:
             ax_mat.plot([j, j], [min(on), max(on)], color=color, lw=2, zorder=1)

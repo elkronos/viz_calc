@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
-from matplotlib.colors import is_color_like, to_hex, to_rgb
+from matplotlib.colors import is_color_like, to_hex, to_rgb, to_rgba
 from matplotlib.ticker import ScalarFormatter
 
 # Okabe & Ito (2008) "Color Universal Design" palette. The eight colours stay
@@ -282,14 +282,16 @@ def palette(n: int, colors: Sequence[str] | str | None = None) -> list[str]:
     """Return *n* colours.
 
     ``None`` uses Okabe–Ito for up to eight categories and the perceptually
-    uniform ``viridis`` colormap beyond that. A string names any Matplotlib
-    colormap; a sequence of colours is cycled.
+    uniform ``viridis`` colormap beyond that. The eighth Okabe–Ito colour is
+    black, so under a style with a dark ``rcParams["axes.facecolor"]`` (such
+    as ``dark_background``) it is white instead. A string names any
+    Matplotlib colormap; a sequence of colours is cycled.
     """
     if n <= 0:
         return []
     if colors is None:
         if n <= len(OKABE_ITO):
-            return list(OKABE_ITO[:n])
+            return [foreground(None, c) if c == OKABE_ITO[7] else c for c in OKABE_ITO[:n]]
         colors = "viridis"
     if isinstance(colors, str):
         cmap = plt.get_cmap(colors)
@@ -330,6 +332,31 @@ def text_color(background: str) -> str:
     lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
     # Pick the colour with the higher WCAG contrast ratio.
     return "black" if (lum + 0.05) / 0.05 >= 1.05 / (lum + 0.05) else "white"
+
+
+def foreground(ax: Axes | None = None, color: str = "black") -> str:
+    """*color* on a light face, its mirror image (one minus each channel) on a dark one.
+
+    *color* is a grey chosen for a white face: ``"black"`` for reference lines,
+    error bars and labels drawn on the axes, a light grey for gridlines. The
+    face is read when the chart is drawn, from *ax* (``rcParams["axes.facecolor"]``
+    without one), so the default style and other light styles keep *color* and
+    a dark style such as ``dark_background`` gets white marks and a dark grid.
+    A transparent face falls back to the figure's, and a transparent figure to
+    ``rcParams["text.color"]`` (light text means a dark background).
+    """
+    if ax is None:
+        faces = [plt.rcParams["axes.facecolor"], plt.rcParams["figure.facecolor"]]
+    else:
+        faces = [ax.get_facecolor(), ax.figure.get_facecolor(), ax.figure.figure.get_facecolor()]
+    for face in faces:
+        rgba = to_rgba(face)
+        if rgba[3] > 0:
+            dark = text_color(to_hex(rgba[:3])) == "white"
+            break
+    else:
+        dark = text_color(plt.rcParams["text.color"]) == "black"
+    return to_hex([1 - c for c in to_rgb(color)]) if dark else color
 
 
 def category_order(values: pd.Series, order: Sequence[Any] | None = None, complete: bool = False,

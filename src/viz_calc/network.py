@@ -454,7 +454,9 @@ def network_map(
     metric = table[size_by].to_numpy(float)
     sizes = 150 + 850 * (metric - metric.min()) / (np.ptp(metric) or 1)
     ncomm = int(table["community"].max()) + 1
-    cols = palette(ncomm)
+    # Plotly draws on its own white template, so the Matplotlib style must not turn the eighth colour white.
+    with plt.rc_context({"axes.facecolor": "white"} if interactive else {}):
+        cols = palette(ncomm)
     node_colors = [cols[c] for c in table["community"]]
     widths = np.ones(G.number_of_edges())
     if weighted:
@@ -555,7 +557,8 @@ def sankey(
     flows = data.groupby([source, target], sort=False, observed=True)[value].sum().reset_index()
     nodes = list(pd.unique(pd.concat([flows[source], flows[target]])))
     index = {n: i for i, n in enumerate(nodes)}
-    cols = palette(len(nodes))
+    with plt.rc_context({"axes.facecolor": "white"}):  # Plotly's background, whatever the Matplotlib style
+        cols = palette(len(nodes))
     fig = go.Figure(go.Sankey(
         node={"label": [str(n) for n in nodes], "pad": 15, "thickness": 18, "color": cols},
         link={"source": flows[source].map(index), "target": flows[target].map(index), "value": flows[value],

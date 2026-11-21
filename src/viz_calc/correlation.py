@@ -26,6 +26,7 @@ from ._core import (
     cleanup_on_error,
     column_list,
     exact_mean,
+    foreground,
     get_ax,
     level_label,
     select_columns,
@@ -341,8 +342,8 @@ def quadrant_plot(
 
     fig, ax = get_ax(ax, figsize=(7, 6))
     ax.scatter(xv, yv, s=22, color=color, alpha=0.7, lw=0)
-    ax.axvline(cx, color="black", lw=0.8)
-    ax.axhline(cy, color="black", lw=0.8)
+    ax.axvline(cx, color=foreground(ax), lw=0.8)
+    ax.axhline(cy, color=foreground(ax), lw=0.8)
     if fit and np.ptp(xv) > 0:
         slope, intercept = np.polyfit(xv, yv, 1)
         grid = np.linspace(xv.min(), xv.max(), 50)
@@ -357,9 +358,10 @@ def quadrant_plot(
             ("high x, low y", right & ~top, 0.97, 0.03, "right", "bottom")]
     rows = [{"quadrant": name, "n": int(m.sum()), "percent": 100 * m.mean()} for name, m, *_ in spec]
     if annotate:
+        box = foreground(ax, "white")
         for (name, m, tx, ty, ha, va) in spec:
             ax.text(tx, ty, f"{name}\n{100 * m.mean():.1f}%", transform=ax.transAxes, ha=ha, va=va, fontsize=9,
-                    color=NEUTRAL, bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.8, "pad": 1.5})
+                    color=NEUTRAL, bbox={"facecolor": box, "edgecolor": "none", "alpha": 0.8, "pad": 1.5})
 
     cor = st.correlation_test(d[x], d[y], method)
     sym = "r" if method == "pearson" else "ρ"
