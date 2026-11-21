@@ -36,10 +36,11 @@ repository stores no PyPI token.
 ## Each release
 
 3. Prepare the release commit on `main`. In `CHANGELOG.md`, rename the
-   `## Unreleased` heading to the new version, for example `## 1.2.0`. Set
-   `__version__` in `src/viz_calc/__init__.py` to the same version; it is the
-   only place the version is written, and `pyproject.toml` reads it from
-   there. Merge the commit and wait for CI to pass on it.
+   `## Unreleased` heading to the new version and the release date, for
+   example `## 1.2.0 - 2026-12-01`. Set `__version__` in
+   `src/viz_calc/__init__.py` to the same version; it is the only place the
+   version is written, and `pyproject.toml` reads it from there. Merge the
+   commit and wait for CI to pass on it.
 
    The first upload needs a version after 1.1.0, because 1.1.0 is the code
    merged in pull request #3 and `main` has changed since.
@@ -93,4 +94,5 @@ git push origin v1.0.0 v1.1.0
 ```
 
 Neither commit has the publish workflow, so a GitHub release made from either
-tag uploads nothing to PyPI.
+tag uploads nothing to PyPI. Both were merged on 2026-09-28, so the dated
+CHANGELOG headings are `## 1.1.0 - 2026-09-28` and `## 1.0.0 - 2026-09-28`.
