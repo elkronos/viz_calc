@@ -64,6 +64,9 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
         raise ValueError("need at least three complete rows")
     # Plain NumPy floats: pandas 2.0 cannot centre Arrow-backed columns (an ArrowExtensionArray has no reshape).
     X = pd.DataFrame(X.to_numpy(dtype=float, na_value=np.nan), index=X.index, columns=X.columns)
+    # Centring removes any shift of a feature, so features far from zero next to their spread are first shifted by an
+    # exact amount that keeps their digits (see stats._offset); other features are left as they are.
+    X = X - [st._offset(X.iloc[:, j].to_numpy()) for j in range(X.shape[1])]
     # The float mean of a constant column such as 0.1 is off by an ulp, so centring leaves rounding noise (an SD
     # near 3e-17) that scaling would blow up into a whole component; constant columns are found by their values.
     constant = (X.max() == X.min()).to_numpy()

@@ -87,6 +87,17 @@ def test_unscaled_pca_gives_a_constant_feature_no_variance(c):
     pd.testing.assert_series_equal(got["explained_variance_ratio"], dyadic["explained_variance_ratio"])
 
 
+@pytest.mark.parametrize("offset", [1e12, 2.0**52, -(2.0**52)])
+def test_pca_does_not_change_with_an_exact_offset(offset):
+    # Centring on a mean rounded at 2**52 moved the explained variance ratios by 1.7e-4.
+    m = datasets.measurements()
+    m["length"] = np.round(m["length"] * 10) * 2  # even whole numbers, exact at these offsets
+    want, got = vc.pca(m, FEATURES), vc.pca(m.assign(length=m["length"] + offset), FEATURES)
+    for key in ("explained_variance_ratio", "eigenvalues"):
+        assert got[key].to_numpy() == pytest.approx(want[key].to_numpy(), rel=1e-12)
+    assert got["scores"].to_numpy() == pytest.approx(want["scores"].to_numpy(), rel=1e-12, abs=1e-12)
+
+
 def test_pca_of_ordinary_features_is_unchanged():
     m = datasets.measurements()
     m.loc[3, "width"] = np.nan

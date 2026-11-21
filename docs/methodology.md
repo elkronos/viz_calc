@@ -47,9 +47,10 @@ next to their spread (a spread below $2^{-20}$ of their magnitude, as with an
 offset of $10^{12}$ on data spread over tens), deviations from the rounded
 mean lose the values' low digits; at an offset of $2^{53}$ the mean is off by
 about as much as the values differ. Welch's test, *g*, Pearson's *r*,
-eta-squared and the default bootstrap statistics then first subtract the
-value nearest zero, which is exact there, so an offset that leaves the values
-exact does not change them. Other data are not shifted.
+eta-squared, PCA (per feature) and the default bootstrap statistics then
+first subtract the value nearest zero, which is exact there, so an offset
+that leaves the values exact does not change them. Other data are not
+shifted.
 
 ### Bootstrap confidence intervals
 Bias-corrected and accelerated (BCa) intervals (Efron, 1987) from
