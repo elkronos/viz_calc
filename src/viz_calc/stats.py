@@ -173,7 +173,11 @@ def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0
     with np.errstate(invalid="ignore"):  # comparisons with nan are False, so missing counts pass
         bad = np.isinf(pairs_k) | np.isinf(pairs_n) | (pairs_k < 0) | (pairs_n < 0) | (pairs_k > pairs_n)
     if bad.any():
-        shown = [f"successes={a:g}, n={b:g}" for a, b in zip(pairs_k[bad].tolist()[:5], pairs_n[bad].tolist()[:5])]
+        def text(v: float) -> str:  # every digit, so counts such as 1000001 and 1000000 do not print alike
+            return str(int(v)) if v.is_integer() and abs(v) < 2**53 else repr(v)
+
+        pairs = zip(pairs_k[bad].tolist()[:5], pairs_n[bad].tolist()[:5])
+        shown = [f"successes={text(a)}, n={text(b)}" for a, b in pairs]
         raise ValueError("successes and n must be finite, non-negative counts with successes <= n, got "
                          f"{'; '.join(shown)}{' ...' if bad.sum() > 5 else ''}")
     z = _st.norm.ppf(1 - (1 - level) / 2)

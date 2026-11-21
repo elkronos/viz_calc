@@ -1,5 +1,7 @@
 """Constant groups, p-value ranges, pd.NA in plain lists and FD bin limits in viz_calc.stats."""
 
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -94,6 +96,15 @@ def test_wilson_ci_rejects_impossible_counts(k, n):
 def test_wilson_ci_names_the_impossible_entries_of_an_array():
     with pytest.raises(ValueError, match=r"got successes=4, n=3$"):
         st.wilson_ci(np.array([1, 4, np.nan]), np.array([3, 3, 3]))
+
+
+@pytest.mark.parametrize("k,n,shown", [(1_000_001, 1_000_000, "successes=1000001, n=1000000"),
+                                       (0.1 + 0.2, 0.3, "successes=0.30000000000000004, n=0.3"),
+                                       (5, np.inf, "successes=5, n=inf"), (-2.5, 1e300, "successes=-2.5, n=1e+300")])
+def test_wilson_ci_error_tells_the_counts_apart(k, n, shown):
+    # Six significant digits printed 1000001 of 1000000 as "successes=1e+06, n=1e+06".
+    with pytest.raises(ValueError, match=f"got {re.escape(shown)}$"):
+        st.wilson_ci(k, n)
 
 
 def test_wilson_ci_keeps_nan_for_missing_or_zero_counts_and_accepts_weighted_counts():
