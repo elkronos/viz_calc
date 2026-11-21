@@ -100,7 +100,7 @@ These functions have no `ax=` and always create their own figure:
 | `compare_correlations` | one heatmap per pair of groups |
 | `percent_grid`, `donut_grid` | one panel per facet or row |
 | `upset` | intersection bars, membership matrix and set sizes on linked axes |
-| `calendar_heatmap` | one panel per year |
+| `calendar_heatmap` | one panel per year with data |
 | `profile_bars`, `profile_boxes`, `profile_scatters` | pages of small multiples; `res.figure` is a list |
 | `animated_bubble` | the animation redraws its own figure |
 | `sankey` | returns a Plotly figure, as does `network_map(interactive=True)` |

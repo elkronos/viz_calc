@@ -60,6 +60,18 @@ def test_calendar_heatmap_rejects_unknown_stat_before_drawing():
     assert plt.get_fignums() == []
 
 
+@pytest.mark.parametrize("extra", ["2022-06-01", "1900-01-01", "9999-12-31"])
+def test_calendar_heatmap_draws_only_the_years_with_data(extra):
+    # A placeholder date once drew every year in between: 7,976 empty panels and 4.5 GB for 9999-12-31
+    if pd.to_datetime(pd.Series([extra]), errors="coerce").isna().all():
+        pytest.skip(f"this pandas cannot hold {extra}")
+    days = pd.date_range("2024-01-01", periods=300, freq="D").strftime("%Y-%m-%d").tolist()
+    res = vc.calendar_heatmap(pd.DataFrame({"d": [extra] + days, "v": 1.0}), date="d", value="v")
+    assert [ax.get_ylabel() for ax in res.axes] == sorted([extra[:4], "2024"])
+    assert res.figure.get_figheight() == pytest.approx(2 * 2.1 + 0.4)
+    assert res.table["date"].dt.year.value_counts().to_dict() == {2024: 300, int(extra[:4]): 1}
+
+
 @pytest.mark.parametrize("today", ["nope", "", "Now", object()])
 def test_gantt_rejects_a_bad_today_before_drawing(today):
     df = pd.DataFrame({"t": ["x"], "s": ["2024-01-01"], "e": ["2024-02-01"]})

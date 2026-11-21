@@ -362,11 +362,13 @@ def calendar_heatmap(
     cmap: str = "viridis",
     missing_color: str = "#eeeeee",
 ) -> VizResult:
-    """Calendar heatmap (one row of weeks per year), like a contribution graph.
+    """Calendar heatmap (one row of weeks per year with data), like a contribution graph.
 
     Days are aggregated with *stat* (count rows when *value* is omitted).
     Days without data are drawn in *missing_color* so they are not confused
-    with zero. One colour scale is shared across years.
+    with zero. One colour scale is shared across years. Years without any
+    dated rows get no row, so a stray placeholder date such as
+    ``9999-12-31`` adds one row, not one for every year in between.
 
     Parameters
     ----------
@@ -395,7 +397,7 @@ def calendar_heatmap(
             daily[grouped.count() == 0] = np.nan  # a day whose values are all missing is "no data", not 0
     if daily.empty or daily.isna().all():
         raise ValueError("no dated rows with data")
-    years = list(range(daily.index.min().year, daily.index.max().year + 1))
+    years = sorted(daily.index.year.unique())
     vmin, vmax = float(np.nanmin(daily)), float(np.nanmax(daily))
     fig, axes = plt.subplots(len(years), 1, figsize=(12, 2.1 * len(years) + 0.4), squeeze=False)
     for ax, year in zip(axes[:, 0], years):
