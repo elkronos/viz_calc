@@ -25,6 +25,7 @@ from ._core import (
     check_numeric,
     cleanup_on_error,
     column_list,
+    foreground,
     get_ax,
     level_label,
     level_percent,
@@ -210,12 +211,12 @@ def pca_plot(
         mult = 0.8 * span / np.abs(top.to_numpy()).max()
         for f, (lx, ly) in zip(top.index, top.to_numpy() * mult):
             ax.annotate("", (lx, ly), (0, 0), arrowprops={"arrowstyle": "->", "color": NEUTRAL, "lw": 1.2})
-            ax.text(lx * 1.08, ly * 1.08, f, color="black", fontsize=8, ha="center", va="center")
+            ax.text(lx * 1.08, ly * 1.08, f, color=foreground(ax), fontsize=8, ha="center", va="center")
     evr = res["explained_variance_ratio"]
     ax.set_xlabel(f"{pc_x} ({evr[pc_x]:.1%} of variance)")
     ax.set_ylabel(f"{pc_y} ({evr[pc_y]:.1%} of variance)")
-    ax.axhline(0, color="#dddddd", lw=0.8, zorder=0)
-    ax.axvline(0, color="#dddddd", lw=0.8, zorder=0)
+    ax.axhline(0, color=foreground(ax, "#dddddd"), lw=0.8, zorder=0)
+    ax.axvline(0, color=foreground(ax, "#dddddd"), lw=0.8, zorder=0)
     ax.set_aspect("equal", adjustable="datalim")
     if group is not None:
         ax.legend(title=str(group), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))

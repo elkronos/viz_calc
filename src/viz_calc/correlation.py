@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
+from matplotlib.colors import to_hex
 
 from . import stats as st
 from ._core import (
@@ -27,10 +28,12 @@ from ._core import (
     cleanup_on_error,
     column_list,
     exact_mean,
+    foreground,
     get_ax,
     level_label,
     level_mask,
     select_columns,
+    text_color,
 )
 
 __all__ = ["correlogram", "compare_correlations", "quadrant_plot"]
@@ -98,8 +101,8 @@ def _draw_matrix(ax: Axes, mat: np.ndarray, labels: list[str], triangle: str, vl
         for a, i in enumerate(rows):
             for b, j in enumerate(cols):
                 if not mask[i, j] and text[i, j]:
-                    ax.text(b, a, text[i, j], ha="center", va="center", fontsize=9,
-                            color="white" if abs(mat[i, j]) > 0.6 * vlim else "black")
+                    cell = to_hex(im.cmap(im.norm(mat[i, j])))  # the colour the label is drawn on
+                    ax.text(b, a, text[i, j], ha="center", va="center", fontsize=9, color=text_color(cell))
     ax.figure.colorbar(im, ax=ax, shrink=0.8, label=colorbar_label)
 
 
@@ -130,6 +133,8 @@ def correlogram(
 
     A diverging, perceptually balanced colormap centred on zero is used so
     that sign and magnitude are both read correctly (Crameri et al., 2020).
+    Each cell's label is black or white, whichever reads better on the cell's
+    colour, with any *cmap*.
 
     *columns* (any sequence of labels, e.g. ``df.columns[:4]``) defaults to
     every numeric, non-boolean column. *alpha*, the significance level for
@@ -205,6 +210,8 @@ def compare_correlations(
     independent correlations is significant after adjusting across the
     variable pairs in that comparison. Spearman correlations use the
     ``1.06/(n−3)`` variance of Fieller, Hartley & Pearson (1957).
+    Cell labels are black or white, whichever reads better on the cell's
+    colour.
     *columns* (any sequence of labels) defaults to every numeric,
     non-boolean column other than *group*. *alpha* must be strictly between
     0 and 1 (``0.05``, not ``5``), and *decimals* a whole number of 0 or more.
@@ -345,8 +352,8 @@ def quadrant_plot(
 
     fig, ax = get_ax(ax, figsize=(7, 6))
     ax.scatter(xv, yv, s=22, color=color, alpha=0.7, lw=0)
-    ax.axvline(cx, color="black", lw=0.8)
-    ax.axhline(cy, color="black", lw=0.8)
+    ax.axvline(cx, color=foreground(ax), lw=0.8)
+    ax.axhline(cy, color=foreground(ax), lw=0.8)
     if fit and np.ptp(xv) > 0:
         slope, intercept = np.polyfit(xv, yv, 1)
         grid = np.linspace(xv.min(), xv.max(), 50)
@@ -361,9 +368,10 @@ def quadrant_plot(
             ("high x, low y", right & ~top, 0.97, 0.03, "right", "bottom")]
     rows = [{"quadrant": name, "n": int(m.sum()), "percent": 100 * m.mean()} for name, m, *_ in spec]
     if annotate:
+        box = foreground(ax, "white")
         for (name, m, tx, ty, ha, va) in spec:
             ax.text(tx, ty, f"{name}\n{100 * m.mean():.1f}%", transform=ax.transAxes, ha=ha, va=va, fontsize=9,
-                    color=NEUTRAL, bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.8, "pad": 1.5})
+                    color=NEUTRAL, bbox={"facecolor": box, "edgecolor": "none", "alpha": 0.8, "pad": 1.5})
 
     cor = st.correlation_test(d[x], d[y], method)
     sym = "r" if method == "pearson" else "ρ"

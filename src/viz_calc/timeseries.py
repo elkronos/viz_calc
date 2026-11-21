@@ -33,6 +33,7 @@ from ._core import (
     check_numeric,
     cleanup_on_error,
     column_list,
+    foreground,
     get_ax,
     level_label,
     palette,
@@ -535,7 +536,7 @@ def gantt(
             handles.append(Patch(color=NEUTRAL, label="(missing)"))
         ax.legend(handles=handles, title=str(group), frameon=False,
                   loc="upper left", bbox_to_anchor=(1.01, 1))
-    ax.grid(axis="x", color="#eeeeee")
+    ax.grid(axis="x", color=foreground(ax, "#eeeeee"))
     ax.set_axisbelow(True)
     ax.spines[["top", "right"]].set_visible(False)
     table = d[list(dict.fromkeys([task, start, end, group] if group is not None else [task, start, end]))]
@@ -602,7 +603,7 @@ def duration_plot(
     _date_axis(ax, tz=tz)
     ax.legend(handles=[Patch(color=colors[0], label=outer_name), Patch(color=colors[1], label=inner_name)],
               frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
-    ax.grid(axis="x", color="#eeeeee")
+    ax.grid(axis="x", color=foreground(ax, "#eeeeee"))
     ax.set_axisbelow(True)
     ax.spines[["top", "right"]].set_visible(False)
     table = d[columns].reset_index(drop=True)

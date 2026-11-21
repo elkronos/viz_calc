@@ -33,6 +33,7 @@ from ._core import (
     check_numeric,
     cleanup_on_error,
     column_list,
+    foreground,
     get_ax,
     level_label,
     level_mask,
@@ -334,13 +335,14 @@ def donut_grid(
     """One donut per row of a wide table (rows = charts, columns = categories).
 
     Every category keeps the same colour in every donut. The row total is
-    printed in the centre. Shares below *min_label* percent (a finite number)
-    are not labelled. *columns* (a list of distinct labels or any other
-    iterable of them, e.g. ``df.columns[1:]``, but not a lone string)
-    defaults to the numeric, non-boolean columns. Values must be
-    non-negative and not missing (fill or drop missing cells first); an
-    all-zero row is drawn as an empty grey ring. *col_wrap* (donuts per row)
-    must be a positive integer.
+    printed in the centre. Each share is printed on its wedge in black or
+    white, whichever reads better on the wedge's colour; shares below
+    *min_label* percent (a finite number) are not labelled. *columns* (a
+    list of distinct labels or any other iterable of them, e.g.
+    ``df.columns[1:]``, but not a lone string) defaults to the numeric,
+    non-boolean columns. Values must be non-negative and not missing (fill
+    or drop missing cells first); an all-zero row is drawn as an empty grey
+    ring. *col_wrap* (donuts per row) must be a positive integer.
 
     Note: people compare angles less accurately than lengths (Cleveland &
     McGill, 1984); for precise comparisons use :func:`stacked_percentages`.
@@ -374,10 +376,11 @@ def donut_grid(
         wedges, _ = ax.pie(vals if total else np.ones_like(vals), colors=cols if total else ["#eeeeee"] * len(vals),
                            startangle=90, counterclock=False, wedgeprops={"width": 0.4, "edgecolor": "white"})
         if labels and total:
-            for w, sh in zip(wedges, share):
+            for w, sh, c in zip(wedges, share, cols):
                 if sh >= min_label:
                     ang = np.deg2rad((w.theta1 + w.theta2) / 2)
-                    ax.text(0.8 * np.cos(ang), 0.8 * np.sin(ang), f"{sh:.0f}%", ha="center", va="center", fontsize=8)
+                    ax.text(0.8 * np.cos(ang), 0.8 * np.sin(ang), f"{sh:.0f}%", ha="center", va="center", fontsize=8,
+                            color=text_color(c))
         ax.text(0, 0, abbreviate(total), ha="center", va="center", fontsize=11, weight="bold")
         ax.set_title(level_label(idx), fontsize="medium")
     for ax in list(axes.flat)[n:]:
@@ -406,14 +409,15 @@ def nested_pie(
 ) -> VizResult:
     """Two-level donut: *outer* categories on the inner ring, *inner* sub-categories around them.
 
-    Sub-category wedges use lighter shades of their parent's colour and sit
-    directly outside it, so the hierarchy is visible. With *value* omitted,
-    rows are counted. Values must be non-negative, with a positive total;
-    missing values count as zero. *outer*, *inner* and *value* must be
-    different columns, and *outer* and *inner* each need at least one
-    non-missing value. Rows with a missing *outer* or *inner* category are
-    not dropped: they are drawn in grey as "(missing)" (a missing *outer*
-    last) and count towards the total.
+    Sub-category wedges use lighter shades of their parent's colour (darker
+    ones for a white parent, such as the eighth default colour under a dark
+    style) and sit directly outside it, so the hierarchy is visible. With
+    *value* omitted, rows are counted. Values must be non-negative, with a
+    positive total; missing values count as zero. *outer*, *inner* and
+    *value* must be different columns, and *outer* and *inner* each need at
+    least one non-missing value. Rows with a missing *outer* or *inner*
+    category are not dropped: they are drawn in grey as "(missing)" (a
+    missing *outer* last) and count towards the total.
     Neither category column may be named ``"value"``, ``"percent_of_total"``
     or ``"percent_of_parent"``, as those name the table's output columns.
     """
@@ -451,7 +455,8 @@ def nested_pie(
     child_cols = []
     for i, c in enumerate(base_cols):
         rgb = np.array(to_rgb(c))
-        child_cols += [tuple(rgb + (1 - rgb) * t) for t in np.linspace(0.25, 0.65, int((codes == i).sum()))]
+        end = np.zeros(3) if (rgb == 1).all() else np.ones(3)  # white has no lighter shades: shade towards black
+        child_cols += [tuple(rgb + (end - rgb) * t) for t in np.linspace(0.25, 0.65, int((codes == i).sum()))]
     child_cols = [NEUTRAL if gap else c for c, gap in zip(child_cols, agg[inner].isna())]
 
     def name(v: Any) -> str:
@@ -649,7 +654,7 @@ def waterfall(
                                for k, c, e in zip(table["kind"], table["change"], table["end"])], fontsize=8, padding=2)
     for i in range(len(table) - 1):
         ax.plot([i + 0.33, i + 1 - 0.33], [table["end"][i]] * 2, color=NEUTRAL, lw=0.8)
-    ax.axhline(0, color="black", lw=0.8)
+    ax.axhline(0, color=foreground(ax), lw=0.8)
     ax.set_xticks(pos, table["label"], rotation=30, ha="right")
     ax.yaxis.set_major_formatter(AbbrevFormatter())
     ax.set_ylabel(value)
@@ -719,7 +724,8 @@ def funnel(
         if vv >= 0.3 * vmax:
             ax.text(0, p, text, ha="center", va="center", color=text_color(color), weight="bold", fontsize=9)
         else:  # too narrow to hold the label: put it beside the bar
-            ax.text(vv / 2 + vmax * 0.02, p, text, ha="left", va="center", color="black", weight="bold", fontsize=9)
+            ax.text(vv / 2 + vmax * 0.02, p, text, ha="left", va="center", color=foreground(ax), weight="bold",
+                    fontsize=9)
         if p != pos[0]:
             ax.text(vmax / 2 * 1.02, p + 0.5, f"↓ {pct(pp)} of previous", va="center", fontsize=8, color=NEUTRAL)
     ax.set_yticks(pos, t[stage].astype(str))
@@ -736,7 +742,7 @@ def bullet(
     value: str,
     target: str | None = None,
     bands: Sequence[str] | Sequence[float] | None = None,
-    bar_color: str = "#222222",
+    bar_color: str | None = None,
     ax: Axes | None = None,
 ) -> VizResult:
     """Bullet graphs: a measure against a target and qualitative ranges.
@@ -760,6 +766,14 @@ def bullet(
         ``["good"]`` for one column).
         Ascending order. Entries that are all labels in ``data.columns``
         (e.g. ``[2, 3]`` for integer-labelled columns) are column names.
+    bar_color
+        Colour of the measure. ``None`` is ``"#222222"``, as Few specifies,
+        and the target line is black. Both read on the bands, which are
+        light greys in any style. A mark on the axes face instead (no bands,
+        or past the last band) follows the face, so on a dark face
+        (``dark_background``) a target there is white, a bar without bands
+        is ``"#dddddd"`` and a bar that runs past the bands has a white
+        outline.
     ax
         An Axes to draw into. Only for single-row *data* (one bullet graph);
         with more rows it raises ``ValueError``, since each row needs its own
@@ -823,13 +837,18 @@ def bullet(
         for lim, g in zip(sorted(limits), greys):
             ax.barh(0, lim - prev, left=prev, height=1, color=g)
             prev = lim
-        ax.barh(0, vals[i], height=0.35, color=bar_color)
+        # The bands are light greys in any style. Past the last band, or with no bands, marks sit on the axes face.
+        reach = max(limits, default=-math.inf)  # the bands cover the axis from its start up to here
+        ink = foreground(ax)  # "black" on a light face, white on a dark one
+        bar = bar_color if bar_color is not None else "#222222" if limits else foreground(ax, "#222222")
+        past = bar_color is None and bool(limits) and ink != "black" and max(vals[i], 0.0) > reach
+        ax.barh(0, vals[i], height=0.35, color=bar, **({"edgecolor": ink} if past else {}))
         if target is not None:
-            ax.plot([targets[i]] * 2, [-0.35, 0.35], color="black", lw=2.5)
+            ax.plot([targets[i]] * 2, [-0.35, 0.35], color="black" if targets[i] <= reach else ink, lw=2.5)
         pad = 0.02 * (top - bottom)
         ax.set_xlim(bottom - (pad if bottom < 0 else 0), top + pad)
         if bottom < 0:
-            ax.axvline(0, color="black", lw=0.8)
+            ax.axvline(0, color="black" if 0 <= reach else ink, lw=0.8)
         ax.set_yticks([0], [level_label(row[label])])
         ax.set_ylim(-0.5, 0.5)
         ax.spines[["top", "right", "left"]].set_visible(False)
@@ -848,7 +867,7 @@ def upset(
     min_size: int = 1,
     max_intersections: int | None = 20,
     sort_by: Literal["size", "degree"] = "size",
-    color: str = "#333333",
+    color: str | None = None,
 ) -> VizResult:
     """UpSet plot of set intersections — a scalable replacement for Venn diagrams.
 
@@ -873,6 +892,12 @@ def upset(
     sort_by
         Display order: ``"size"`` (largest first) or ``"degree"`` (number of
         sets involved, then size).
+    color
+        Colour of the intersection bars and of the member dots and their
+        links. ``None`` is ``"#333333"`` on a light axes face and
+        ``"#cccccc"`` on a dark one (``dark_background``). The dots of sets
+        that do not take part are ``"#dddddd"``, or ``"#222222"`` on a dark
+        face, so they stay fainter than the member dots.
 
     References
     ----------
@@ -926,6 +951,7 @@ def upset(
     ax_mat = fig.add_subplot(gs[1, 1], sharex=ax_bar)
     ax_set = fig.add_subplot(gs[1, 0], sharey=ax_mat)
     xs = np.arange(m)
+    color = foreground(ax_bar, "#333333") if color is None else color
     bars = ax_bar.bar(xs, table["size"], color=color, width=0.6)
     ax_bar.bar_label(bars, fontsize=8, padding=1)
     ax_bar.set_ylabel("Intersection size")
@@ -933,7 +959,7 @@ def upset(
     ax_bar.tick_params(axis="x", bottom=False, labelbottom=False)
     for j, row in enumerate(select_columns(table, names).to_numpy()):
         on = [i for i, member in enumerate(row) if member]
-        ax_mat.scatter([j] * k, range(k), s=60, color="#dddddd", zorder=1)
+        ax_mat.scatter([j] * k, range(k), s=60, color=foreground(ax_mat, "#dddddd"), zorder=1)
         ax_mat.scatter([j] * len(on), on, s=60, color=color, zorder=2)
         if len(on) > 1:
             ax_mat.plot([j, j], [min(on), max(on)], color=color, lw=2, zorder=1)

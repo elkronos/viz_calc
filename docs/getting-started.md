@@ -163,6 +163,22 @@ additions. How you change a chart's colours depends on what it colours:
 In `animated_bubble`, `color=` names the **column** whose categories set the
 bubble colours; the colours themselves go in `colors=`.
 
+viz_calc leaves the Matplotlib style to you. Marks drawn straight on the axes
+background (means and confidence intervals, error bars, reference and zero
+lines, labels beside bars, `pca_plot`'s loading labels, `upset`'s bars and
+dots) are black or dark grey on a light background, and gridlines are a pale
+grey. Under a style with a dark axes background, such as `dark_background`,
+they turn white or light grey and the gridlines dark grey, and the eighth
+Okabe–Ito colour, black, is drawn white. Colours you pass are used as
+given. The background is read when the chart function runs, so a
+background set on the axes afterwards does not recolour these marks, and a
+style context covers the charts made inside it:
+
+```python
+with plt.style.context("dark_background"):
+    res = vc.estimation_plot(trial, x="arm", y="score")
+```
+
 ## Conventions
 
 Arguments are named for the role a column plays, and most names mean the

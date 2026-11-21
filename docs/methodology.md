@@ -236,6 +236,7 @@ record which comparison was used.
 | Bullet graphs in greyscale bands | Compact target comparison readable without colour | Few, 2013 |
 | Bubble **area** ∝ value, one scale and fixed axes per animation | Area is the size cue readers use; per-frame rescaling breaks comparison between frames | Cleveland & McGill, 1984 |
 | Label text colour chosen by contrast | Keeps labels legible on light and dark fills | WCAG 2.x contrast ratio |
+| Reference lines, error bars and labels on the axes background follow its lightness | They stay visible under a dark Matplotlib style, which viz_calc leaves to the user | WCAG 2.x contrast ratio |
 
 ## References
 

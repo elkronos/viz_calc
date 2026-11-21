@@ -26,6 +26,7 @@ from ._core import (
     check_numeric,
     check_range,
     cleanup_on_error,
+    foreground,
     get_ax,
     level_label,
     level_mask,
@@ -182,7 +183,7 @@ def histogram(
                     ax.plot(grid, dens * scale, color=col, lw=1.5)
             if ref_line is not None and s.size:
                 v = {"mean": np.mean, "median": np.median}[ref_line](s) if isinstance(ref_line, str) else float(ref_line)
-                ax.axvline(v, color=col if h is not None else "black", ls="--", lw=1.2)
+                ax.axvline(v, color=col if h is not None else foreground(ax), ls="--", lw=1.2)
             rows.append({"facet": f, "hue": h, **_describe(pd.Series(s))})
         if f is not None:
             ax.set_title(f"{facet} = {level_label(f)}", fontsize="medium", loc="left")
