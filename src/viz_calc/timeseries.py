@@ -79,7 +79,10 @@ def _numpy_dates(s: pd.Series) -> pd.Series:
     if pa.types.is_timestamp(t):
         return s.astype(pd.DatetimeTZDtype(t.unit, t.tz) if t.tz else f"datetime64[{t.unit}]")
     if pa.types.is_date(t):
-        return pd.to_datetime(s)  # NumPy datetime64[ns] on pandas 2, datetime64[s] on pandas 3
+        try:
+            return pd.to_datetime(s)  # NumPy datetime64[ns] on pandas 2, datetime64[s] on pandas 3
+        except (ValueError, OverflowError):  # past 2262 on pandas 2: _dates then names the column in its error
+            return s.astype(object)
     return s
 
 

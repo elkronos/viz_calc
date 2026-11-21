@@ -317,6 +317,21 @@ def test_arrow_backed_dates_give_the_same_table(call, source):
     assert dates and not [c for c in dates if isinstance(table[c].dtype, pd.ArrowDtype)]
 
 
+def test_arrow_date_beyond_the_pandas_range_is_reported_by_column():
+    # pandas 2 holds dates up to 2262 only, so a 9999-12-31 placeholder fails there as it does for text
+    pytest.importorskip("pyarrow")
+    csv = "date,v\n2024-03-01,1\n2024-03-02,2\n9999-12-31,3\n"
+    plain = pd.read_csv(io.StringIO(csv))
+    arrow = pd.read_csv(io.StringIO(csv), engine="pyarrow", dtype_backend="pyarrow")
+    if pd.to_datetime(plain["date"], errors="coerce").notna().all():  # pandas 3
+        expected = vc.calendar_heatmap(plain, date="date", value="v").table
+        pd.testing.assert_frame_equal(vc.calendar_heatmap(arrow, date="date", value="v").table, expected,
+                                      check_dtype=False)
+    else:
+        with pytest.raises(ValueError, match="column 'date' could not be parsed as dates"):
+            vc.calendar_heatmap(arrow, date="date", value="v")
+
+
 # --- the walkthrough ------------------------------------------------------------------------------------------------
 
 
