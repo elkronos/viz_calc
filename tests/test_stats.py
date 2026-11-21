@@ -1,5 +1,6 @@
 """Statistical helpers checked against SciPy and published worked examples."""
 
+import inspect
 import tracemalloc
 
 import numpy as np
@@ -104,6 +105,31 @@ def test_bootstrap_up_to_2000_rows_matches_scipy_unbatched():
     except TypeError:  # SciPy < 1.15 names the argument random_state
         res = sps.bootstrap((a, b), diff, random_state=np.random.default_rng(5), **kwargs)
     assert (lo, hi) == tuple(float(v) for v in res.confidence_interval)
+
+
+def test_a_type_error_from_the_statistic_is_raised_once_without_rerunning_the_bootstrap():
+    # The rng/random_state keyword used to be chosen by retrying on TypeError, which reran the whole bootstrap
+    # when the user's statistic raised one and chained the same error to itself.
+    a, b = [1.0, 2.0, 4.0, 7.0], [3.0, 5.0, 6.0, 9.0, 10.0]
+
+    def failing(limit):
+        calls = []
+
+        def statistic(x, y):
+            calls.append(1)
+            if len(calls) > limit:
+                raise TypeError("statistic failed on one resample")
+            return float(np.mean(y) - np.mean(x))
+        return statistic, calls
+
+    keyword = "rng" if "rng" in inspect.signature(sps.bootstrap).parameters else "random_state"  # SciPy < 1.15
+    statistic, direct = failing(5)
+    with pytest.raises(TypeError, match="failed on one resample"):
+        sps.bootstrap((a, b), statistic, n_resamples=50, vectorized=False, **{keyword: np.random.default_rng(0)})
+    statistic, calls = failing(5)
+    with pytest.raises(TypeError, match="failed on one resample") as info:
+        st.bootstrap_ci(a, b, statistic=statistic, n_resamples=50)
+    assert len(calls) == len(direct) and info.value.__context__ is None
 
 
 def test_adjust_pvalues_worked_example():

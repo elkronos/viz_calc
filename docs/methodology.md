@@ -24,7 +24,10 @@ nominal error rate when variances or group sizes differ and costs almost no
 power when they are equal (Welch, 1947; Delacre, Lakens & Leys, 2017).
 If both groups are constant the standard error is zero and $t = \pm\infty$
 with the sign of the difference ($p = 0$); two identical constants have no
-difference, so $t$ is `NaN` and $p = 1$. Used by `estimation_plot`.
+difference, so $t$ is `NaN` and $p = 1$. The Welch–Satterthwaite formula is
+0/0 there, so the reported degrees of freedom are Student's
+$n_A + n_B - 2$. Used by `estimation_plot`, whose `df` column shows the
+same value.
 
 ### Hedges' *g*
 Cohen's *d* with pooled SD, times the small-sample correction
@@ -39,19 +42,45 @@ are identical groups and the mean CI of `[0.1] * 3` is exactly 0.1.
 The mean CI, Welch's test and *g* rescale the data by a power of two before
 squaring deviations; the rescaling is exact, so ordinary results are
 unchanged and magnitudes beyond about $10^{\pm 154}$ no longer overflow or
-underflow (which used to give $g = 0$).
+underflow (which used to give $g = 0$). When all values sit far from zero
+next to their spread (a spread below $2^{-20}$ of their magnitude, as with an
+offset of $10^{12}$ on data spread over tens), deviations from the rounded
+mean lose the values' low digits; at an offset of $2^{53}$ the mean is off by
+about as much as the values differ. Welch's test, *g*, Pearson's *r*,
+eta-squared, PCA (per feature) and the default bootstrap statistics then
+first subtract the value nearest zero, which is exact there, so an offset
+that leaves the values exact does not change them. Other data are not
+shifted.
 
 ### Bootstrap confidence intervals
 Bias-corrected and accelerated (BCa) intervals (Efron, 1987) from
 `scipy.stats.bootstrap`, 5,000 resamples, fixed seed. Each group is resampled
 independently. Used for the mean difference in `estimation_plot`, following
 estimation-statistics practice (Cumming, 2014; Ho et al., 2019).
+`stats.bootstrap_ci` bootstraps the mean of one sample or the difference in
+means of two unless given another statistic.
+
+BCa's bias correction counts the bootstrap values below the estimate, so
+values tied with it matter, and on data recorded to a fixed precision
+(scores, counts, one-decimal measurements) many are. In floating point a
+resample whose mean difference equals the estimate can come out a few ulps
+above or below it, depending on the summation order and on the units: two
+groups holding the same values $[1,1,1,2,1]$ and $[1,1,1,1,2]$ gave −0.4
+to 0.4 in units but −0.4 to 0.6 in tenths. With the default statistics a
+bootstrap value that differs from the estimate by less than $2^{-40}$ times
+the largest magnitude in the data counts as a tie, after the exact shift for
+values far from zero described above. That is far above the rounding error
+of a mean and far below the gap between two distinct bootstrap values of
+recorded data, so the interval does not depend on the units. Every other
+bootstrap value is used exactly as computed.
 
 ### Wilson score interval for a proportion
 $\dfrac{\hat p + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat p(1-\hat p)}{n} + \frac{z^2}{4n^2}}}{1 + z^2/n}$.
 Recommended over the Wald interval, whose coverage collapses for small *n*
 or extreme proportions (Wilson, 1927; Brown, Cai & DasGupta, 2001). Used by
-`percent_grid`, `centered_bar`.
+`percent_grid`, `centered_bar`. Counts may be fractional (weighted data);
+$n = 0$ or a missing count gives `NaN`, and an impossible count (negative,
+infinite, or more successes than $n$) raises a `ValueError`.
 
 ### Multiple-comparison adjustment
 * **Holm** step-down (Holm, 1979): controls the family-wise error rate and
@@ -123,15 +152,24 @@ size (Balinski & Young, 1982). Used by `waffle`.
 ### Eta-squared
 $\eta^2 = SS_\text{between}/SS_\text{total}$, the share of a numeric
 variable's variance explained by a grouping. Used to rank panels in
-`profile_boxes`.
+`profile_boxes`. A constant column has no variance to explain, so its
+$\eta^2$ is missing (its floating-point sums of squares would hold only
+rounding noise, as for a column of 0.1).
 
 ### Principal component analysis
 SVD of the centred (and by default standardized) data matrix; eigenvalues
 $= s^2/(n-1)$; component signs fixed so the largest loading is positive
 (Jolliffe & Cadima, 2016). Ellipses are drawn from the eigen-decomposition
-of each group's covariance with radius $\sqrt{\chi^2_2(\text{level})}$. The
-"data" ellipse uses the covariance of the points; the "confidence" ellipse
-uses the covariance of the mean (divided by *n*).
+of each group's covariance. The "data" ellipse is the normal-theory ellipse
+at the group's mean and covariance, with radius
+$\sqrt{\chi^2_2(\text{level})}$: for a large group it holds about *level*
+of the population, while a small group's own points nearly all fall inside
+it. The "confidence" ellipse is Hotelling's (1931) $T^2$ region for the
+group mean: the covariance of the mean (divided by *n*) with radius
+$\sqrt{2(n-1)/(n-2)\,F_{2,\,n-2}(\text{level})}$, exact for normal data in
+groups of three or more. The $\chi^2_2$ radius assumes a known covariance
+and covers the true mean far less often in small groups (about 75% instead
+of 95% at $n = 5$).
 
 ### Networks
 Repeated edges are merged by summing their weights. Louvain community
@@ -223,6 +261,7 @@ record which comparison was used.
 * Hedges, L. V., & Olkin, I. (1985). *Statistical Methods for Meta-Analysis*. Academic Press.
 * Ho, J., Tumkaya, T., Aryal, S., Choi, H., & Claridge-Chang, A. (2019). Moving beyond P values: data analysis with estimation graphics. *Nature Methods*, 16, 565–566.
 * Holm, S. (1979). A simple sequentially rejective multiple test procedure. *Scandinavian Journal of Statistics*, 6(2), 65–70.
+* Hotelling, H. (1931). The generalization of Student's ratio. *Annals of Mathematical Statistics*, 2(3), 360–378.
 * Jolliffe, I. T., & Cadima, J. (2016). Principal component analysis: a review and recent developments. *Philosophical Transactions of the Royal Society A*, 374, 20150202.
 * Lex, A., Gehlenborg, N., Strobelt, H., Vuillemot, R., & Pfister, H. (2014). UpSet: visualization of intersecting sets. *IEEE Transactions on Visualization and Computer Graphics*, 20(12), 1983–1992.
 * Okabe, M., & Ito, K. (2008). *Color Universal Design (CUD): How to make figures and presentations that are friendly to colorblind people*. J*Fly.

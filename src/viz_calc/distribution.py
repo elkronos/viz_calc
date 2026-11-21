@@ -131,7 +131,7 @@ def histogram(
     elif ref_line is not None and (isinstance(ref_line, bool) or not isinstance(ref_line, Real)):
         raise ValueError(f"ref_line must be 'mean', 'median', a number or None, got {ref_line!r}")
     check_count("col_wrap", col_wrap)
-    check_range("alpha", alpha, 0, 1)
+    alpha = check_range("alpha", alpha, 0, 1)
     values = data[x].dropna().to_numpy(float)
     if isinstance(bins, str):
         edges, rule = st._bin_edges(values, bins)
@@ -223,7 +223,7 @@ def ridgeplot(
     check_dataframe(data, [x, group])
     check_not_reserved(_SUMMARY, group=group)
     check_numeric(data, x)
-    check_range("overlap", overlap, 0, 1, include_high=False)
+    overlap = check_range("overlap", overlap, 0, 1, include_high=False)
     check_has_values(data, x)
     groups = category_order(data[group], order)
     values = data[x].dropna().to_numpy(float)

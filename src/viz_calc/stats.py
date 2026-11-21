@@ -10,6 +10,7 @@ page of the documentation.
 
 from __future__ import annotations
 
+import inspect
 import numbers
 from collections.abc import Callable, Sequence
 from fractions import Fraction
@@ -20,6 +21,8 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 from scipy import stats as _st
+
+from ._core import check_count
 
 __all__ = [
     "wilson_ci",
@@ -84,6 +87,34 @@ def _unit_scale(*samples: np.ndarray) -> float:
     return float(np.ldexp(1.0, np.frexp(top)[1] - 1))
 
 
+def _offset(*samples: np.ndarray) -> float:
+    """A value to subtract from every sample before taking deviations from the mean: 0, or one of the values.
+
+    Deviations ``x - mean`` lose digits when the values sit far from zero next
+    to their spread: with an offset of ``1e12`` on data spread over tens they
+    keep about 17 of their 53 bits, and at ``2**53`` the rounded mean is off
+    by about as much as the values differ, so *t*, *g*, *r*, eta-squared and
+    the bootstrap's tie tolerance go wrong although every value is exact.
+    When the spread of all values is below ``2**-20`` of their magnitude (the
+    deviations would lose more than 20 of the 53 bits), the value nearest zero
+    is returned; every value is then within a factor of two of it, so the
+    subtraction is exact (Sterbenz's lemma) and none of those statistics
+    change. Otherwise the result is 0, so ordinary data give bit-identical
+    results.
+    """
+    present = [s for s in samples if s.size]
+    if not present:
+        return 0.0
+    lo, hi = min(float(np.min(s)) for s in present), max(float(np.max(s)) for s in present)
+    if not (np.isfinite(lo) and np.isfinite(hi)):
+        return 0.0
+    if lo > 0 and hi - lo < lo * 2.0**-20:
+        return lo
+    if hi < 0 and hi - lo < -hi * 2.0**-20:
+        return hi
+    return 0.0
+
+
 def _var(x: np.ndarray) -> float:
     """Sample variance (``ddof=1``), exactly 0 for a constant sample.
 
@@ -122,8 +153,11 @@ def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0
     small *n* or proportions near 0 or 1 (Brown, Cai & DasGupta, 2001).
 
     Returns ``(lower, upper)`` as proportions: floats for scalar input,
-    arrays for array input. ``n == 0`` gives ``nan``. *level* must be
-    strictly between 0 and 1 (``0.95``, not ``95``), else ``ValueError``.
+    arrays for array input. ``n == 0`` gives ``nan``, and so does a missing
+    count. Counts need not be whole numbers (weighted data), but they must be
+    possible: a negative or infinite count, or more *successes* than *n*,
+    raises ``ValueError``. *level* must be strictly between 0 and 1
+    (``0.95``, not ``95``), else ``ValueError``.
 
     References
     ----------
@@ -135,8 +169,19 @@ def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0
     level = _check_level(level)
     k = _as_float(successes)
     n = _as_float(n)
+    pairs_k, pairs_n = np.broadcast_arrays(k, n)
+    with np.errstate(invalid="ignore"):  # comparisons with nan are False, so missing counts pass
+        bad = np.isinf(pairs_k) | np.isinf(pairs_n) | (pairs_k < 0) | (pairs_n < 0) | (pairs_k > pairs_n)
+    if bad.any():
+        def text(v: float) -> str:  # every digit, so counts such as 1000001 and 1000000 do not print alike
+            return str(int(v)) if v.is_integer() and abs(v) < 2**53 else repr(v)
+
+        pairs = zip(pairs_k[bad].tolist()[:5], pairs_n[bad].tolist()[:5])
+        shown = [f"successes={text(a)}, n={text(b)}" for a, b in pairs]
+        raise ValueError("successes and n must be finite, non-negative counts with successes <= n, got "
+                         f"{'; '.join(shown)}{' ...' if bad.sum() > 5 else ''}")
     z = _st.norm.ppf(1 - (1 - level) / 2)
-    with np.errstate(invalid="ignore", divide="ignore"):
+    with np.errstate(invalid="ignore", divide="ignore", over="ignore"):  # n**2 overflows harmlessly for huge n
         p = k / n
         denom = 1 + z**2 / n
         centre = (p + z**2 / (2 * n)) / denom
@@ -184,7 +229,9 @@ def welch_test(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> d
     ``df`` (Welch–Satterthwaite) and ``p``. When both groups are constant the
     standard error is zero: ``t`` is then ``±inf`` with the sign of the
     difference and ``p`` is 0; if the two constants are identical there is no
-    difference, so ``t`` is ``nan`` and ``p`` is 1. A constant group's mean is
+    difference, so ``t`` is ``nan`` and ``p`` is 1. The Welch–Satterthwaite
+    ``df`` is 0/0 there, so ``df`` is reported as the Student value
+    ``n_a + n_b - 2`` (non-missing values). A constant group's mean is
     its common value, so ``[0.1] * 3`` and ``[0.1] * 10`` count as identical.
 
     References
@@ -199,6 +246,8 @@ def welch_test(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> d
     a, b = _clean(a), _clean(b)
     if a.size < 2 or b.size < 2:
         raise ValueError("each group needs at least two non-missing values")
+    c = _offset(a, b)
+    a, b = a - c, b - c  # exact, and nothing below depends on a shared shift; see _offset
     s = _unit_scale(a, b)
     a, b = a / s, b / s  # exact; see _unit_scale
     va, vb = _var(a) / a.size, _var(b) / b.size
@@ -237,6 +286,8 @@ def hedges_g(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> dic
     n1, n2 = a.size, b.size
     if n1 < 2 or n2 < 2:
         raise ValueError("each group needs at least two non-missing values")
+    c = _offset(a, b)
+    a, b = a - c, b - c  # exact, and g does not depend on a shared shift; see _offset
     s = _unit_scale(a, b)
     a, b = a / s, b / s  # exact, and g does not depend on the scale; see _unit_scale
     df = n1 + n2 - 2
@@ -252,7 +303,7 @@ def hedges_g(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> dic
 
 def bootstrap_ci(
     *samples: Sequence[float],
-    statistic: Callable[..., float] = lambda a, b: _mean(b) - _mean(a),
+    statistic: Callable[..., float] | None = None,
     level: float = 0.95,
     n_resamples: int = 5000,
     method: Literal["BCa", "percentile", "basic"] = "BCa",
@@ -261,10 +312,21 @@ def bootstrap_ci(
     """Bootstrap estimate and confidence interval: ``(estimate, lower, upper)``.
 
     Defaults to the bias-corrected and accelerated (BCa) interval (Efron,
-    1987), resampling each sample independently. The default statistic is the
-    difference in means ``mean(b) - mean(a)`` used by estimation plots
-    (Ho et al., 2019). A fixed *seed* keeps figures reproducible. *level* must
-    be strictly between 0 and 1 (``0.95``, not ``95``), else ``ValueError``.
+    1987), resampling each sample independently. The default statistic is
+    the mean of one sample, and for two samples the difference in means
+    ``mean(b) - mean(a)`` used by estimation plots (Ho et al., 2019); other
+    numbers of samples need a *statistic*, which is called with one array per
+    sample. A fixed *seed* keeps figures reproducible. With the default
+    statistic, a bootstrap value that equals the estimate in exact arithmetic
+    but differs from it by rounding error counts as a tie, so the BCa
+    interval does not change with the units of the data (a statistic you
+    pass is used as it is).
+
+    *level* must be strictly between 0 and 1 (``0.95``, not ``95``),
+    *n_resamples* a whole number of at least 1, *method* one of ``"BCa"``,
+    ``"percentile"`` and ``"basic"`` (in any letter case), and *seed* ``None``,
+    a whole number of at least 0 or a NumPy ``Generator``, ``BitGenerator`` or
+    ``SeedSequence``; anything else raises ``ValueError``.
 
     References
     ----------
@@ -274,23 +336,83 @@ def bootstrap_ci(
     Moving beyond P values: data analysis with estimation graphics. *Nature
     Methods*, 16, 565–566.
     """
+    check_count("n_resamples", n_resamples)
+    methods = ("BCa", "percentile", "basic")
+    if not isinstance(method, str) or method.lower() not in [m.lower() for m in methods]:
+        raise ValueError(f"method must be one of {list(methods)}, got {method!r}")
+    if seed is not None and not isinstance(seed, (np.random.Generator, np.random.BitGenerator, np.random.SeedSequence)):
+        check_count("seed", seed, minimum=0)
     estimate, lo, hi, _ = _bootstrap(samples, statistic, level, n_resamples, method, seed)
     return estimate, lo, hi
 
+
+# SciPy 1.15 renamed bootstrap's random_state to rng. Deciding once, rather than retrying on TypeError, keeps a
+# TypeError raised by the statistic from rerunning the whole bootstrap.
+_RNG_KEYWORD = "rng" if "rng" in inspect.signature(_st.bootstrap).parameters else "random_state"
 
 _BOOTSTRAP_ONE_PIECE = 2000  # largest sample bootstrapped unbatched; two at 5,000 resamples peak near 450 MB
 _BOOTSTRAP_BATCH_VALUES = 2**22  # values per sample held at once when batching
 
 
+def _default_statistic(n_samples: int) -> Callable[..., float]:
+    """The mean of one sample, or ``mean(b) - mean(a)`` for two."""
+    if n_samples == 1:
+        return _mean
+    if n_samples == 2:
+        return lambda a, b: _mean(b) - _mean(a)
+    raise ValueError("the default statistic needs one sample (its mean) or two (mean(b) - mean(a)), "
+                     f"got {n_samples}; pass statistic= for other designs")
+
+
+def _tie_exact(statistic: Callable[..., float], estimate: float, scale: float) -> Callable[..., float]:
+    """*statistic*, returning exactly *estimate* for any value within rounding error of it.
+
+    A resample whose mean (or difference in means) equals the estimate in
+    exact arithmetic can come out a few ulps above or below it, depending on
+    the order of summation and on the units of the data. BCa's bias
+    correction counts the bootstrap values below the estimate, so such values
+    would count as below or above at random and move the interval when the
+    data are rescaled. Values within ``2**-40`` of *scale* (the magnitude of
+    the data) are made exact ties; that is far above the rounding error of a
+    mean of millions of values. Every other value is returned unchanged.
+    """
+    tolerance = 2.0**-40 * scale
+
+    def snapped(*samples: np.ndarray) -> float:
+        value = statistic(*samples)
+        return estimate if abs(value - estimate) <= tolerance else value
+
+    return snapped
+
+
 def _bootstrap(samples, statistic, level, n_resamples, method, seed):
-    """Like :func:`bootstrap_ci` but also returns the bootstrap distribution."""
+    """Like :func:`bootstrap_ci` but also returns the bootstrap distribution.
+
+    A *statistic* of ``None`` stands for the default of :func:`bootstrap_ci`,
+    with ties to the estimate kept exact (see :func:`_tie_exact`) and values
+    far from zero shifted first (see :func:`_offset`).
+    """
     level = _check_level(level)
+    default = statistic is None
+    if default:
+        statistic = _default_statistic(len(samples))
+    elif not samples:
+        raise ValueError("bootstrap_ci needs at least one sample")
     data = tuple(_clean(s) for s in samples)
     if any(d.size < 2 for d in data):
         raise ValueError("each sample needs at least two non-missing values")
+    shift = _offset(*data) if default else 0.0
+    if shift:
+        # Values far from zero next to their spread are bootstrapped shifted (exact; see _offset), so the tie
+        # tolerance below scales with their spread. A mean moves with the shift; a difference in means does not.
+        back = shift if len(data) == 1 else 0.0
+        estimate, lo, hi, dist = _bootstrap(tuple(d - shift for d in data), None, level, n_resamples, method, seed)
+        return estimate + back, lo + back, hi + back, dist + back
     estimate = float(statistic(*data))
     if all(np.ptp(d) == 0 for d in data):  # every resample equals the data: the interval is the estimate itself
         return estimate, estimate, estimate, np.full(n_resamples, estimate)
+    if default:
+        statistic = _tie_exact(statistic, estimate, _unit_scale(*data))
     kwargs = dict(n_resamples=n_resamples, confidence_level=level, method=method, vectorized=False)
     largest = max(d.size for d in data)
     if largest > _BOOTSTRAP_ONE_PIECE:
@@ -299,10 +421,8 @@ def _bootstrap(samples, statistic, level, n_resamples, method, seed):
         # They consume the random stream in a different order, so above the threshold a seeded
         # interval differs from the unbatched one by Monte Carlo noise; at or below it nothing changes.
         kwargs["batch"] = max(1, _BOOTSTRAP_BATCH_VALUES // largest)
-    try:
-        res = _st.bootstrap(data, statistic, rng=np.random.default_rng(seed), **kwargs)
-    except TypeError:  # SciPy < 1.15 names the argument random_state
-        res = _st.bootstrap(data, statistic, random_state=np.random.default_rng(seed), **kwargs)
+    kwargs[_RNG_KEYWORD] = np.random.default_rng(seed)
+    res = _st.bootstrap(data, statistic, **kwargs)
     lo, hi = res.confidence_interval
     return estimate, float(lo), float(hi), np.asarray(res.bootstrap_distribution)
 
@@ -444,7 +564,10 @@ def correlation_test(x: Sequence[float], y: Sequence[float], method: Literal["pe
     # Not np.ptp: for a column that is all +inf it is inf - inf = nan, and the constant column would get a p-value.
     if n < 3 or (x == x[0]).all() or (y == y[0]).all():
         return {"r": np.nan, "ci_low": np.nan, "ci_high": np.nan, "p": np.nan, "n": n}
-    res = _st.spearmanr(x, y) if method == "spearman" else _st.pearsonr(x, y)
+    if method == "spearman":
+        res = _st.spearmanr(x, y)
+    else:
+        res = _st.pearsonr(x - _offset(x), y - _offset(y))  # exact shifts, which r does not depend on; see _offset
     r, p = float(res[0]), float(res[1])
     if method == "spearman" and n <= _SPEARMAN_EXACT_MAX_N:
         p = _spearman_exact_p(x, y)
@@ -536,6 +659,8 @@ def _bin_edges(x: Sequence[float], rule: str) -> tuple[np.ndarray, str]:
         raise ValueError("no non-missing values")
     if rule not in ("fd", "sturges", "scott", "auto"):
         raise ValueError(f"rule must be 'fd', 'sturges', 'scott' or 'auto', got {rule!r}")
+    if rule in ("fd", "auto") and np.ptp(x) == 0:  # one distinct value: the IQR is 0 as well
+        return np.histogram_bin_edges(x, bins="sturges"), "sturges (IQR is 0, so FD is undefined)"
     if rule in ("fd", "auto") and np.ptp(x) > 0:
         # Decide before calling NumPy, which would try to allocate the huge bin array.
         span = float(np.ptp(x))

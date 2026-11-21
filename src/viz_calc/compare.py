@@ -209,8 +209,8 @@ def estimation_plot(
             continue
         # Resample the data divided by a power of two (exact), so BCa's sums of powers neither overflow nor underflow.
         s = st._unit_scale(ref, samples[g])
-        est, lo, hi, dist = st._bootstrap((ref / s, samples[g] / s), lambda a, b: st._mean(b) - st._mean(a),
-                                          level, n_resamples, "BCa", seed)
+        # The default statistic, mean(b) - mean(a), with ties to the estimate kept exact whatever the units.
+        est, lo, hi, dist = st._bootstrap((ref / s, samples[g] / s), None, level, n_resamples, "BCa", seed)
         est, lo, hi, dist = est * s, lo * s, hi * s, dist * s
         dens = _half_violin(dist)
         if dens is not None:
