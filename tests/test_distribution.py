@@ -32,3 +32,18 @@ def test_to_pptx_dpi_accepts_any_real_number(value, tmp_path):
     pytest.importorskip("pptx")
     res = vc.histogram(datasets.measurements(), "length")
     assert vc.to_pptx(res, str(tmp_path / "a.pptx"), dpi=value) == str(tmp_path / "a.pptx")
+
+
+# --- the bin rule reported for a column with a single value ------------------------------------------------------
+
+
+@pytest.mark.parametrize("rule", ["fd", "auto"])
+@pytest.mark.parametrize("value", [3, 3.0, 0.1])
+def test_a_constant_column_reports_the_sturges_fallback(rule, value):
+    d = pd.DataFrame({"v": [value] * 6})
+    res = vc.histogram(d, "v", bins=rule)
+    assert res.info["bin_rule"] == "sturges (IQR is 0, so FD is undefined)"
+    assert res.info["bin_edges"].tolist() == [value - 0.5, value + 0.5]
+    assert res.table["n"].tolist() == [6]
+    near = vc.histogram(pd.DataFrame({"v": [value] * 6 + [value + 1]}), "v", bins=rule)  # IQR 0, two values
+    assert near.info["bin_rule"] == res.info["bin_rule"]

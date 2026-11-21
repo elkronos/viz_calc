@@ -536,6 +536,8 @@ def _bin_edges(x: Sequence[float], rule: str) -> tuple[np.ndarray, str]:
         raise ValueError("no non-missing values")
     if rule not in ("fd", "sturges", "scott", "auto"):
         raise ValueError(f"rule must be 'fd', 'sturges', 'scott' or 'auto', got {rule!r}")
+    if rule in ("fd", "auto") and np.ptp(x) == 0:  # one distinct value: the IQR is 0 as well
+        return np.histogram_bin_edges(x, bins="sturges"), "sturges (IQR is 0, so FD is undefined)"
     if rule in ("fd", "auto") and np.ptp(x) > 0:
         # Decide before calling NumPy, which would try to allocate the huge bin array.
         span = float(np.ptp(x))
