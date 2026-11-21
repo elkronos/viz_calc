@@ -17,6 +17,7 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like, to_hex, to_rgb
 from matplotlib.ticker import ScalarFormatter
+from matplotlib.transforms import Bbox
 
 # Okabe & Ito (2008) "Color Universal Design" palette. The eight colours stay
 # distinguishable under the common forms of colour-vision deficiency.
@@ -56,6 +57,11 @@ class VizResult:
         A tidy ``DataFrame`` holding the values that were drawn.
     info
         Extra scalar results (test statistics, parameters used, notes).
+
+    A result can be pickled, figure included (for a cache or a process
+    pool), with two exceptions: ``animated_bubble``'s ``info["animation"]``,
+    a Matplotlib ``FuncAnimation``, which never pickles, and the figure of
+    ``network_map(directed=True)`` with networkx older than 3.3.
     """
 
     figure: Any
@@ -319,6 +325,28 @@ def slot_colors(colors: Any, slots: Sequence[str], name: str = "colors") -> list
     if bad:
         raise ValueError(f"{name} contains invalid colour(s): {bad}")
     return colors
+
+
+class _VisibleBar:
+    """The visible part of a bar, in display units: the box ``Axes.bar_label(label_type="center")`` centres on.
+
+    Matplotlib computes it with a lambda, which pickle cannot store; an
+    instance does the same and pickles with its figure.
+    """
+
+    def __init__(self, bar: Any) -> None:
+        self.bar = bar
+
+    def __call__(self, renderer: Any) -> Bbox:
+        return Bbox.intersection(self.bar.get_window_extent(renderer), self.bar.get_clip_box()) or Bbox.null()
+
+
+def center_labels(ax: Axes, bars: Any, labels: Sequence[str], **kwargs: Any) -> list[Any]:
+    """``ax.bar_label(bars, labels, label_type="center", **kwargs)``, with labels that can be pickled."""
+    texts = ax.bar_label(bars, labels=labels, label_type="center", **kwargs)
+    for text, bar in zip(texts, bars):
+        text.xycoords = _VisibleBar(bar)
+    return texts
 
 
 def text_color(background: str) -> str:

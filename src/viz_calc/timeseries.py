@@ -716,7 +716,8 @@ def animated_bubble(
     *size* (a column used for two of these appears once). *time* must be a
     different column from *x*, *y* and *size*. Save the animation with
     ``anim.save("out.gif")`` or show it in a notebook with
-    ``IPython.display.HTML(anim.to_jshtml())``.
+    ``IPython.display.HTML(anim.to_jshtml())``. A ``FuncAnimation`` cannot
+    be pickled, so neither can the whole result; its figure and table can.
 
     Parameters
     ----------
