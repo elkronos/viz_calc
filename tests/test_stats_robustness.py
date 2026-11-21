@@ -167,7 +167,6 @@ def test_constant_groups_are_constant_whatever_their_binary_representation(a, b)
     assert lo == hi == m
 
 
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")  # the BCa bootstrap of constant groups is degenerate
 def test_welch_df_of_two_constant_groups_is_the_documented_student_df():
     # The Welch-Satterthwaite df is 0/0 when both groups are constant; n_a + n_b - 2 is reported instead.
     assert st.welch_test([1, 1, np.nan], [2, 2, 2])["df"] == 3.0
