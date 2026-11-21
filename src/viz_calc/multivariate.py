@@ -79,7 +79,7 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     Z[:, constant] = 0.0
     if scale:
         sd = X.std(ddof=1).to_numpy()
-        flat = constant | ~(sd > 0)  # an SD of 0 or nan (infinite values) cannot be divided by either
+        flat = constant | ~(sd > 0)  # an SD of 0 or nan cannot be divided by either
         if flat.any():
             raise ValueError(f"constant feature(s) cannot be scaled: {[f for f, c in zip(features, flat) if c]}")
         Z = Z / sd
