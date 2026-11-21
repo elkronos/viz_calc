@@ -281,6 +281,9 @@ def raincloud(
     hides the data. Raincloud plots show all three with little clutter
     (Allen et al., 2019). Groups run along the vertical axis.
 
+    Rows with a missing *x* belong to no group, so they are left out;
+    ``info["dropped_missing_group"]`` counts them (0 when there are none).
+
     References
     ----------
     Allen, M., Poggiali, D., Whitaker, K., Marshall, T. R., & Kievit, R. A.
@@ -321,4 +324,4 @@ def raincloud(
     ax.set_xlabel(y)
     ax.set_ylabel(x)
     ax.spines[["top", "right"]].set_visible(False)
-    return VizResult(fig, ax, pd.DataFrame(rows))
+    return VizResult(fig, ax, pd.DataFrame(rows), {"dropped_missing_group": int(data[x].isna().sum())})

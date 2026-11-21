@@ -55,25 +55,40 @@ def _jitter(n: int, width: float, rng: np.random.Generator) -> np.ndarray:
 _TIE = 4 * np.finfo(float).eps  # a floating-point rounding difference, relative to the data's scale
 
 
-def _threshold(data: pd.DataFrame, y: str, threshold: Any) -> tuple[float, float]:
-    """``(value, tie tolerance)`` for a *threshold* option: a number, or ``"mean"``/``"median"`` of *y*.
+def _check_threshold(threshold: Any) -> None:
+    """Raise unless *threshold* is a finite number, ``"mean"`` or ``"median"``."""
+    if isinstance(threshold, str) and threshold in ("mean", "median"):
+        return
+    if isinstance(threshold, Real) and not isinstance(threshold, bool) and np.isfinite(float(threshold)):
+        return
+    raise ValueError(f"threshold must be a finite number, 'mean' or 'median', got {threshold!r}")
+
+
+def _drawn_rows(values: pd.Series, groups: Sequence[Any]) -> np.ndarray:
+    """Which rows of the group column *values* hold one of *groups*: the rows the chart draws."""
+    drawn = np.zeros(len(values), dtype=bool)
+    for g in groups:
+        drawn |= level_mask(values, g).to_numpy(dtype=bool, na_value=False)
+    return drawn
+
+
+def _threshold(values: pd.Series, threshold: Any) -> tuple[float, float]:
+    """``(value, tie tolerance)`` for a valid *threshold* option: a number, or ``"mean"``/``"median"`` of *values*.
 
     ``"mean"`` is the correctly rounded mean, and the tolerance is the rounding
     error the data can carry, so a value that equals the mean in decimal is
     not pushed to one side of it by floating-point arithmetic.
     """
-    values = data[y].to_numpy(dtype=float, na_value=np.nan)
-    values = values[~np.isnan(values)]
-    if values.size == 0:
-        raise ValueError(f"column {y!r} has no non-missing values")
-    if isinstance(threshold, str) and threshold in ("mean", "median"):
-        if threshold == "median":
-            return float(np.median(values)), 0.0
-        thr, scale = exact_mean(values), float(np.mean(np.abs(values)))
-        return thr, (_TIE * scale if np.isfinite(thr) and np.isfinite(scale) else 0.0)
-    if isinstance(threshold, Real) and not isinstance(threshold, bool) and np.isfinite(float(threshold)):
+    if not isinstance(threshold, str):
         return float(threshold), 0.0
-    raise ValueError(f"threshold must be a finite number, 'mean' or 'median', got {threshold!r}")
+    v = values.to_numpy(dtype=float, na_value=np.nan)
+    v = v[~np.isnan(v)]
+    if v.size == 0:
+        raise ValueError(f"threshold={threshold!r} needs a value of {values.name!r} in one of the groups drawn")
+    if threshold == "median":
+        return float(np.median(v)), 0.0
+    thr, scale = exact_mean(v), float(np.mean(np.abs(v)))
+    return thr, (_TIE * scale if np.isfinite(thr) and np.isfinite(scale) else 0.0)
 
 
 def _threshold_text(thr: float, tol: float, compared: Any) -> str:
@@ -132,7 +147,10 @@ def estimation_plot(
     data
         Long-format data: one row per observation.
     x
-        Grouping column.
+        Grouping column. Rows with a missing *x* belong to no group, so they
+        are left out of every group and comparison;
+        ``info["dropped_missing_group"]`` counts them (0 when there are
+        none).
     y
         Numeric outcome column.
     reference
@@ -239,7 +257,8 @@ def estimation_plot(
         ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     return VizResult(fig, np.array([ax_raw, ax_diff]), pd.DataFrame(rows),
-                     {"comparisons": comps_df, "level": level, "p_adjust": p_adjust, "reference": reference})
+                     {"comparisons": comps_df, "level": level, "p_adjust": p_adjust, "reference": reference,
+                      "dropped_missing_group": int(data[x].isna().sum())})
 
 
 def _half_violin(values: np.ndarray, points: int = 200):
@@ -281,13 +300,18 @@ def benchmark_bar(
     2005). Individual points are overlaid by default (Weissgerber et al.,
     2015).
 
+    Rows with a missing *x* belong to no group, so they are left out of the
+    bars and of the threshold; ``info["dropped_missing_group"]`` counts them
+    (0 when there are none).
+
     Parameters
     ----------
     threshold
-        A number, or ``"mean"``/``"median"`` of all observations of *y*.
-        ``"mean"`` is correctly rounded, and group means or CI limits that
-        differ from the threshold only by floating-point rounding count as
-        equal to it.
+        A number, or ``"mean"``/``"median"`` of the observations of *y* that
+        are drawn: those in the groups on the axis, so a group left out of
+        *order* does not count either. ``"mean"`` is correctly rounded, and
+        group means or CI limits that differ from the threshold only by
+        floating-point rounding count as equal to it.
     error
         What the error bars show: ``"ci"``, ``"se"`` or ``"sd"``.
     classify
@@ -314,9 +338,11 @@ def benchmark_bar(
     check_not_reserved(["n", "mean", "sd", "se", "ci_low", "ci_high", "status"], x=x)
     st._check_level(level)
     colors = slot_colors(colors, ("below", "above", "indistinguishable"))
-    thr, tol = _threshold(data, y, threshold)
+    check_has_values(data, y)
+    _check_threshold(threshold)
 
     groups = category_order(data[x], order)
+    thr, tol = _threshold(data[y][_drawn_rows(data[x], groups)], threshold)
     rows = []
     for g in groups:
         s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
@@ -365,7 +391,8 @@ def benchmark_bar(
     ax.legend(handles=[Patch(color=color_for[s], label=s) for s in present], frameon=False, loc="upper left",
               bbox_to_anchor=(1.01, 1))
     ax.spines[["top", "right"]].set_visible(False)
-    return VizResult(fig, ax, table, {"threshold": thr, "error": error, "classify": classify, "level": level})
+    return VizResult(fig, ax, table, {"threshold": thr, "error": error, "classify": classify, "level": level,
+                                      "dropped_missing_group": int(data[x].isna().sum())})
 
 
 @cleanup_on_error
@@ -644,12 +671,18 @@ def centered_bar(
     (Wilson, 1927), which behave well for small groups and extreme
     proportions (Brown, Cai & DasGupta, 2001).
 
+    Rows with a missing *x* belong to no group, so they are left out of the
+    bars and of the threshold; ``info["dropped_missing_group"]`` counts them
+    (0 when there are none).
+
     Parameters
     ----------
     threshold
-        A number, or ``"mean"``/``"median"`` of all observations of *y*.
-        ``"mean"`` is correctly rounded, and values that differ from it only
-        by floating-point rounding count as on it (so at-or-above).
+        A number, or ``"mean"``/``"median"`` of the observations of *y* that
+        are drawn: those in the groups on the axis, so a group left out of
+        *order* does not count either. ``"mean"`` is correctly rounded, and
+        values that differ from it only by floating-point rounding count as
+        on it (so at-or-above).
     level
         Confidence level of the Wilson intervals, strictly between 0 and 1
         (``0.95``, not ``95``).
@@ -664,8 +697,11 @@ def centered_bar(
     check_not_reserved(["n", "n_above", "p_above", "ci_low", "ci_high", "p_below"], x=x)
     st._check_level(level)
     colors = slot_colors(colors, ("at_or_above", "below"))
-    thr, tol = _threshold(data, y, threshold)
+    check_has_values(data, y)
+    _check_threshold(threshold)
     groups = category_order(data[x], order)
+    drawn = data[y][_drawn_rows(data[x], groups)]
+    thr, tol = _threshold(drawn, threshold)
     rows = []
     for g in groups:
         s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
@@ -675,7 +711,7 @@ def centered_bar(
                      "ci_low": float(lo), "ci_high": float(hi), "p_below": (n - k) / n if n else np.nan})
     table = pd.DataFrame(rows)
 
-    shown = _threshold_text(thr, tol, data[y].to_numpy(dtype=float, na_value=np.nan))
+    shown = _threshold_text(thr, tol, drawn.to_numpy(dtype=float, na_value=np.nan))
     fig, ax = get_ax(ax)
     pos = np.arange(len(table))
     up = ax.bar(pos, table["p_above"], color=colors[0], label=f"≥ {shown}")
@@ -699,7 +735,8 @@ def centered_bar(
     ax.set_title(f"Share of {y} above/below {shown} (error bars: {level_percent(level)} Wilson CI)", loc="left")
     ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1, 1))
     ax.spines[["top", "right"]].set_visible(False)
-    return VizResult(fig, ax, table, {"threshold": thr, "level": level})
+    return VizResult(fig, ax, table, {"threshold": thr, "level": level,
+                                      "dropped_missing_group": int(data[x].isna().sum())})
 
 
 @cleanup_on_error
