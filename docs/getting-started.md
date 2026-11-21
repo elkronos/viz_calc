@@ -260,6 +260,18 @@ same thing everywhere. The exceptions are listed here.
   [API reference](api.md)), in `profile_boxes` and `profile_scatters`, and
   in `animated_bubble`. `sankey` and `network_map` reject infinite flows
   and edge weights. Missing values are handled as each function describes.
+* **Missing groups.** Rows whose group is missing are not dropped by the
+  charts that describe the data: `lollipop`, `divergent_bar`,
+  `stacked_percentages`, `percent_grid`, `histogram` (`hue` and `facet`),
+  `ridgeplot`, `waffle`, `nested_pie`, `circular_bar`, `gantt` and
+  `pca_plot` draw them as a last group named "(missing)", in grey where
+  colour tells the groups apart. The charts that estimate or test
+  differences between groups (`estimation_plot`, `benchmark_bar`,
+  `centered_bar`, `raincloud`, `compare_correlations`) leave those rows out,
+  so they never enter a test or a p-value adjustment as a group of their
+  own, and count them in the result's info, under "dropped_missing_group".
+  In `benchmark_bar` and `centered_bar`, a `threshold` of "mean" or
+  "median" is taken from the rows in the groups drawn.
 * **Grid width** of multi-panel figures is `col_wrap` in `histogram`,
   `percent_grid` and `donut_grid`, and `ncols` in the `profile_*` functions.
 * **Column labels** need not be strings: a column labelled 0 (from a
