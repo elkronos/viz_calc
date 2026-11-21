@@ -633,7 +633,8 @@ def centered_bar(
         Confidence level of the Wilson intervals, strictly between 0 and 1
         (``0.95``, not ``95``).
     colors
-        A tuple of two colours: ``(at_or_above, below)``.
+        A tuple of two colours: ``(at_or_above, below)``. The share labels on
+        each bar are black or white, whichever reads better on its colour.
     """
     check_dataframe(data, [x, y])
     check_numeric(data, y)
@@ -660,8 +661,10 @@ def centered_bar(
                                              np.clip(table["ci_high"] - table["p_above"], 0, None)],
                 fmt="none", ecolor=foreground(ax), capsize=3, lw=1)
     if labels:
-        ax.bar_label(up, labels=[_share_label(v) for v in table["p_above"]], padding=2, fontsize=8, label_type="center", color="white")
-        ax.bar_label(down, labels=[_share_label(v) for v in table["p_below"]], padding=2, fontsize=8, label_type="center", color="black")
+        ax.bar_label(up, labels=[_share_label(v) for v in table["p_above"]], padding=2, fontsize=8, label_type="center",
+                     color=text_color(colors[0]))
+        ax.bar_label(down, labels=[_share_label(v) for v in table["p_below"]], padding=2, fontsize=8, label_type="center",
+                     color=text_color(colors[1]))
     ax.axhline(0, color=foreground(ax), lw=0.8)
     ax.set_ylim(-1.05, 1.05)
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{abs(v):.0%}"))

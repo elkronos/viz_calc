@@ -23,8 +23,10 @@ from ._core import (
     check_has_values,
     check_numeric,
     cleanup_on_error,
+    foreground,
     palette,
     require,
+    text_color,
 )
 
 __all__ = ["network_map", "sankey"]
@@ -318,6 +320,8 @@ def network_map(
     graphs, communities are found on the undirected graph with reciprocal
     weights summed.
 
+    Node labels are black or white, whichever reads better on the node's
+    colour; a label wider than its node is drawn in the axes foreground.
     Set ``interactive=True`` for a Plotly figure with hover details.
 
     References
@@ -513,7 +517,12 @@ def network_map(
         nx.draw_networkx_edges(G, pos, ax=ax, width=widths, edge_color="#aaaaaa", arrows=False)
     nx.draw_networkx_nodes(G, pos, ax=ax, node_size=sizes, node_color=node_colors, edgecolors="white")
     if labels:
-        nx.draw_networkx_labels(G, pos, ax=ax, font_size=8)
+        texts = nx.draw_networkx_labels(G, pos, ax=ax, font_size=8)
+        # A label that fits inside its node is read against the node's colour; a wider one mostly against the face.
+        diameter = dict(zip(nodes, np.sqrt(sizes) * fig.dpi / 72))  # node_size is an area in points²
+        fill = dict(zip(nodes, node_colors))
+        for node, t in texts.items():
+            t.set_color(text_color(fill[node]) if t.get_window_extent().width <= diameter[node] else foreground(ax))
     if communities and ncomm > 1:
         ax.legend(handles=[Patch(color=c, label=f"community {i}") for i, c in enumerate(cols)], frameon=False,
                   loc="upper left", bbox_to_anchor=(1.01, 1))

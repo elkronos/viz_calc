@@ -342,13 +342,14 @@ def donut_grid(
     """One donut per row of a wide table (rows = charts, columns = categories).
 
     Every category keeps the same colour in every donut. The row total is
-    printed in the centre. Shares below *min_label* percent (a finite number)
-    are not labelled. *columns* (a list of distinct labels or any other
-    iterable of them, e.g. ``df.columns[1:]``, but not a lone string)
-    defaults to the numeric, non-boolean columns. Values must be
-    non-negative and not missing (fill or drop missing cells first); an
-    all-zero row is drawn as an empty grey ring. *col_wrap* (donuts per row)
-    must be a positive integer.
+    printed in the centre. Each share is printed on its wedge in black or
+    white, whichever reads better on the wedge's colour; shares below
+    *min_label* percent (a finite number) are not labelled. *columns* (a
+    list of distinct labels or any other iterable of them, e.g.
+    ``df.columns[1:]``, but not a lone string) defaults to the numeric,
+    non-boolean columns. Values must be non-negative and not missing (fill
+    or drop missing cells first); an all-zero row is drawn as an empty grey
+    ring. *col_wrap* (donuts per row) must be a positive integer.
 
     Note: people compare angles less accurately than lengths (Cleveland &
     McGill, 1984); for precise comparisons use :func:`stacked_percentages`.
@@ -381,10 +382,11 @@ def donut_grid(
         wedges, _ = ax.pie(vals if total else np.ones_like(vals), colors=cols if total else ["#eeeeee"] * len(vals),
                            startangle=90, counterclock=False, wedgeprops={"width": 0.4, "edgecolor": "white"})
         if labels and total:
-            for w, sh in zip(wedges, share):
+            for w, sh, c in zip(wedges, share, cols):
                 if sh >= min_label:
                     ang = np.deg2rad((w.theta1 + w.theta2) / 2)
-                    ax.text(0.8 * np.cos(ang), 0.8 * np.sin(ang), f"{sh:.0f}%", ha="center", va="center", fontsize=8)
+                    ax.text(0.8 * np.cos(ang), 0.8 * np.sin(ang), f"{sh:.0f}%", ha="center", va="center", fontsize=8,
+                            color=text_color(c))
         ax.text(0, 0, abbreviate(total), ha="center", va="center", fontsize=11, weight="bold")
         ax.set_title(level_label(idx), fontsize="medium")
     for ax in list(axes.flat)[n:]:

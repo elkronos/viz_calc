@@ -185,3 +185,82 @@ def test_foreground_follows_the_face_it_is_drawn_on():
     assert _core.foreground(ax) == "black"
     with plt.rc_context({"text.color": "white"}):  # nothing opaque behind: light text means a dark page
         assert _core.foreground(ax) == "#ffffff"
+
+
+# --- labels drawn on a fill take black or white from that fill ------------------------------------------------------
+
+LIGHT_AND_DARK = [("#F0E442", "#08306b"), ("#08306b", "#F0E442")]
+
+
+@pytest.mark.parametrize("dark", [False, True], ids=["default style", "dark style"])
+@pytest.mark.parametrize("colors", [None, *LIGHT_AND_DARK])
+def test_donut_grid_labels_read_on_their_wedge(dark, colors):
+    data = pd.DataFrame({"a": [3, 5], "b": [4, 2]}, index=["x", "y"])
+    with plt.rc_context():
+        if dark:
+            plt.style.use("dark_background")
+        res = vc.donut_grid(data, colors=None if colors is None else list(colors))
+    checked = 0
+    for ax in res.figure.axes:
+        for t in ax.texts:
+            if t.get_text().endswith("%"):
+                point = ax.transData.transform(t.get_position())
+                wedge = next(w for w in ax.patches if w.contains_point(point))
+                assert _contrast(t.get_color(), wedge.get_facecolor()) >= 4.5, (t.get_text(), to_hex(t.get_color()))
+                checked += 1
+    assert checked == 4
+
+
+@pytest.mark.parametrize("colors", LIGHT_AND_DARK)
+def test_centered_bar_labels_read_on_their_bar(colors):
+    res = vc.centered_bar(datasets.trial(), x="arm", y="score", threshold=55, colors=colors)
+    ax = res.axes
+    assert len(ax.texts) == len(ax.patches) == 6  # one centred label per bar, in bar order
+    for t, bar in zip(ax.texts, ax.patches):
+        assert _contrast(t.get_color(), bar.get_facecolor()) >= 4.5, (t.get_text(), to_hex(t.get_color()))
+
+
+def _check_matrix_labels(ax):
+    im = ax.images[0]
+    cells = im.get_array()
+    labels = [t for t in ax.texts if t.get_text()]
+    assert labels
+    for t in labels:
+        col, row = (int(round(v)) for v in t.get_position())
+        cell = im.cmap(im.norm(cells[row, col]))
+        assert _contrast(t.get_color(), cell) >= 4.5, (t.get_text(), to_hex(t.get_color()), to_hex(cell))
+
+
+@pytest.mark.parametrize("cmap", ["viridis", "cividis", "RdBu_r", "PuOr_r"])
+def test_matrix_labels_read_on_their_cell(cmap):
+    meas = datasets.measurements()
+    _check_matrix_labels(vc.correlogram(meas, method="spearman", cmap=cmap).axes)
+    res = vc.compare_correlations(meas, group="group", columns=["length", "width", "depth", "mass"], cmap=cmap)
+    for ax in res.axes.flat:
+        if ax.get_visible():
+            _check_matrix_labels(ax)
+
+
+@pytest.mark.parametrize("dark", [False, True], ids=["default style", "dark style"])
+def test_network_labels_read_on_their_node_or_on_the_face(dark):
+    pytest.importorskip("networkx")
+    from matplotlib.collections import PathCollection
+
+    with plt.rc_context():
+        if dark:
+            plt.style.use("dark_background")
+        res = vc.network_map(datasets.network(), source="source", target="target", weight="strength",
+                             size_by="betweenness")
+    ax = res.axes
+    nodes = next(c for c in ax.collections if isinstance(c, PathCollection))
+    order = list(res.table["node"])
+    on_node = 0
+    for t in ax.texts:
+        k = order.index(t.get_text())
+        diameter = np.sqrt(nodes.get_sizes()[k]) * res.figure.dpi / 72
+        if t.get_window_extent().width <= diameter:
+            on_node += 1
+            assert _contrast(t.get_color(), nodes.get_facecolors()[k]) >= 4.5, (t.get_text(), to_hex(t.get_color()))
+        else:  # wider than its node: most of the label is on the axes face
+            assert _contrast(t.get_color(), ax.get_facecolor()) >= 4.5, t.get_text()
+    assert on_node >= len(order) // 2
