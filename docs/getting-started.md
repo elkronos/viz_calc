@@ -116,8 +116,10 @@ its backslash; `text.parse_math` itself is off only while the call runs.
 Everything else keeps Matplotlib's rules: text already on an Axes you pass as
 `ax=`, text you add or change afterwards
 (`res.axes.set_xlabel(r"Dose ($\mu$g)")` draws a μ), and numbers such as the
-tick labels of a log axis. A title, label or tick label that held a `$` from
-the data stays literal when you change it later; pass `parse_math=True`
+tick labels of a log axis. A legend the chart adds to your Axes is the chart's
+text, so it shows the labels of your own artists there as written too. A
+title, label or tick label that held a `$` from the data stays literal when
+you change it later; pass `parse_math=True`
 (`res.axes.set_title(r"$\alpha$ = 0.05", parse_math=True)`) for mathtext there.
 
 In the Plotly figures (`sankey` and `network_map(interactive=True)`) node
