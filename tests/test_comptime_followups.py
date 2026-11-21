@@ -319,7 +319,7 @@ def test_animated_bubble_mixed_number_and_text_times_raise_clearly():
 def test_upset_boolean_set_names_give_correct_degrees():
     two = pd.DataFrame({False: [True, False], True: [True, True]})  # intersections {False, True} and {True}
     table = vc.upset(two).table
-    degrees = {tuple(bool(v) for v in row[[0, 1]]): row["degree"] for _, row in table.iterrows()}
+    degrees = {tuple(bool(v) for v in row.iloc[[0, 1]]): row["degree"] for _, row in table.iterrows()}
     assert degrees == {(True, True): 2, (False, True): 1}
 
 

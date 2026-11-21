@@ -146,7 +146,11 @@ TABLES = [  # page, text in the block that makes the table, where the numbers ar
 @pytest.mark.parametrize("page,call,source,keys,ordered", TABLES, ids=[f"{p.split('/')[-1]}:{c}" for p, c, *_ in TABLES])
 def test_documented_table_matches_code(page, call, source, keys, ordered):
     text, records = _read(page), _run(page)
-    i = next(i for i, r in enumerate(records) if call in r["code"])
+    i = next((i for i, r in enumerate(records) if call in r["code"]), None)
+    err = records[-1]["error"]
+    if i is None and isinstance(err, ImportError) and "optional dependency" in str(err):
+        pytest.skip(f"{page} stopped before the block with {call}: {err}")
+    assert i is not None, f"{page}: no block contains {call}"
     rec = records[i]
     if isinstance(rec["error"], ImportError):
         pytest.skip(str(rec["error"]))
