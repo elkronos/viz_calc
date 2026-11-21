@@ -43,35 +43,81 @@ __all__ = ["period_bars", "timeseries_fill", "calendar_heatmap", "gantt", "durat
 
 _PERIOD = {"day": "D", "week": "W", "month": "M", "quarter": "Q", "year": "Y"}
 
+# A clock time (group 1) followed by a UTC offset at the end of the text: "Z", "+01:00", "+0100" or "+01"
+_OFFSET_AT_END = r"(\d:\d\d(?::\d\d(?:[.,]\d+)?)?)\s*(?:[Zz]|[+-]\d\d(?::?\d\d)?)\s*$"
+_HAS_OFFSET = re.compile(_OFFSET_AT_END)
+
+
+def _lacks_offset(values: pd.Series) -> bool:
+    """Whether any of *values* (text or datetimes, none missing) has no UTC offset.
+
+    Text that ends in a clock time and an offset is accepted without parsing;
+    every other value is parsed on its own, so zones written another way
+    (``"UTC"``, ``"GMT"``) count as offsets too.
+    """
+    for v in pd.unique(values.to_numpy(dtype=object)):
+        if isinstance(v, str) and _HAS_OFFSET.search(v):
+            continue
+        if pd.Timestamp(v).tzinfo is None:
+            return True
+    return False
+
+
+def _numpy_dates(s: pd.Series) -> pd.Series:
+    """Arrow-backed dates and timestamps -> NumPy datetime64, keeping the time zone; other columns are unchanged.
+
+    ``read_parquet`` and ``read_csv(engine="pyarrow")`` with
+    ``dtype_backend="pyarrow"`` return these. pandas handles them differently
+    from one version to the next (on pandas 3, ``.dt.tz`` and
+    ``.dt.to_period`` fail for them), so the date code works on NumPy values.
+    """
+    if not isinstance(s.dtype, pd.ArrowDtype):
+        return s
+    import pyarrow as pa  # installed whenever a column has an ArrowDtype
+
+    t = s.dtype.pyarrow_dtype
+    if pa.types.is_timestamp(t):
+        return s.astype(pd.DatetimeTZDtype(t.unit, t.tz) if t.tz else f"datetime64[{t.unit}]")
+    if pa.types.is_date(t):
+        try:
+            return pd.to_datetime(s)  # NumPy datetime64[ns] on pandas 2, datetime64[s] on pandas 3
+        except (ValueError, OverflowError):  # past 2262 on pandas 2: _dates then names the column in its error
+            return s.astype(object)
+    return s
+
 
 def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = False) -> pd.Series:
     """Parse *s* to datetimes, strictly.
 
-    Accepts datetime columns, strings pandas can parse with one consistent
-    format, and ISO-8601 strings that mix date-only and date-time values or
-    carry different UTC offsets (e.g. across a daylight-saving change).
-    Ambiguous mixtures (such as day-first and month-first strings) raise
-    instead of being guessed element by element.
+    Accepts datetime columns (Arrow-backed ones too), strings pandas can
+    parse with one consistent format, and ISO-8601 strings that mix
+    date-only and date-time values or carry different UTC offsets (e.g.
+    across a daylight-saving change). Ambiguous mixtures (such as day-first
+    and month-first strings) raise instead of being guessed element by
+    element.
 
     With ``keep_tz=False`` timezone-aware values become naive local wall-clock
     times, so each value lands on the calendar day it was recorded in. With
     ``keep_tz=True`` time zones are kept (mixed offsets become UTC), so
-    elapsed times and instants stay exact.
+    elapsed times and instants stay exact, and text that mixes values with
+    and without a UTC offset raises on every pandas version (pandas 2.2 and
+    2.3 would give the offset-less values the others' offset).
 
     With ``dayfirst=True`` numeric dates such as ``"05/01/2021"`` are read
     day first (5 January). It is not meant for ISO 8601 strings, which
     pandas would then read as year-day-month.
     """
 
-    def attempt(**kwargs):
+    def attempt(values, **kwargs):
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", FutureWarning)  # pandas 2.x warns about mixed offsets
-                out = pd.to_datetime(s, **kwargs)
+                out = pd.to_datetime(values, **kwargs)
         except (ValueError, TypeError, OverflowError):
             return None
         return out if pd.api.types.is_datetime64_any_dtype(out) else None
 
+    s = _numpy_dates(s)
     if s.notna().sum() == 0:  # e.g. a blank CSV column read as float NaN: nothing to parse
         return pd.Series(pd.NaT, index=s.index, dtype="datetime64[ns]")
     values = s.cat.categories if isinstance(s.dtype, pd.CategoricalDtype) else s
@@ -82,23 +128,30 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
     if numeric:
         raise ValueError(f"column {name!r} holds numbers, which are ambiguous as dates (years? epoch seconds?); "
                          "convert it first, e.g. pd.to_datetime(values, unit='s') or format='%Y'")
-    out = s if pd.api.types.is_datetime64_any_dtype(s) else attempt(dayfirst=dayfirst)
+    out = s if pd.api.types.is_datetime64_any_dtype(s) else attempt(s, dayfirst=dayfirst)
     if out is None:
-        out = attempt(format="ISO8601")  # date-only and date-time ISO strings together
+        out = attempt(s, format="ISO8601")  # date-only and date-time ISO strings together
     if out is None:
-        utc = attempt(format="ISO8601", utc=True)  # ISO strings with different UTC offsets
+        utc = attempt(s, format="ISO8601", utc=True)  # ISO strings with different UTC offsets
         if utc is None:
             raise ValueError(f"column {name!r} could not be parsed as dates; use one consistent format, "
                              "ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
         if keep_tz:
-            # A list, not s.map(): mapping a Categorical can return a Categorical, which has no .all().
-            has_zone = [pd.Timestamp(v).tzinfo is not None for v in s[utc.notna()]]  # blanks don't count
-            if not all(has_zone):  # an offset-less value would silently be read as UTC
-                raise ValueError(f"column {name!r} mixes values with and without a UTC offset; make them consistent")
             out = utc
-        else:  # the strings are valid ISO 8601, so element-wise parsing is unambiguous
-            out = pd.to_datetime(s.map(lambda v: pd.NaT if pd.isna(v) else pd.Timestamp(v).tz_localize(None)))
-    if not keep_tz and getattr(out.dt, "tz", None) is not None:
+        else:
+            # The strings are valid ISO 8601, so each wall-clock time is the text without its offset, parsed in one go
+            try:
+                out = attempt(s.str.replace(_OFFSET_AT_END, r"\1", regex=True), format="ISO8601")
+            except (AttributeError, NotImplementedError):  # not text, or Arrow text (pandas 2.3 refuses \1 there)
+                out = None
+            if out is None or getattr(out.dtype, "tz", None) is not None or not out.isna().equals(utc.isna()):
+                # Anything that reads differently without its offset is parsed one value at a time (slower)
+                out = pd.to_datetime(s.map(lambda v: pd.NaT if pd.isna(v) else pd.Timestamp(v).tz_localize(None)))
+    # An offset-less value is read as UTC (utc=True) or, on pandas 2.2 and 2.3, given the others' offset
+    if keep_tz and out is not s and getattr(out.dtype, "tz", None) is not None:
+        if _lacks_offset(s[out.notna().to_numpy()]):  # blanks don't count
+            raise ValueError(f"column {name!r} mixes values with and without a UTC offset; make them consistent")
+    if not keep_tz and getattr(out.dtype, "tz", None) is not None:
         out = out.dt.tz_localize(None)
     return out
 
@@ -259,7 +312,7 @@ def timeseries_fill(
     colors = slot_colors(colors, ("first series", "second series"))
     check_has_values(data, time, a, b)
     d = data[[time, a, b]].copy()
-    col = d[time]
+    col = _numpy_dates(d[time])
     if isinstance(col.dtype, pd.CategoricalDtype):  # judge a Categorical by its values (NaN-safe)
         col = col.astype(object)
     if not pd.api.types.is_numeric_dtype(col) and not pd.api.types.is_datetime64_any_dtype(col):
@@ -276,15 +329,20 @@ def timeseries_fill(
     d[time] = _numpy_numbers(col)
     d = d.dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
     t = d[time]
+    tz = getattr(t.dtype, "tz", None)
+    # Matplotlib converts tz-aware values one Timestamp at a time; their UTC date numbers draw the same, fast
+    x = mdates.date2num(_instant(t)) if tz is not None else t
     ya = d[a].to_numpy(dtype=float, na_value=np.nan)  # nullable dtypes with NA on pandas 2.0
     yb = d[b].to_numpy(dtype=float, na_value=np.nan)
     fig, ax = get_ax(ax, figsize=(10, 4.5))
-    ax.plot(t, ya, color=colors[0], lw=1.8, label=names[0])
-    ax.plot(t, yb, color=colors[1], lw=1.8, label=names[1])
-    ax.fill_between(t, ya, yb, where=ya >= yb, interpolate=True, color=colors[0], alpha=alpha, lw=0)
-    ax.fill_between(t, ya, yb, where=ya < yb, interpolate=True, color=colors[1], alpha=alpha, lw=0)
+    ax.plot(x, ya, color=colors[0], lw=1.8, label=names[0])
+    ax.plot(x, yb, color=colors[1], lw=1.8, label=names[1])
+    ax.fill_between(x, ya, yb, where=ya >= yb, interpolate=True, color=colors[0], alpha=alpha, lw=0)
+    ax.fill_between(x, ya, yb, where=ya < yb, interpolate=True, color=colors[1], alpha=alpha, lw=0)
+    if tz is not None:
+        ax.xaxis_date(tz)  # a date axis in the data's zone, as plotting the values themselves gives
     if pd.api.types.is_datetime64_any_dtype(t):
-        _date_axis(ax, tz=getattr(t.dt, "tz", None))
+        _date_axis(ax, tz=tz)
     ax.set_xlabel(time)
     ax.legend(frameon=False, loc="upper left")
     ax.spines[["top", "right"]].set_visible(False)
@@ -307,11 +365,13 @@ def calendar_heatmap(
     cmap: str = "viridis",
     missing_color: str = "#eeeeee",
 ) -> VizResult:
-    """Calendar heatmap (one row of weeks per year), like a contribution graph.
+    """Calendar heatmap (one row of weeks per year with data), like a contribution graph.
 
     Days are aggregated with *stat* (count rows when *value* is omitted).
     Days without data are drawn in *missing_color* so they are not confused
-    with zero. One colour scale is shared across years.
+    with zero. One colour scale is shared across years. Years without any
+    dated rows get no row, so a stray placeholder date such as
+    ``9999-12-31`` adds one row, not one for every year in between.
 
     Parameters
     ----------
@@ -340,7 +400,7 @@ def calendar_heatmap(
             daily[grouped.count() == 0] = np.nan  # a day whose values are all missing is "no data", not 0
     if daily.empty or daily.isna().all():
         raise ValueError("no dated rows with data")
-    years = list(range(daily.index.min().year, daily.index.max().year + 1))
+    years = sorted(daily.index.year.unique())
     vmin, vmax = float(np.nanmin(daily)), float(np.nanmax(daily))
     fig, axes = plt.subplots(len(years), 1, figsize=(12, 2.1 * len(years) + 0.4), squeeze=False)
     for ax, year in zip(axes[:, 0], years):
@@ -369,7 +429,7 @@ def calendar_heatmap(
 def _instant(t: Any) -> Any:
     """Matplotlib date numbers are UTC: convert tz-aware values to naive UTC (naive values are left alone)."""
     if isinstance(t, pd.Series):
-        return t.dt.tz_convert("UTC").dt.tz_localize(None) if getattr(t.dt, "tz", None) is not None else t
+        return t.dt.tz_convert("UTC").dt.tz_localize(None) if getattr(t.dtype, "tz", None) is not None else t
     return t.tz_convert("UTC").tz_localize(None) if t.tzinfo is not None else t
 
 
@@ -389,13 +449,13 @@ def _timeline_columns(d: pd.DataFrame, columns: Sequence[str]) -> Any:
     for c in columns:
         d[c] = _dates(d[c], c, keep_tz=True)
     used = [c for c in columns if d[c].notna().any()]  # an all-empty column has no zone to compare
-    zones = [getattr(d[c].dt, "tz", None) for c in used]
+    zones = [getattr(d[c].dtype, "tz", None) for c in used]
     if any(z is None for z in zones) and any(z is not None for z in zones):
         raise ValueError(f"columns {list(columns)} mix timezone-aware and naive dates; make them consistent")
     tz = next((z for z in zones if z is not None), None)
     for c in columns:  # give empty columns the common zone (or none) so the subtractions work
         if c not in used:
-            own = getattr(d[c].dt, "tz", None)
+            own = getattr(d[c].dtype, "tz", None)
             if tz is not None:
                 d[c] = d[c].dt.tz_localize(tz) if own is None else d[c].dt.tz_convert(tz)
             elif own is not None:
