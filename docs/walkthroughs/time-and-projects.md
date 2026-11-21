@@ -8,6 +8,14 @@ sales = datasets.sales()        # two years of daily 'online' and 'store' sales
 proj = datasets.projects()      # six tasks with planned and actual dates
 ```
 
+Date columns can hold datetimes, with or without a time zone, including the
+Arrow-backed dates that `pd.read_parquet` and `pd.read_csv(engine="pyarrow")`
+return with `dtype_backend="pyarrow"`, or text in one consistent format,
+ideally ISO 8601 (`2024-03-15`, `2024-03-15 09:30+01:00`). `timeseries_fill`,
+`gantt` and `duration_plot` keep time zones, so text that mixes values with
+and without a UTC offset raises a `ValueError` instead of guessing the
+missing offsets.
+
 ## 1. Calendar periods with a trend
 
 ```python

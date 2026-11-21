@@ -62,14 +62,35 @@ def _lacks_offset(values: pd.Series) -> bool:
     return False
 
 
+def _numpy_dates(s: pd.Series) -> pd.Series:
+    """Arrow-backed dates and timestamps -> NumPy datetime64, keeping the time zone; other columns are unchanged.
+
+    ``read_parquet`` and ``read_csv(engine="pyarrow")`` with
+    ``dtype_backend="pyarrow"`` return these. pandas handles them differently
+    from one version to the next (on pandas 3, ``.dt.tz`` and
+    ``.dt.to_period`` fail for them), so the date code works on NumPy values.
+    """
+    if not isinstance(s.dtype, pd.ArrowDtype):
+        return s
+    import pyarrow as pa  # installed whenever a column has an ArrowDtype
+
+    t = s.dtype.pyarrow_dtype
+    if pa.types.is_timestamp(t):
+        return s.astype(pd.DatetimeTZDtype(t.unit, t.tz) if t.tz else f"datetime64[{t.unit}]")
+    if pa.types.is_date(t):
+        return pd.to_datetime(s)  # NumPy datetime64[ns] on pandas 2, datetime64[s] on pandas 3
+    return s
+
+
 def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = False) -> pd.Series:
     """Parse *s* to datetimes, strictly.
 
-    Accepts datetime columns, strings pandas can parse with one consistent
-    format, and ISO-8601 strings that mix date-only and date-time values or
-    carry different UTC offsets (e.g. across a daylight-saving change).
-    Ambiguous mixtures (such as day-first and month-first strings) raise
-    instead of being guessed element by element.
+    Accepts datetime columns (Arrow-backed ones too), strings pandas can
+    parse with one consistent format, and ISO-8601 strings that mix
+    date-only and date-time values or carry different UTC offsets (e.g.
+    across a daylight-saving change). Ambiguous mixtures (such as day-first
+    and month-first strings) raise instead of being guessed element by
+    element.
 
     With ``keep_tz=False`` timezone-aware values become naive local wall-clock
     times, so each value lands on the calendar day it was recorded in. With
@@ -92,6 +113,7 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
             return None
         return out if pd.api.types.is_datetime64_any_dtype(out) else None
 
+    s = _numpy_dates(s)
     if s.notna().sum() == 0:  # e.g. a blank CSV column read as float NaN: nothing to parse
         return pd.Series(pd.NaT, index=s.index, dtype="datetime64[ns]")
     values = s.cat.categories if isinstance(s.dtype, pd.CategoricalDtype) else s
@@ -118,7 +140,7 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
     if keep_tz and out is not s and getattr(out.dtype, "tz", None) is not None:
         if _lacks_offset(s[out.notna().to_numpy()]):  # blanks don't count
             raise ValueError(f"column {name!r} mixes values with and without a UTC offset; make them consistent")
-    if not keep_tz and getattr(out.dt, "tz", None) is not None:
+    if not keep_tz and getattr(out.dtype, "tz", None) is not None:
         out = out.dt.tz_localize(None)
     return out
 
@@ -279,7 +301,7 @@ def timeseries_fill(
     colors = slot_colors(colors, ("first series", "second series"))
     check_has_values(data, time, a, b)
     d = data[[time, a, b]].copy()
-    col = d[time]
+    col = _numpy_dates(d[time])
     if isinstance(col.dtype, pd.CategoricalDtype):  # judge a Categorical by its values (NaN-safe)
         col = col.astype(object)
     if not pd.api.types.is_numeric_dtype(col) and not pd.api.types.is_datetime64_any_dtype(col):
@@ -304,7 +326,7 @@ def timeseries_fill(
     ax.fill_between(t, ya, yb, where=ya >= yb, interpolate=True, color=colors[0], alpha=alpha, lw=0)
     ax.fill_between(t, ya, yb, where=ya < yb, interpolate=True, color=colors[1], alpha=alpha, lw=0)
     if pd.api.types.is_datetime64_any_dtype(t):
-        _date_axis(ax, tz=getattr(t.dt, "tz", None))
+        _date_axis(ax, tz=getattr(t.dtype, "tz", None))
     ax.set_xlabel(time)
     ax.legend(frameon=False, loc="upper left")
     ax.spines[["top", "right"]].set_visible(False)
@@ -389,7 +411,7 @@ def calendar_heatmap(
 def _instant(t: Any) -> Any:
     """Matplotlib date numbers are UTC: convert tz-aware values to naive UTC (naive values are left alone)."""
     if isinstance(t, pd.Series):
-        return t.dt.tz_convert("UTC").dt.tz_localize(None) if getattr(t.dt, "tz", None) is not None else t
+        return t.dt.tz_convert("UTC").dt.tz_localize(None) if getattr(t.dtype, "tz", None) is not None else t
     return t.tz_convert("UTC").tz_localize(None) if t.tzinfo is not None else t
 
 
@@ -409,13 +431,13 @@ def _timeline_columns(d: pd.DataFrame, columns: Sequence[str]) -> Any:
     for c in columns:
         d[c] = _dates(d[c], c, keep_tz=True)
     used = [c for c in columns if d[c].notna().any()]  # an all-empty column has no zone to compare
-    zones = [getattr(d[c].dt, "tz", None) for c in used]
+    zones = [getattr(d[c].dtype, "tz", None) for c in used]
     if any(z is None for z in zones) and any(z is not None for z in zones):
         raise ValueError(f"columns {list(columns)} mix timezone-aware and naive dates; make them consistent")
     tz = next((z for z in zones if z is not None), None)
     for c in columns:  # give empty columns the common zone (or none) so the subtractions work
         if c not in used:
-            own = getattr(d[c].dt, "tz", None)
+            own = getattr(d[c].dtype, "tz", None)
             if tz is not None:
                 d[c] = d[c].dt.tz_localize(tz) if own is None else d[c].dt.tz_convert(tz)
             elif own is not None:

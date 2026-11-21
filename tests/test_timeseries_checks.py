@@ -1,6 +1,7 @@
 """Time charts: input validation, colour roles, date labels and figure cleanup."""
 
 import inspect
+import io
 import re
 import warnings
 from pathlib import Path
@@ -278,6 +279,42 @@ def test_gantt_categorical_group_with_unused_categories_does_not_warn():
     bars = [to_hex(p.get_facecolor()) for p in res.axes.patches]
     expected = ["(missing)" if pd.isna(t) else t for t in proj["team"]]
     assert bars == [legend[t] for t in expected]
+
+
+# --- Arrow-backed dates ---------------------------------------------------------------------------------------------
+
+
+_ARROW_CSV = "task,date,start,end,v,w\n" + "\n".join(
+    f"t{i},2024-03-{i + 25:02d},2024-03-{i + 25:02d},2024-04-{i + 1:02d},{i},{4 - i}" for i in range(5))
+
+_ARROW_CALLS = {
+    "period_bars": lambda d: vc.period_bars(d, date="date", value="v", freq="week"),
+    "timeseries_fill": lambda d: vc.timeseries_fill(d, time="date", series=["v", "w"]),
+    "calendar_heatmap": lambda d: vc.calendar_heatmap(d, date="date", value="v"),
+    "gantt": lambda d: vc.gantt(d, task="task", start="start", end="end", today="2024-03-27"),
+    "duration_plot": lambda d: vc.duration_plot(d, label="task", start="start", end="end", inner_start="start",
+                                                inner_end="end"),
+}
+
+
+@pytest.mark.parametrize("call", list(_ARROW_CALLS.values()), ids=list(_ARROW_CALLS))
+@pytest.mark.parametrize("source", ["read_csv", "convert_dtypes", "convert_dtypes with a zone"])
+def test_arrow_backed_dates_give_the_same_table(call, source):
+    # read_csv(engine="pyarrow") gives date32[pyarrow] columns, convert_dtypes timestamp[pyarrow] ones
+    pytest.importorskip("pyarrow")
+    plain = pd.read_csv(io.StringIO(_ARROW_CSV), parse_dates=["date", "start", "end"])
+    if source.endswith("zone"):  # 2024-03-31 is a daylight-saving change in Berlin
+        plain = plain.assign(**{c: plain[c].dt.tz_localize("Europe/Berlin") for c in ("date", "start", "end")})
+    if source == "read_csv":
+        arrow = pd.read_csv(io.StringIO(_ARROW_CSV), engine="pyarrow", dtype_backend="pyarrow")
+    else:
+        arrow = plain.convert_dtypes(dtype_backend="pyarrow")
+    assert isinstance(arrow["date"].dtype, pd.ArrowDtype)
+    expected = call(plain).table
+    table = call(arrow).table
+    pd.testing.assert_frame_equal(table, expected, check_dtype=False)
+    dates = [c for c in expected if pd.api.types.is_datetime64_any_dtype(expected[c])]
+    assert dates and not [c for c in dates if isinstance(table[c].dtype, pd.ArrowDtype)]
 
 
 # --- the walkthrough ------------------------------------------------------------------------------------------------
