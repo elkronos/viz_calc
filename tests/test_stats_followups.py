@@ -155,6 +155,13 @@ def test_bootstrap_ci_checks_its_options_before_resampling(data, kwargs, message
         st.bootstrap_ci(*data, **kwargs)
 
 
+def test_bootstrap_ci_seed_can_be_a_numpy_generator():
+    a, b = [1.0, 2.0, 4.0, 7.0], [3.0, 5.0, 6.0, 9.0, 10.0]
+    want = st.bootstrap_ci(a, b, n_resamples=300, seed=3)
+    for seed in (np.random.default_rng(3), np.random.PCG64(3), np.random.SeedSequence(3)):
+        assert st.bootstrap_ci(a, b, n_resamples=300, seed=seed) == want
+
+
 def test_bootstrap_ci_method_keeps_any_letter_case():
     a, b = [1.0, 2.0, 4.0, 7.0], [3.0, 5.0, 6.0, 9.0, 10.0]
     assert st.bootstrap_ci(a, b, method="bca", n_resamples=300) == st.bootstrap_ci(a, b, n_resamples=300)

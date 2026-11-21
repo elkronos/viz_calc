@@ -324,8 +324,9 @@ def bootstrap_ci(
 
     *level* must be strictly between 0 and 1 (``0.95``, not ``95``),
     *n_resamples* a whole number of at least 1, *method* one of ``"BCa"``,
-    ``"percentile"`` and ``"basic"`` (in any letter case), and *seed* ``None``
-    or a whole number of at least 0; anything else raises ``ValueError``.
+    ``"percentile"`` and ``"basic"`` (in any letter case), and *seed* ``None``,
+    a whole number of at least 0 or a NumPy ``Generator``, ``BitGenerator`` or
+    ``SeedSequence``; anything else raises ``ValueError``.
 
     References
     ----------
