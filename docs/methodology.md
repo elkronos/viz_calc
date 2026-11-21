@@ -51,7 +51,9 @@ estimation-statistics practice (Cumming, 2014; Ho et al., 2019).
 $\dfrac{\hat p + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat p(1-\hat p)}{n} + \frac{z^2}{4n^2}}}{1 + z^2/n}$.
 Recommended over the Wald interval, whose coverage collapses for small *n*
 or extreme proportions (Wilson, 1927; Brown, Cai & DasGupta, 2001). Used by
-`percent_grid`, `centered_bar`.
+`percent_grid`, `centered_bar`. Counts may be fractional (weighted data);
+$n = 0$ or a missing count gives `NaN`, and an impossible count (negative,
+infinite, or more successes than $n$) raises a `ValueError`.
 
 ### Multiple-comparison adjustment
 * **Holm** step-down (Holm, 1979): controls the family-wise error rate and

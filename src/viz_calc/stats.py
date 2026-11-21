@@ -122,8 +122,11 @@ def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0
     small *n* or proportions near 0 or 1 (Brown, Cai & DasGupta, 2001).
 
     Returns ``(lower, upper)`` as proportions: floats for scalar input,
-    arrays for array input. ``n == 0`` gives ``nan``. *level* must be
-    strictly between 0 and 1 (``0.95``, not ``95``), else ``ValueError``.
+    arrays for array input. ``n == 0`` gives ``nan``, and so does a missing
+    count. Counts need not be whole numbers (weighted data), but they must be
+    possible: a negative or infinite count, or more *successes* than *n*,
+    raises ``ValueError``. *level* must be strictly between 0 and 1
+    (``0.95``, not ``95``), else ``ValueError``.
 
     References
     ----------
@@ -135,8 +138,15 @@ def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0
     level = _check_level(level)
     k = _as_float(successes)
     n = _as_float(n)
+    pairs_k, pairs_n = np.broadcast_arrays(k, n)
+    with np.errstate(invalid="ignore"):  # comparisons with nan are False, so missing counts pass
+        bad = np.isinf(pairs_k) | np.isinf(pairs_n) | (pairs_k < 0) | (pairs_n < 0) | (pairs_k > pairs_n)
+    if bad.any():
+        shown = [f"successes={a:g}, n={b:g}" for a, b in zip(pairs_k[bad].tolist()[:5], pairs_n[bad].tolist()[:5])]
+        raise ValueError("successes and n must be finite, non-negative counts with successes <= n, got "
+                         f"{'; '.join(shown)}{' ...' if bad.sum() > 5 else ''}")
     z = _st.norm.ppf(1 - (1 - level) / 2)
-    with np.errstate(invalid="ignore", divide="ignore"):
+    with np.errstate(invalid="ignore", divide="ignore", over="ignore"):  # n**2 overflows harmlessly for huge n
         p = k / n
         denom = 1 + z**2 / n
         centre = (p + z**2 / (2 * n)) / denom

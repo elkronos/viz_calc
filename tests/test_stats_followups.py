@@ -79,3 +79,34 @@ def test_fd_keeps_a_real_iqr_at_large_magnitudes():
     assert vc.histogram(pd.DataFrame({"x": x}), "x").info["bin_rule"] == "fd (whole-number widths for integer data)"
     edges, rule = st._bin_edges(x + 0.5, "auto")  # same data off the integer grid
     assert not rule.startswith("sturges")
+
+
+# --- wilson_ci on impossible counts -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("k,n", [(5, 3), (-1, 10), (10.5, 10), (-0.5, 10), (3, -5), (5, np.inf), (np.inf, np.inf),
+                                 (np.nan, np.inf), (1, 0)])
+def test_wilson_ci_rejects_impossible_counts(k, n):
+    with pytest.raises(ValueError, match=r"successes <= n, got successes="):
+        st.wilson_ci(k, n)
+
+
+def test_wilson_ci_names_the_impossible_entries_of_an_array():
+    with pytest.raises(ValueError, match=r"got successes=4, n=3$"):
+        st.wilson_ci(np.array([1, 4, np.nan]), np.array([3, 3, 3]))
+
+
+def test_wilson_ci_keeps_nan_for_missing_or_zero_counts_and_accepts_weighted_counts():
+    assert all(np.isnan(v) for v in st.wilson_ci(np.nan, 10) + st.wilson_ci(0, 0) + st.wilson_ci(3, np.nan))
+    lo, hi = st.wilson_ci(2.5, 10)
+    assert 0 < lo < 0.25 < hi < 1
+
+
+def test_wilson_ci_of_huge_counts_does_not_warn():
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert st.wilson_ci(1e200, 1e200) == (1.0, 1.0)
+        lo, hi = st.wilson_ci(0, 1e200)
+        assert lo == 0.0 and 0 < hi < 1e-199
