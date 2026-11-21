@@ -278,6 +278,10 @@ def bootstrap_ci(
     return estimate, lo, hi
 
 
+_BOOTSTRAP_ONE_PIECE = 2000  # largest sample bootstrapped unbatched (peak memory about 400 MB)
+_BOOTSTRAP_BATCH_VALUES = 2**22  # values per sample held at once when batching
+
+
 def _bootstrap(samples, statistic, level, n_resamples, method, seed):
     """Like :func:`bootstrap_ci` but also returns the bootstrap distribution."""
     level = _check_level(level)
@@ -288,6 +292,13 @@ def _bootstrap(samples, statistic, level, n_resamples, method, seed):
     if all(np.ptp(d) == 0 for d in data):  # every resample equals the data: the interval is the estimate itself
         return estimate, estimate, estimate, np.full(n_resamples, estimate)
     kwargs = dict(n_resamples=n_resamples, confidence_level=level, method=method, vectorized=False)
+    largest = max(d.size for d in data)
+    if largest > _BOOTSTRAP_ONE_PIECE:
+        # Unbatched, SciPy holds every resample at once and BCa adds an n x (n - 1) jackknife matrix:
+        # 4 GB at 10,000 rows per sample. Batches cap that near _BOOTSTRAP_BATCH_VALUES values per sample.
+        # They consume the random stream in a different order, so above the threshold a seeded
+        # interval differs from the unbatched one by Monte Carlo noise; at or below it nothing changes.
+        kwargs["batch"] = max(1, _BOOTSTRAP_BATCH_VALUES // largest)
     try:
         res = _st.bootstrap(data, statistic, rng=np.random.default_rng(seed), **kwargs)
     except TypeError:  # SciPy < 1.15 names the argument random_state

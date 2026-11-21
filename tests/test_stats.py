@@ -1,5 +1,7 @@
 """Statistical helpers checked against SciPy and published worked examples."""
 
+import tracemalloc
+
 import numpy as np
 import pytest
 from scipy import stats as sps
@@ -62,6 +64,39 @@ def test_bootstrap_is_reproducible_and_sensible():
     est, lo, hi = r1
     assert lo < est < hi
     assert est == pytest.approx(b.mean() - a.mean())
+
+
+def test_bootstrap_memory_stays_bounded_for_large_samples():
+    # Unbatched, the BCa jackknife alone held an n x (n - 1) matrix: about 800 MiB traced here at 5,000 rows
+    # per sample, 4 GB at 10,000 and a MemoryError at 20,000.
+    rng = np.random.default_rng(1)
+    a, b = rng.normal(0, 1, 5000), rng.normal(0.1, 1, 5000)
+    tracemalloc.start()
+    try:
+        est, lo, hi = st.bootstrap_ci(a, b, n_resamples=200)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert lo < est < hi
+    assert peak < 300 * 2**20
+
+
+def test_bootstrap_up_to_2000_rows_matches_scipy_unbatched():
+    # Batching changes how the seeded generator is consumed, so it starts above 2,000 rows only:
+    # intervals for smaller samples stay exactly what earlier versions reported.
+    rng = np.random.default_rng(2)
+    a, b = rng.normal(0, 1, 2000), rng.normal(0.1, 1, 1500)
+
+    def diff(x, y):
+        return float(np.mean(y) - np.mean(x))
+
+    _, lo, hi = st.bootstrap_ci(a, b, statistic=diff, n_resamples=300, seed=5)
+    kwargs = dict(n_resamples=300, confidence_level=0.95, method="BCa", vectorized=False)
+    try:
+        res = sps.bootstrap((a, b), diff, rng=np.random.default_rng(5), **kwargs)
+    except TypeError:  # SciPy < 1.15 names the argument random_state
+        res = sps.bootstrap((a, b), diff, random_state=np.random.default_rng(5), **kwargs)
+    assert (lo, hi) == tuple(float(v) for v in res.confidence_interval)
 
 
 def test_adjust_pvalues_worked_example():
