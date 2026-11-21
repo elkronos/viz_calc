@@ -3,9 +3,11 @@
 import numpy as np
 import pandas as pd
 import pytest
+from matplotlib.colors import to_rgba
 
 import viz_calc as vc
 from viz_calc import datasets
+from viz_calc._core import NEUTRAL
 
 GONE = [1, 2, 3, 44, 45]  # trial rows given a missing arm (and an outlying score) below
 
@@ -108,3 +110,113 @@ def test_compare_correlations_counts_the_rows_left_out():
     assert sorted(set(res.table["group_a"]) | set(res.table["group_b"])) == ["alpha", "beta", "gamma"]
     clean = vc.compare_correlations(datasets.measurements(), group="group", columns=["length", "width", "depth"])
     assert clean.info["dropped_missing_group"] == 0
+
+
+# --- descriptive charts draw the rows as a last "(missing)" group, grey where colour marks the group -------------
+
+GREY = to_rgba(NEUTRAL)
+
+
+def _ticks(labels):
+    return [t.get_text() for t in labels]
+
+
+@pytest.mark.parametrize("stat", ["mean", "sum", "count"])
+@pytest.mark.parametrize("sort", ["descending", "ascending", None])
+def test_lollipop_draws_a_missing_category_last_in_grey(trial_gaps, stat, sort):
+    res = vc.lollipop(trial_gaps, x="arm", y="score", stat=stat, sort=sort)
+    table = res.table
+    assert table["arm"].isna().tolist() == [False, False, False, True]
+    expected = {"mean": 500.0, "sum": 2500.0, "count": 5}[stat]
+    assert table["value"].iloc[-1] == expected
+    if stat == "count":
+        assert table["value"].sum() == len(trial_gaps)
+    assert _ticks(res.axes.get_yticklabels())[-1] == "(missing)"
+    assert res.axes.get_yticks()[-1] == min(res.axes.get_yticks())  # the last row is at the bottom
+    dots = res.axes.collections[-1].get_facecolors()
+    assert np.allclose(dots[-1], GREY) and not np.allclose(dots[0], GREY)
+    assert to_rgba(res.axes.collections[-2].get_color()[0]) == GREY  # its stem
+
+
+def test_lollipop_counts_rows_with_a_missing_category():
+    df = pd.DataFrame({"k": ["a", None, "b", "a", None]})
+    res = vc.lollipop(df, x="k", stat="count", horizontal=False)
+    assert res.table["value"].tolist() == [2, 1, 2]
+    assert _ticks(res.axes.get_xticklabels()) == ["a", "b", "(missing)"]
+
+
+def test_lollipop_without_missing_categories_keeps_one_colour():
+    res = vc.lollipop(datasets.trial(), x="arm", y="score")
+    assert np.allclose(res.axes.collections[-1].get_facecolors(), to_rgba(vc.OKABE_ITO[0]))
+    assert "(missing)" not in _ticks(res.axes.get_yticklabels())
+
+
+@pytest.mark.parametrize("sort", [False, True])
+@pytest.mark.parametrize("dtype", [object, "category"])
+def test_divergent_bar_sums_a_missing_category_last_in_grey(sort, dtype):
+    df = pd.DataFrame({"c": _as(["a", "b", None, "a", None], dtype), "l": [1.0, 2, 30, 4, 5], "r": [5.0, 6, 70, 8, 1]})
+    res = vc.divergent_bar(df, category="c", left="l", right="r", sort=sort)
+    assert res.table["c"].isna().tolist() == [False, False, True]
+    assert res.table[["l", "r"]].iloc[-1].tolist() == [35.0, 71.0]
+    assert res.table[["l", "r"]].sum().tolist() == [42.0, 90.0]
+    assert _ticks(res.axes.get_yticklabels())[-1] == "(missing)"
+    left, right = (c.patches for c in res.axes.containers)
+    assert left[-1].get_facecolor() == right[-1].get_facecolor() == GREY
+    assert left[0].get_facecolor() != GREY and right[0].get_facecolor() != GREY
+    assert [t.get_text() for t in res.axes.get_legend().get_texts()] == ["l", "r"]
+
+
+def test_stacked_percentages_draws_a_missing_group_as_the_last_bar():
+    s = datasets.survey()
+    s["team"] = s["team"].astype(object)
+    s.loc[[0, 1, 2, 3], "team"] = None
+    res = vc.stacked_percentages(s, group="team", category="remote")
+    assert _ticks(res.axes.get_xticklabels())[-1].startswith("(missing)\n(n=4)")
+    gone = res.table[res.table["team"].isna()]
+    assert gone["n"].sum() == 4 and gone["percent"].sum() == pytest.approx(100)
+    assert res.table["n"].sum() == len(s)
+    subset = vc.stacked_percentages(s, group="team", category="remote", group_order=["Sales", "Data"])
+    assert [t.split("\n")[0] for t in _ticks(subset.axes.get_xticklabels())] == ["Sales", "Data", "(missing)"]
+
+
+def test_percent_grid_draws_a_missing_facet_as_the_last_panel():
+    s = datasets.survey()
+    s["team"] = s["team"].astype("category")
+    s.loc[[0, 1, 2, 3], "team"] = np.nan
+    res = vc.percent_grid(s, column="remote", facet="team", success=True)
+    assert res.table["n"].sum() == len(s)
+    assert res.table["facet"].isna().tolist() == [False] * 4 + [True]
+    titles = [ax.get_title() for ax in res.axes.flat if ax.get_visible()]
+    assert titles[-1].startswith("(missing): ") and titles[-1].endswith("n=4")
+
+
+def test_histogram_draws_a_missing_hue_in_grey_and_a_missing_facet_as_a_panel():
+    m = datasets.measurements()
+    m["group"] = m["group"].astype(object)
+    m.loc[[0, 1, 2], "group"] = None
+    res = vc.histogram(m, x="length", hue="group")
+    assert res.table["n"].tolist() == [47, 50, 50, 3] and res.table["hue"].isna().tolist()[-1]
+    legend = res.axes.flat[0].get_legend()
+    assert _ticks(legend.get_texts()) == ["alpha", "beta", "gamma", "(missing)"]
+    assert to_rgba(legend.get_lines()[-1].get_color()) == GREY
+    facets = vc.histogram(m, x="length", facet="group")
+    assert facets.table["n"].tolist() == [47, 50, 50, 3]
+    assert [ax.get_title(loc="left") for ax in facets.axes.flat][3] == "group = (missing)"
+
+
+def test_ridgeplot_draws_a_missing_group_last_in_grey(trial_gaps):
+    res = vc.ridgeplot(trial_gaps, x="score", group="arm")
+    assert res.table["n"].tolist() == [37, 40, 38, 5] and res.table["arm"].isna().tolist()[-1]
+    assert _ticks(res.axes.get_yticklabels())[-1] == "(missing)"
+    m = datasets.measurements()
+    m["group"] = m["group"].astype(object)
+    m.loc[range(0, 150, 10), "group"] = None
+    fills = vc.ridgeplot(m, x="length", group="group").axes.collections
+    assert len(fills) == 4 and np.allclose(fills[-1].get_facecolors()[0][:3], GREY[:3])
+
+
+def test_descriptive_charts_without_missing_groups_have_no_missing_level():
+    trial, m = datasets.trial(), datasets.measurements()
+    assert "(missing)" not in _ticks(vc.ridgeplot(trial, x="score", group="arm").axes.get_yticklabels())
+    assert len(vc.histogram(m, x="length", hue="group", facet="group").table) == 9
+    assert len(vc.stacked_percentages(datasets.survey(), group="team", category="remote").table) == 8

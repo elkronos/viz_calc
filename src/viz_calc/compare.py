@@ -420,6 +420,10 @@ def lollipop(
     or the rows when *y* is not given. The aggregated values are in the
     table's ``value`` column, so *x* cannot be named ``"value"``.
 
+    Rows with a missing *x* are not dropped: they form a "(missing)"
+    category, drawn last (after the sorted ones) and in grey. Its row in the
+    table holds the missing value in the *x* column.
+
     References
     ----------
     Cleveland, W. S., & McGill, R. (1984). Graphical perception. *JASA*,
@@ -437,29 +441,34 @@ def lollipop(
         check_numeric(data, y)
         check_finite(data, y)
         if stat == "sum":  # in float where an int64 sum could wrap around
-            agg = safe_sum(data[y], data[x], sort=True)
+            agg = safe_sum(data[y], data[x], sort=True, dropna=False)
         else:
-            agg = data.groupby(x, observed=True)[y].agg(stat)
+            agg = data.groupby(x, observed=True, dropna=False)[y].agg(stat)
     elif y is not None:
-        agg = data.groupby(x, observed=True)[y].count()
+        agg = data.groupby(x, observed=True, dropna=False)[y].count()
     else:
-        agg = data.groupby(x, observed=True).size()
+        agg = data.groupby(x, observed=True, dropna=False).size()
     table = agg.rename("value").reset_index()
     if sort is not None:
         table = table.sort_values("value", ascending=(sort == "ascending"), ignore_index=True)
+    missing = table[x].isna().to_numpy()
+    if missing.any():  # the rows without an x come last, whatever their value
+        last = np.argsort(missing, kind="stable")
+        table, missing = table.iloc[last].reset_index(drop=True), missing[last]
+    dot = [NEUTRAL if m else color for m in missing] if missing.any() else color
 
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)) if horizontal else (8, 5))
     pos = np.arange(len(table))
     if horizontal:
         pos = pos[::-1]  # first row at the top
     alphas = np.where(table["value"] < threshold, 0.3, 1.0) if threshold is not None else np.ones(len(table))
-    for p, v, a in zip(pos, table["value"], alphas):
+    for p, v, a, m in zip(pos, table["value"], alphas, missing):
         if horizontal:
-            ax.hlines(p, 0, v, color=color, alpha=a, lw=1.5)
+            ax.hlines(p, 0, v, color=NEUTRAL if m else color, alpha=a, lw=1.5)
         else:
-            ax.vlines(p, 0, v, color=color, alpha=a, lw=1.5)
+            ax.vlines(p, 0, v, color=NEUTRAL if m else color, alpha=a, lw=1.5)
     xs, ys = (table["value"], pos) if horizontal else (pos, table["value"])
-    ax.scatter(xs, ys, s=90, color=color, alpha=alphas, zorder=3)
+    ax.scatter(xs, ys, s=90, color=dot, alpha=alphas, zorder=3)
     if labels:
         for p, v in zip(pos, table["value"]):
             if horizontal:
@@ -468,7 +477,7 @@ def lollipop(
             else:
                 ax.annotate(abbreviate(v), (p, v), xytext=(0, 8 if v >= 0 else -8), textcoords="offset points",
                             ha="center", va="bottom" if v >= 0 else "top", fontsize=9)
-    ticks = [level_label(v) for v in table[x]]
+    ticks = ["(missing)" if m else level_label(v) for v, m in zip(table[x], missing)]
     label = f"{stat} of {y}" if stat != "count" else "count"
     fmt = AbbrevFormatter()
     if horizontal:
@@ -592,7 +601,9 @@ def divergent_bar(
     column are all missing keeps a missing value there (and no bar), rather
     than a 0. Categories are drawn bottom to
     top in the order of a ``Categorical`` column, and in the order they
-    first appear otherwise.
+    first appear otherwise. Rows with a missing *category* are not dropped:
+    they are summed into a "(missing)" category, drawn last (at the top) and
+    in grey, with the missing value in the table's *category* column.
 
     Parameters
     ----------
@@ -610,17 +621,23 @@ def divergent_bar(
         raise ValueError("divergent_bar expects non-negative values in both columns")
     by_levels = isinstance(data[category].dtype, pd.CategoricalDtype)  # grouping sorts a Categorical by its categories
     # By position; safe_sum sums in float where int64 could wrap, and gives NaN (not pd.NA) for an all-missing category.
-    sums = [safe_sum(values.iloc[:, i], values.iloc[:, 0], sort=by_levels, min_count=1) for i in (1, 2)]
+    sums = [safe_sum(values.iloc[:, i], values.iloc[:, 0], sort=by_levels, min_count=1, dropna=False)
+            for i in (1, 2)]
     table = pd.concat(sums, axis=1, keys=[left, right]).rename_axis(category).reset_index()
     if sort:  # by a separate key, so a column named "total" cannot be overwritten
         total = table[left].fillna(0) + table[right].fillna(0)
         table = table.iloc[np.argsort(total.to_numpy(), kind="stable")].reset_index(drop=True)
+    missing = table[category].isna().to_numpy()
+    if missing.any():  # the rows without a category come last, whatever their total
+        last = np.argsort(missing, kind="stable")
+        table, missing = table.iloc[last].reset_index(drop=True), missing[last]
+    left_colors, right_colors = ([NEUTRAL if m else c for m in missing] if missing.any() else c for c in colors)
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)))
     pos = np.arange(len(table))
-    ax.barh(pos, -table[left], color=colors[0], label=left_label or left)
-    ax.barh(pos, table[right], color=colors[1], label=right_label or right)
+    ax.barh(pos, -table[left], color=left_colors, label=left_label or left)
+    ax.barh(pos, table[right], color=right_colors, label=right_label or right)
     ax.axvline(0, color=foreground(ax), lw=0.8)
-    ax.set_yticks(pos, [level_label(v) for v in table[category]])
+    ax.set_yticks(pos, ["(missing)" if m else level_label(v) for v, m in zip(table[category], missing)])
     ax.xaxis.set_major_formatter(AbbrevFormatter(absolute=True))
     lim = max(table[left].max(), table[right].max()) * 1.1
     ax.set_xlim(-lim, lim)
