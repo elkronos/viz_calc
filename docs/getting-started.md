@@ -148,8 +148,9 @@ dots) are black or dark grey on a light background, and gridlines are a pale
 grey. Under a style with a dark axes background, such as `dark_background`,
 they turn white or light grey and the gridlines dark grey, and the eighth
 Okabe–Ito colour, black, is drawn white. Colours you pass are used as
-given. The background is read when the chart is drawn, so a style context
-covers the charts made inside it:
+given. The background is read when the chart function runs, so a
+background set on the axes afterwards does not recolour these marks, and a
+style context covers the charts made inside it:
 
 ```python
 with plt.style.context("dark_background"):

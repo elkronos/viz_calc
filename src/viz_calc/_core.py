@@ -339,7 +339,7 @@ def foreground(ax: Axes | None = None, color: str = "black") -> str:
 
     *color* is a grey chosen for a white face: ``"black"`` for reference lines,
     error bars and labels drawn on the axes, a light grey for gridlines. The
-    face is read when the chart is drawn, from *ax* (``rcParams["axes.facecolor"]``
+    face is read when the chart function runs, from *ax* (``rcParams["axes.facecolor"]``
     without one), so the default style and other light styles keep *color* and
     a dark style such as ``dark_background`` gets white marks and a dark grid.
     A transparent face falls back to the figure's, and a transparent figure to
