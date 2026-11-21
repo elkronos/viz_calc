@@ -76,12 +76,12 @@ def _numpy_dates(s: pd.Series) -> pd.Series:
     """
     if not isinstance(s.dtype, pd.ArrowDtype):
         return s
-    import pyarrow as pa  # installed whenever a column has an ArrowDtype
-
+    # ArrowDtype.type is the scalar type: datetime or Timestamp for timestamps, date for date32 and date64.
+    # Timestamp and datetime are subclasses of date, so timestamps are tested first.
     t = s.dtype.pyarrow_dtype
-    if pa.types.is_timestamp(t):
+    if issubclass(s.dtype.type, datetime.datetime):
         return s.astype(pd.DatetimeTZDtype(t.unit, t.tz) if t.tz else f"datetime64[{t.unit}]")
-    if pa.types.is_date(t):
+    if s.dtype.type is datetime.date:
         try:
             return pd.to_datetime(s)  # NumPy datetime64[ns] on pandas 2, datetime64[s] on pandas 3
         except (ValueError, OverflowError):  # past 2262 on pandas 2: _dates then names the column in its error
