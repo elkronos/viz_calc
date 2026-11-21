@@ -92,9 +92,12 @@ def _calls():
 
 
 CALLS = _calls()
+NEEDS = {"network_map": "networkx"}  # optional dependency of a call in CALLS
 
 
 def _call(name):
+    if name in NEEDS:
+        pytest.importorskip(NEEDS[name])
     func, data, kwargs = CALLS[name]
     return func, (data() if callable(data) else _data(data)), kwargs
 
@@ -376,6 +379,7 @@ def test_animated_bubble_uses_one_area_scale():
 
 
 def test_network_metrics():
+    pytest.importorskip("networkx")
     edges = datasets.network()
     res = vc.network_map(edges, source="source", target="target", weight="strength")
     t = res.table.set_index("node")
@@ -385,6 +389,7 @@ def test_network_metrics():
 
 
 def test_network_and_sankey_interactive():
+    pytest.importorskip("networkx")
     pytest.importorskip("plotly")
     edges = datasets.network()
     res = vc.network_map(edges, source="source", target="target", interactive=True)

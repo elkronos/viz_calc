@@ -77,6 +77,9 @@ ruff check src tests
 python examples/gallery.py && mkdocs serve    # rebuild images and preview the docs (needs ".[docs]")
 ```
 
+Tests of the networkx, plotly and python-pptx features skip when that package
+is not installed.
+
 The documentation site is published to the `gh-pages` branch by
 `.github/workflows/docs.yml` on every push to `main`. GitHub Pages serves it
 from that branch (Settings → Pages → Deploy from a branch → `gh-pages`, `/ (root)`).

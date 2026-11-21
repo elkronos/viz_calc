@@ -23,6 +23,10 @@ jobs:
           - python: "3.10"
             label: minimum versions
             deps: "numpy==1.24.1 pandas==2.0.0 matplotlib==3.7.0 scipy==1.11.1 networkx==3.2 plotly==5.15.0 python-pptx==0.6.21 python-dateutil==2.8.2"
+          # Core dependencies only, so the tests of networkx, plotly and python-pptx features must skip.
+          - python: "3.13"
+            label: no extras
+            extras: none
           - python: "3.11"
           - python: "3.12"
           - python: "3.13"
@@ -34,11 +38,23 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          if [ -n "${{ matrix.deps }}" ]; then pip install ${{ matrix.deps }}; fi
-          pip install -e ".[dev]" ${{ matrix.deps }}
+          if [ "${{ matrix.extras }}" = none ]; then
+            pip install -e . "pytest>=7"
+          else
+            if [ -n "${{ matrix.deps }}" ]; then pip install ${{ matrix.deps }}; fi
+            pip install -e ".[dev]" ${{ matrix.deps }}
+          fi
+      - name: Check that no optional dependency is installed
+        if: matrix.extras == 'none'
+        run: >-
+          python -c "import importlib.util, sys;
+          found = [m for m in ('networkx', 'plotly', 'pptx') if importlib.util.find_spec(m)];
+          sys.exit(f'installed: {found}' if found else 0)"
       - name: Lint
+        if: matrix.extras != 'none'
         run: ruff check src tests examples
       - name: Test
         run: pytest
       - name: Build gallery
+        if: matrix.extras != 'none'
         run: python examples/gallery.py
