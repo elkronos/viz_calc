@@ -15,7 +15,12 @@ keywords = ["visualization", "statistics", "matplotlib", "pandas", "estimation",
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
@@ -38,6 +43,8 @@ docs = ["viz_calc[all]", "mkdocs>=1.6,<2", "mkdocs-material>=9.5", "mkdocstrings
 [project.urls]
 Documentation = "https://elkronos.github.io/viz_calc/"
 Source = "https://github.com/elkronos/viz_calc"
+Changelog = "https://github.com/elkronos/viz_calc/blob/main/CHANGELOG.md"
+Issues = "https://github.com/elkronos/viz_calc/issues"
 
 [tool.hatch.version]
 path = "src/viz_calc/__init__.py"

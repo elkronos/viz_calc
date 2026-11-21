@@ -105,6 +105,25 @@ def test_version_is_written_once():
     assert found == [viz_calc.__version__]
 
 
+def test_python_classifiers_name_the_versions_ci_tests():
+    # PyPI shows these classifiers, so they list exactly the Python versions the CI test matrix runs.
+    if not CI.exists():
+        pytest.skip("the CI workflow is not next to the tests")
+    tested = set(re.findall(r'^ +- python: "(3\.[0-9]+)"', CI.read_text(encoding="utf-8"), re.M))
+    classified = {c.rsplit(" :: ", 1)[1] for c in _pyproject()["project"]["classifiers"]
+                  if re.fullmatch(r"Programming Language :: Python :: 3\.[0-9]+", c)}
+    assert classified == tested
+
+
+def test_ci_builds_checks_and_imports_the_distributions():
+    if not CI.exists():
+        pytest.skip("the CI workflow is not next to the tests")
+    text = CI.read_text(encoding="utf-8")
+    assert re.search(r"^  build:$", text, re.M)
+    assert "twine check --strict dist/*" in text
+    assert re.search(r"pip\" install dist/\*\.whl", text)
+
+
 def test_build_backend_floor_writes_the_license_fields():
     # hatchling before 1.26 rejects the list form of project.license-files, and 1.26 writes the legacy
     # License field. 1.27 is the first release that writes License-Expression and License-File.
