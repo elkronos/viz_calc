@@ -21,6 +21,8 @@ from ._core import (
     check_choice,
     check_count,
     check_dataframe,
+    check_distinct,
+    check_finite,
     check_not_reserved,
     check_numeric,
     cleanup_on_error,
@@ -44,7 +46,8 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     when features are on different units; otherwise large-variance features
     dominate (Jolliffe & Cadima, 2016). A feature whose values are all
     identical cannot be standardized and raises ``ValueError``; unscaled, it
-    adds a component with zero variance. Component signs are fixed so that the
+    adds a component with zero variance. A feature holding an infinite value
+    raises ``ValueError`` either way. Component signs are fixed so that the
     largest-magnitude loading of each component is positive, making results
     reproducible.
 
@@ -60,6 +63,7 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     features = column_list("features", features, distinct=True)
     check_dataframe(data, features)
     check_numeric(data, *features)
+    check_finite(data, *features)
     X = select_columns(data, features).dropna()
     if len(X) < 3:
         raise ValueError("need at least three complete rows")
@@ -75,7 +79,7 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     Z[:, constant] = 0.0
     if scale:
         sd = X.std(ddof=1).to_numpy()
-        flat = constant | ~(sd > 0)  # an SD of 0 or nan (infinite values) cannot be divided by either
+        flat = constant | ~(sd > 0)  # an SD of 0 or nan cannot be divided by either
         if flat.any():
             raise ValueError(f"constant feature(s) cannot be scaled: {[f for f, c in zip(features, flat) if c]}")
         Z = Z / sd
@@ -230,6 +234,24 @@ def pca_plot(
     return VizResult(fig, ax, table, {**res, "ellipses": ellipses, "components": (pc_x, pc_y)})
 
 
+def _floats(frame: pd.DataFrame) -> pd.DataFrame:
+    """*frame* as NumPy floats, with NaN for missing values (also in nullable and Arrow columns)."""
+    return pd.DataFrame(frame.to_numpy(dtype=float, na_value=np.nan), index=frame.index, columns=frame.columns)
+
+
+def _group_stat(grouped: Any, stat: str) -> pd.DataFrame:
+    """*stat* of each column of *grouped* per group, as floats; the mean of a constant group is its value exactly.
+
+    The floating-point mean of ``[0.1] * 3`` is off by an ulp (see ``stats._mean``), so groups of different sizes
+    holding one constant would get different means, which ``normalize="groups"`` spreads over the whole axis.
+    """
+    value = _floats(grouped.agg(stat))
+    if stat == "mean":
+        lo, hi = _floats(grouped.min()), _floats(grouped.max())
+        value = value.mask(lo == hi, lo)
+    return value
+
+
 @cleanup_on_error
 def radar(
     data: pd.DataFrame,
@@ -247,15 +269,25 @@ def radar(
     Because metrics usually have different units, each axis is rescaled:
 
     * ``"data"`` (default): 0 = smallest and 1 = largest **observed value**
-      of the metric, so group summaries sit inside the range of the data.
+      of the metric in the rows drawn (a group left out of *order* does not
+      count), so group summaries sit inside the range of the data.
     * ``"groups"``: 0 = lowest group, 1 = highest group. Exaggerates small
       differences and always puts one group at the centre.
     * ``"none"``: raw values (only sensible when metrics share a unit).
 
-    A group with no data on a metric is left as a gap on that axis. Raw and
-    scaled values are in the returned table. Radar charts are best
-    for spotting profile *shapes*; the enclosed area depends on the order of
-    the metrics and should not be compared.
+    An axis with nothing to scale (every value of the metric the same under
+    ``"data"``, every group's *stat* the same under ``"groups"``) puts the
+    groups mid-scale, at 0.5. The mean of a group whose values are all the
+    same is exactly that value, so a constant metric such as 0.1 lands there
+    too, whatever the group sizes.
+
+    Rows with a missing *group* are not dropped: they are drawn last, in
+    grey, as "(missing)", and their row of the table has a missing *group*.
+    *group* needs at least one non-missing value and cannot be one of the
+    *metrics*. A group with no data on a metric is left as a gap on that
+    axis. Raw and scaled values are in the returned table. Radar charts are
+    best for spotting profile *shapes*; the enclosed area depends on the
+    order of the metrics and should not be compared.
 
     An *ax* passed in must be a polar Axes, for example from
     ``plt.subplots(subplot_kw={"projection": "polar"})`` or
@@ -264,7 +296,10 @@ def radar(
     """
     metrics = column_list("metrics", metrics, distinct=True)
     check_dataframe(data, [*metrics, group])
+    for m in metrics:
+        check_distinct(group=group, metrics=m)
     check_numeric(data, *metrics)
+    check_finite(data, *metrics)
     check_choice("normalize", normalize, ["data", "groups", "none"])
     check_choice("stat", stat, ["mean", "median"])
     if len(metrics) < 3:
@@ -274,11 +309,19 @@ def radar(
                          "plt.subplots(subplot_kw={'projection': 'polar'}) or fig.add_subplot(projection='polar')")
     check_not_reserved([f"{m}_{suffix}" for suffix in (stat, "scaled") for m in metrics], group=group)
     groups = category_order(data[group], order)
-    raw = data.groupby(group, observed=True)[metrics].agg(stat).reindex(groups)
-    raw = pd.DataFrame(raw.to_numpy(dtype=float, na_value=np.nan), index=raw.index, columns=raw.columns)
+    grouped = data.groupby(group, observed=True)[metrics]
+    raw = _group_stat(grouped, stat).reindex(groups)
+    missing = data[group].isna().to_numpy()
+    rest = select_columns(data, metrics)[missing]  # rows without a group, drawn in grey as "(missing)"
+    if missing.any():
+        label = pd.Index(data[group][missing].iloc[:1])  # a missing value of the group column's own type
+        raw = pd.concat([raw, _group_stat(rest.groupby(np.zeros(len(rest), dtype=int)), stat).set_axis(label)])
     scaled = raw.copy()
     if normalize != "none":
-        ref = data[metrics].astype(float) if normalize == "data" else raw
+        ref = raw
+        if normalize == "data":  # the range of the rows drawn: a group left out of *order* does not count
+            ref = pd.concat([_floats(grouped.min()).reindex(groups), _floats(grouped.max()).reindex(groups),
+                             _floats(rest)])
         lo, span = ref.min(), (ref.max() - ref.min()).replace(0, np.nan)
         scaled = (raw - lo) / span
         flat = [m for m in metrics if pd.isna(span[m])]  # metric has one value only: put groups mid-scale
@@ -286,15 +329,17 @@ def radar(
             scaled[m] = raw[m].where(raw[m].isna(), 0.5)  # a group with no data stays missing (a gap)
     angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False)
     closed = np.r_[angles, angles[0]]
-    cols = palette(len(groups), colors)
+    names, cols = [level_label(g) for g in groups], palette(len(groups), colors)
+    if missing.any():
+        names, cols = names + ["(missing)"], cols + [NEUTRAL]
     if ax is None:
         fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={"polar": True})
     else:
         fig = ax.figure
-    for g, c in zip(groups, cols):
-        vals = scaled.loc[g].to_numpy(float)
+    for i, (name, c) in enumerate(zip(names, cols)):
+        vals = scaled.iloc[i].to_numpy(float)  # by position: the "(missing)" row has a missing label
         # Markers keep a group visible even when missing metrics break its outline into isolated points.
-        ax.plot(closed, np.r_[vals, vals[0]], color=c, lw=2, marker="o", ms=4, label=level_label(g))
+        ax.plot(closed, np.r_[vals, vals[0]], color=c, lw=2, marker="o", ms=4, label=name)
         if not np.isnan(vals).any():  # a polygon with a missing vertex would be misleading
             ax.fill(closed, np.r_[vals, vals[0]], color=c, alpha=0.12)
     ax.set_xticks(angles, metrics)
