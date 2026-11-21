@@ -105,6 +105,28 @@ These functions have no `ax=` and always create their own figure:
 | `animated_bubble` | the animation redraws its own figure |
 | `sankey` | returns a Plotly figure, as does `network_map(interactive=True)` |
 
+## Text in charts
+
+Category values, column names and the labels you pass are drawn as written.
+Matplotlib reads text with a pair of `$` as mathtext, so a price band such as
+`$5-$10` would lose its dollar signs and `$a^$` would raise an error when the
+figure is drawn or saved. Wherever text a chart draws holds a `$`, mathtext is
+off for that text (its `parse_math` property), so a `$` escaped as `\$` keeps
+its backslash; `text.parse_math` itself is off only while the call runs.
+Everything else keeps Matplotlib's rules: text already on an Axes you pass as
+`ax=`, text you add or change afterwards
+(`res.axes.set_xlabel(r"Dose ($\mu$g)")` draws a μ), and numbers such as the
+tick labels of a log axis. A legend the chart adds to your Axes is the chart's
+text, so it shows the labels of your own artists there as written too. A
+title, label or tick label that held a `$` from the data stays literal when
+you change it later; pass `parse_math=True`
+(`res.axes.set_title(r"$\alpha$ = 0.05", parse_math=True)`) for mathtext there.
+
+In the Plotly figures (`sankey` and `network_map(interactive=True)`) node
+names are escaped, so `<`, `>` and `&` in them show as typed: a node named
+`<a href=...>` is not read as Plotly's HTML markup and cannot become a link.
+`sankey`'s `title=` is passed through unchanged and may use that markup.
+
 ## Using the statistics without a chart
 
 All the methods are public in [`viz_calc.stats`](api.md#statistics):

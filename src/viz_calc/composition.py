@@ -23,6 +23,7 @@ from ._core import (
     VizResult,
     _level_key,
     abbreviate,
+    center_labels,
     check_choice,
     check_dataframe,
     check_has_values,
@@ -308,8 +309,8 @@ def stacked_percentages(
         vals = pct[c].to_numpy()
         bars = (ax.barh(pos, vals, left=base, color=col, label=level_label(c), edgecolor="white")
                 if horizontal else ax.bar(pos, vals, bottom=base, color=col, label=level_label(c), edgecolor="white"))
-        ax.bar_label(bars, labels=[f"{v:.0f}%" if v >= min_label else "" for v in vals], label_type="center",
-                     fontsize=8, color=text_color(col))
+        center_labels(ax, bars, [f"{v:.0f}%" if v >= min_label else "" for v in vals], fontsize=8,
+                      color=text_color(col))
         base += vals
     ticks = [f"{level_label(g)}\n(n={n})" for g, n in zip(groups, counts.sum(axis=1))]
     if horizontal:

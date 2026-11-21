@@ -21,6 +21,7 @@ from ._core import (
     VizResult,
     abbreviate,
     category_order,
+    center_labels,
     check_choice,
     check_count,
     check_dataframe,
@@ -590,6 +591,16 @@ def divergent_bar(
     return VizResult(fig, ax, table)
 
 
+def _abs_share(value: float, _pos: Any = None) -> str:
+    """Tick label for a share drawn on both sides of zero: ``-0.25`` reads ``25%``."""
+    return f"{abs(value):.0%}"
+
+
+def _abs_percent(value: float, _pos: Any = None) -> str:
+    """Tick label for a percentage drawn on both sides of zero: ``-25`` reads ``25%``."""
+    return f"{abs(value):.0f}%"
+
+
 def _share_label(p: float) -> str:
     """A share (0 to 1) as a percentage that never reads 0% unless it is 0, nor 100% unless it is 1."""
     if np.isnan(p):
@@ -658,11 +669,11 @@ def centered_bar(
                                              np.clip(table["ci_high"] - table["p_above"], 0, None)],
                 fmt="none", ecolor="black", capsize=3, lw=1)
     if labels:
-        ax.bar_label(up, labels=[_share_label(v) for v in table["p_above"]], padding=2, fontsize=8, label_type="center", color="white")
-        ax.bar_label(down, labels=[_share_label(v) for v in table["p_below"]], padding=2, fontsize=8, label_type="center", color="black")
+        center_labels(ax, up, [_share_label(v) for v in table["p_above"]], padding=2, fontsize=8, color="white")
+        center_labels(ax, down, [_share_label(v) for v in table["p_below"]], padding=2, fontsize=8, color="black")
     ax.axhline(0, color="black", lw=0.8)
     ax.set_ylim(-1.05, 1.05)
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{abs(v):.0%}"))
+    ax.yaxis.set_major_formatter(FuncFormatter(_abs_share))
     ax.set_xticks(pos, [level_label(g) for g in table[x]])
     ax.set_xlabel(x)
     ax.set_ylabel(f"Share of {y}")
@@ -755,12 +766,11 @@ def likert(
         width = table[lvl].to_numpy(float)
         bars = ax.barh(ypos, width, left=left, color=col, label=level_label(lvl), edgecolor="white", lw=0.5)
         if labels:
-            ax.bar_label(bars, labels=[f"{w:.0f}" if w >= 6 else "" for w in width], label_type="center", fontsize=8,
-                         color=text_color(col))
+            center_labels(ax, bars, [f"{w:.0f}" if w >= 6 else "" for w in width], fontsize=8, color=text_color(col))
         left += width
     ax.axvline(0, color="black", lw=0.8)
     ax.set_yticks(ypos, [f"{level_label(i)} (n={n})" for i, n in zip(table["item"], table["n"])])
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{abs(v):.0f}%"))
+    ax.xaxis.set_major_formatter(FuncFormatter(_abs_percent))
     ax.set_xlim(-max(float((-start).max()), 1) * 1.05, max(float(left.max()), 1) * 1.05)
     ax.set_xlabel("Share of responses")
     ax.legend(frameon=False, ncol=k, loc="upper center", bbox_to_anchor=(0.5, -0.12))

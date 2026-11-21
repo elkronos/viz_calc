@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import heapq
+import html
 import math
 from fractions import Fraction
 from itertools import count
@@ -28,6 +29,16 @@ from ._core import (
 )
 
 __all__ = ["network_map", "sankey"]
+
+
+def _plotly_text(value: object) -> str:
+    """*value* as text that Plotly shows as written.
+
+    Plotly reads labels and hover text as a subset of HTML, so a node named
+    ``<a href=...>`` would become a link; ``&``, ``<`` and ``>`` are escaped
+    and Plotly turns them back into the characters.
+    """
+    return html.escape(str(value), quote=False)
 
 
 _PRIME = 2**127 - 1  # a Mersenne prime: path lengths are compared exactly through their residues modulo it
@@ -318,7 +329,8 @@ def network_map(
     graphs, communities are found on the undirected graph with reciprocal
     weights summed.
 
-    Set ``interactive=True`` for a Plotly figure with hover details.
+    Set ``interactive=True`` for a Plotly figure with hover details. Node
+    names are shown there as written, not read as Plotly's HTML markup.
 
     References
     ----------
@@ -482,10 +494,11 @@ def network_map(
                 fig.add_trace(go.Scatter(x=[pos[u][0], pos[v][0]], y=[pos[u][1], pos[v][1]], mode="lines",
                                          line={"width": float(wdt), "color": "#aaaaaa"}, hoverinfo="skip",
                                          showlegend=False))
-        hover = [f"<b>{r.node}</b><br>degree {r.degree}<br>strength {r.strength:.3g}<br>"
+        hover = [f"<b>{_plotly_text(r.node)}</b><br>degree {r.degree}<br>strength {r.strength:.3g}<br>"
                  f"betweenness {r.betweenness:.3f}<br>community {r.community}" for r in table.itertuples()]
         fig.add_trace(go.Scatter(x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes],
-                                 mode="markers+text" if labels else "markers", text=[str(n) for n in nodes] if labels else None,
+                                 mode="markers+text" if labels else "markers",
+                                 text=[_plotly_text(n) for n in nodes] if labels else None,
                                  textposition="top center", hovertext=hover, hoverinfo="text", showlegend=False,
                                  marker={"size": np.sqrt(sizes) * 1.3, "color": node_colors, "line": {"width": 1, "color": "white"}}))
         fig.update_layout(template="simple_white", xaxis={"visible": False}, yaxis={"visible": False},
@@ -534,6 +547,11 @@ def sankey(
     value, or a negative, infinite or complex flow, raises an error (dropping
     the row would silently change the totals). The table reports each node's
     total inflow and outflow.
+
+    Node names are shown as written: ``<``, ``>`` and ``&`` are escaped so
+    that Plotly does not read them as HTML markup. *title* is passed to
+    Plotly unchanged and may use Plotly's HTML subset (``<b>``, ``<br>``,
+    ``<a href=...>``).
     """
     go = require("plotly.graph_objects", "interactive")
     check_dataframe(data, [source, target, value])
@@ -557,7 +575,7 @@ def sankey(
     index = {n: i for i, n in enumerate(nodes)}
     cols = palette(len(nodes))
     fig = go.Figure(go.Sankey(
-        node={"label": [str(n) for n in nodes], "pad": 15, "thickness": 18, "color": cols},
+        node={"label": [_plotly_text(n) for n in nodes], "pad": 15, "thickness": 18, "color": cols},
         link={"source": flows[source].map(index), "target": flows[target].map(index), "value": flows[value],
               "color": "rgba(150,150,150,0.35)"},
     ))
