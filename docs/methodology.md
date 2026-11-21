@@ -149,9 +149,16 @@ variable's variance explained by a grouping. Used to rank panels in
 SVD of the centred (and by default standardized) data matrix; eigenvalues
 $= s^2/(n-1)$; component signs fixed so the largest loading is positive
 (Jolliffe & Cadima, 2016). Ellipses are drawn from the eigen-decomposition
-of each group's covariance with radius $\sqrt{\chi^2_2(\text{level})}$. The
-"data" ellipse uses the covariance of the points; the "confidence" ellipse
-uses the covariance of the mean (divided by *n*).
+of each group's covariance. The "data" ellipse is the normal-theory ellipse
+at the group's mean and covariance, with radius
+$\sqrt{\chi^2_2(\text{level})}$: for a large group it holds about *level*
+of the population, while a small group's own points nearly all fall inside
+it. The "confidence" ellipse is Hotelling's (1931) $T^2$ region for the
+group mean: the covariance of the mean (divided by *n*) with radius
+$\sqrt{2(n-1)/(n-2)\,F_{2,\,n-2}(\text{level})}$, exact for normal data in
+groups of three or more. The $\chi^2_2$ radius assumes a known covariance
+and covers the true mean far less often in small groups (about 75% instead
+of 95% at $n = 5$).
 
 ### Networks
 Repeated edges are merged by summing their weights. Louvain community
@@ -243,6 +250,7 @@ record which comparison was used.
 * Hedges, L. V., & Olkin, I. (1985). *Statistical Methods for Meta-Analysis*. Academic Press.
 * Ho, J., Tumkaya, T., Aryal, S., Choi, H., & Claridge-Chang, A. (2019). Moving beyond P values: data analysis with estimation graphics. *Nature Methods*, 16, 565–566.
 * Holm, S. (1979). A simple sequentially rejective multiple test procedure. *Scandinavian Journal of Statistics*, 6(2), 65–70.
+* Hotelling, H. (1931). The generalization of Student's ratio. *Annals of Mathematical Statistics*, 2(3), 360–378.
 * Jolliffe, I. T., & Cadima, J. (2016). Principal component analysis: a review and recent developments. *Philosophical Transactions of the Royal Society A*, 374, 20150202.
 * Lex, A., Gehlenborg, N., Strobelt, H., Vuillemot, R., & Pfister, H. (2014). UpSet: visualization of intersecting sets. *IEEE Transactions on Visualization and Computer Graphics*, 20(12), 1983–1992.
 * Okabe, M., & Ito, K. (2008). *Color Universal Design (CUD): How to make figures and presentations that are friendly to colorblind people*. J*Fly.

@@ -11,6 +11,7 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.patches import Ellipse
 from scipy.stats import chi2
+from scipy.stats import f as f_dist
 
 from . import stats as st
 from ._core import (
@@ -80,15 +81,20 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
 
 
 def _ellipse(ax: Axes, pts: np.ndarray, level: float, kind: str, color: str) -> dict[str, float] | None:
-    if len(pts) < 3:
+    n = len(pts)
+    if n < 3:
         return None
     cov = np.cov(pts, rowvar=False)
     if kind == "confidence":
-        cov = cov / len(pts)  # covariance of the mean
+        cov = cov / n  # covariance of the mean
+        # Hotelling's T²: exact for normal data whatever n, where chi2_2 assumes a known covariance and covered
+        # the true mean only about 75% of the time at n = 5 for a nominal 95%.
+        radius = np.sqrt(2 * (n - 1) / (n - 2) * f_dist.ppf(level, 2, n - 2))
+    else:
+        radius = np.sqrt(chi2.ppf(level, df=2))
     vals, vecs = np.linalg.eigh(cov)
     order = vals.argsort()[::-1]
     vals, vecs = vals[order], vecs[:, order]
-    radius = np.sqrt(chi2.ppf(level, df=2))
     width, height = 2 * radius * np.sqrt(np.clip(vals, 0, None))
     angle = np.degrees(np.arctan2(vecs[1, 0], vecs[0, 0]))
     centre = pts.mean(axis=0)
@@ -125,10 +131,14 @@ def pca_plot(
     components
         1-based component numbers to plot, e.g. ``(1, 2)`` or ``(2, 3)``.
     ellipse
-        ``"data"``: a normal-theory region expected to contain *level* of each
-        group's points (radius ``sqrt(chi2_2(level))`` in the eigenbasis of the
-        group covariance). ``"confidence"``: a *level* confidence region for the
-        group **mean**. ``None``: no ellipse.
+        ``"data"``: the normal-theory ellipse at each group's mean and
+        covariance, radius ``sqrt(chi2_2(level))`` in the eigenbasis of the
+        group covariance. For a large group it holds about *level* of the
+        population; a small group's own points nearly all fall inside it.
+        ``"confidence"``: a *level* confidence region for the group **mean**
+        from Hotelling's T², radius ``sqrt(2(n - 1)/(n - 2) F_2,n-2(level))``
+        on the covariance of the mean, exact for normal data in groups of 3
+        or more. ``None``: no ellipse.
     level
         Coverage of the ellipses, strictly between 0 and 1 (``0.95``, not
         ``95``); checked even when *ellipse* is ``None``.
