@@ -578,12 +578,13 @@ def require(module: str, extra: str) -> Any:
 
 
 def install_hint(extra: str) -> str:
-    """The pip command that installs an extra's packages, without reinstalling viz_calc.
+    """The pip command that installs an extra's packages.
 
     viz_calc is not on PyPI, so ``pip install "viz_calc[extra]"`` would fetch
     whatever someone else publishes under that name. The packages and their
     minimum versions come from the installed package metadata, which is built
-    from pyproject.toml; without it the hint falls back to the git URL.
+    from pyproject.toml; when it has no entry for the extra, the hint installs
+    viz_calc with the extra from the git URL.
     """
     import re
     from importlib.metadata import PackageNotFoundError, requires
@@ -593,7 +594,8 @@ def install_hint(extra: str) -> str:
     except PackageNotFoundError:
         reqs = []
     marker = re.compile(rf"""extra\s*==\s*["']{re.escape(extra)}["']""")
-    packages = [r.split(";")[0].strip() for r in reqs if marker.search(r)]
+    itself = re.compile(r"viz[-_.]?calc\b", re.IGNORECASE)  # some build tools write all = viz-calc[...]
+    packages = [r.split(";")[0].strip() for r in reqs if marker.search(r) and not itself.match(r)]
     if packages:
         return "pip install " + " ".join(f'"{p}"' for p in packages)
     return f'pip install "viz_calc[{extra}] @ git+https://github.com/elkronos/viz_calc"'

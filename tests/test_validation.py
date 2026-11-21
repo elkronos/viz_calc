@@ -446,6 +446,17 @@ def test_install_hint_names_the_extra_packages_from_metadata(monkeypatch):
     assert install_hint("pptx") == 'pip install "python-pptx>=0.6.21"'
 
 
+def test_install_hint_skips_requirements_on_viz_calc_itself(monkeypatch):
+    # Some build tools write the 'all' extra as a requirement on viz-calc itself; naming that would be the
+    # bare PyPI install the hint exists to avoid.
+    import importlib.metadata
+
+    reqs = ["viz-calc[interactive,network,pptx]; extra == 'all'", "networkx>=3.2; extra == 'network'"]
+    monkeypatch.setattr(importlib.metadata, "requires", lambda name: reqs)
+    assert install_hint("all") == 'pip install "viz_calc[all] @ git+https://github.com/elkronos/viz_calc"'
+    assert install_hint("network") == 'pip install "networkx>=3.2"'
+
+
 def test_install_hint_falls_back_to_the_git_url_without_metadata(monkeypatch):
     import importlib.metadata
 

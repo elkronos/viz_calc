@@ -1,9 +1,8 @@
 name: Attribution
 
 # Fails when a commit message, added line, PR title, PR description or branch name carries an
-# attribution trailer or names a writing tool (the list in the project's authorship rules).
-# Character classes keep this file from matching its own pattern, and the log names only where
-# a match is, never the matched text.
+# attribution trailer or names a writing tool. Character classes keep this file from matching its
+# own pattern, and the log names only where a match is, never the matched text.
 
 on:
   pull_request:

@@ -33,9 +33,9 @@ LEVELS = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"]
 def _data(name):
     """One shared dataset per name, built on first use.
 
-    Building them at import time turned any warning raised by a dataset into a
-    collection error for the whole file; built here, it fails only the tests
-    that use that dataset.
+    A warning raised while building a dataset fails only the tests that use
+    that dataset; at import time it would stop the whole pytest run before any
+    test ran.
     """
     if name == "small":
         return pd.DataFrame({"k": list("abcd"), "a": [3.0, 5, 2, 8], "b": [4.0, 1, 6, 7]})

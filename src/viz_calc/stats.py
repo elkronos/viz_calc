@@ -278,7 +278,7 @@ def bootstrap_ci(
     return estimate, lo, hi
 
 
-_BOOTSTRAP_ONE_PIECE = 2000  # largest sample bootstrapped unbatched (peak memory about 400 MB)
+_BOOTSTRAP_ONE_PIECE = 2000  # largest sample bootstrapped unbatched; two at 5,000 resamples peak near 450 MB
 _BOOTSTRAP_BATCH_VALUES = 2**22  # values per sample held at once when batching
 
 

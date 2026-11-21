@@ -81,7 +81,8 @@ vc.to_pptx([vc.profile_bars(df), vc.profile_boxes(df), res],
            titles=["Counts", "Numeric by category", "Numeric pairs"])
 ```
 
-`to_pptx` (needs the `pptx` extra, see [Install](../getting-started.md#install)) puts one figure per 16:9
+`to_pptx` (needs the `pptx` extra, see
+[Install](../getting-started.md#install)) puts one figure per 16:9
 slide, scaled to fit without distortion. The original scripts stretched each
 image into a fixed 4.5 × 4.5 inch square and paused for keyboard input between
 plots.
