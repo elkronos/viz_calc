@@ -35,6 +35,7 @@ from ._core import (
     exact_mean,
     foreground,
     get_ax,
+    group_key,
     level_label,
     level_mask,
     level_percent,
@@ -435,19 +436,20 @@ def lollipop(
     check_choice("sort", sort, ["descending", "ascending", None])
     check_not_reserved(["value"], x=x)
     check_has_values(data, x, y)
+    key = group_key(data[x])
     if stat != "count":
         if y is None:
             raise ValueError(f"stat={stat!r} needs a y column")
         check_numeric(data, y)
         check_finite(data, y)
         if stat == "sum":  # in float where an int64 sum could wrap around
-            agg = safe_sum(data[y], data[x], sort=True, dropna=False)
+            agg = safe_sum(data[y], key, sort=True, dropna=False)
         else:
-            agg = data.groupby(x, observed=True, dropna=False)[y].agg(stat)
+            agg = data.groupby(key, observed=True, dropna=False)[y].agg(stat)
     elif y is not None:
-        agg = data.groupby(x, observed=True, dropna=False)[y].count()
+        agg = data.groupby(key, observed=True, dropna=False)[y].count()
     else:
-        agg = data.groupby(x, observed=True, dropna=False).size()
+        agg = data.groupby(key, observed=True, dropna=False).size()
     table = agg.rename("value").reset_index()
     if sort is not None:
         table = table.sort_values("value", ascending=(sort == "ascending"), ignore_index=True)
@@ -621,7 +623,7 @@ def divergent_bar(
         raise ValueError("divergent_bar expects non-negative values in both columns")
     by_levels = isinstance(data[category].dtype, pd.CategoricalDtype)  # grouping sorts a Categorical by its categories
     # By position; safe_sum sums in float where int64 could wrap, and gives NaN (not pd.NA) for an all-missing category.
-    sums = [safe_sum(values.iloc[:, i], values.iloc[:, 0], sort=by_levels, min_count=1, dropna=False)
+    sums = [safe_sum(values.iloc[:, i], group_key(values.iloc[:, 0]), sort=by_levels, min_count=1, dropna=False)
             for i in (1, 2)]
     table = pd.concat(sums, axis=1, keys=[left, right]).rename_axis(category).reset_index()
     if sort:  # by a separate key, so a column named "total" cannot be overwritten

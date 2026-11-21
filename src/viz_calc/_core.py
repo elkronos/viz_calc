@@ -582,6 +582,20 @@ def group_label(level: Any) -> str:
     return "(missing)" if level is None else level_label(level)
 
 
+def group_key(values: pd.Series) -> pd.Series:
+    """*values* as a key for ``groupby(dropna=False)``, which makes its missing values a group of their own.
+
+    pandas before 3.0 gets that wrong for a dictionary-encoded Arrow column,
+    which ``read_parquet(dtype_backend="pyarrow")`` returns for a
+    Categorical: it drops the missing values, or adds them to the last level
+    when sorting. Such a column is grouped by its decoded values.
+    """
+    dtype = values.dtype
+    if isinstance(dtype, pd.ArrowDtype) and dtype.type is pd.CategoricalDtype.type:  # a dictionary-encoded column
+        return values.astype(pd.ArrowDtype(dtype.pyarrow_dtype.value_type))
+    return values
+
+
 def _level_key(value: Any) -> Any:
     # On NumPy 1.x a numpy.datetime64 (or timedelta64) hashes differently from the equal pandas Timestamp
     # (Timedelta), so set lookups would miss; compare levels in their pandas form.

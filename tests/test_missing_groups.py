@@ -166,6 +166,21 @@ def test_divergent_bar_sums_a_missing_category_last_in_grey(sort, dtype):
     assert [t.get_text() for t in res.axes.get_legend().get_texts()] == ["l", "r"]
 
 
+@pytest.mark.parametrize("stat", ["mean", "sum", "count"])
+def test_a_dictionary_arrow_category_keeps_its_missing_rows_apart(stat):
+    # read_parquet(dtype_backend="pyarrow") returns a Categorical as a dictionary-encoded Arrow column.
+    pa = pytest.importorskip("pyarrow")
+    k = pd.Series(["b", None, "a", "b", None, "z"], dtype=pd.ArrowDtype(pa.dictionary(pa.int32(), pa.string())))
+    df = pd.DataFrame({"k": k, "y": [1.0, 2, 3, 4, 5, 6]})
+    res = vc.lollipop(df, x="k", y="y", stat=stat, sort=None)
+    assert res.table["value"].tolist() == {"mean": [3.0, 2.5, 6.0, 3.5], "sum": [3.0, 5.0, 6.0, 7.0],
+                                           "count": [1, 2, 1, 2]}[stat]
+    assert _ticks(res.axes.get_yticklabels()) == ["a", "b", "z", "(missing)"]
+    bars = vc.divergent_bar(df.assign(r=1.0), category="k", left="y", right="r")
+    assert bars.table["y"].tolist() == [5.0, 3.0, 6.0, 7.0] and bars.table["r"].tolist() == [2.0, 1.0, 1.0, 2.0]
+    assert _ticks(bars.axes.get_yticklabels()) == ["b", "a", "z", "(missing)"]
+
+
 def test_stacked_percentages_draws_a_missing_group_as_the_last_bar():
     s = datasets.survey()
     s["team"] = s["team"].astype(object)
