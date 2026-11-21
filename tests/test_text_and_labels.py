@@ -4,9 +4,14 @@ import io
 import math
 import pickle
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pytest
 from matplotlib.container import BarContainer
+from matplotlib.mathtext import MathTextParser
+from matplotlib.text import Text
+from matplotlib.ticker import MultipleLocator
 from matplotlib.transforms import Bbox
 
 import viz_calc as vc
@@ -185,3 +190,151 @@ def test_centred_bar_labels_stay_on_the_visible_part_of_their_bar_after_pickling
         assert y == pytest.approx((visible.y0 + visible.y1) / 2, abs=1 + pad)
         checked += 1
     assert checked >= 4
+
+
+# --- mathtext -----------------------------------------------------------------------------------------------------
+
+MONEY = "$5-$10"  # valid mathtext: drawn as math it loses both dollar signs
+BAD = "$a^$"  # invalid mathtext: parsing it raises
+
+
+def _money(value):
+    """*value* after a pair of dollar signs, one of the two kinds above (chosen by the length of its text)."""
+    return f"{MONEY if len(str(value)) % 2 else BAD} {value}"
+
+
+def _with_dollars(name):
+    """The data and arguments of *name* with dollar signs in every column name, text value and index label."""
+    _, frame, kwargs, _ = CALLS[name]
+    names = {c: _money(c) for c in frame.columns}
+    data = frame.rename(columns=names)
+    for c in data.columns:
+        if pd.api.types.is_string_dtype(data[c]) or isinstance(data[c].dtype, pd.CategoricalDtype):
+            data[c] = [v if pd.isna(v) else _money(v) for v in data[c]]
+    if pd.api.types.is_string_dtype(data.index):
+        data.index = [_money(v) for v in data.index]
+
+    def swap(key, value):
+        if key == "levels":
+            return [_money(v) for v in value]
+        if isinstance(value, list):
+            return [names.get(v, v) for v in value]
+        return names.get(value, value) if isinstance(value, str) else value
+
+    return data, {k: swap(k, v) for k, v in kwargs.items()}
+
+
+@pytest.fixture
+def parsed(monkeypatch):
+    """Every string Matplotlib parses as mathtext while the test runs."""
+    seen = []
+    parse = MathTextParser.parse
+
+    def spy(self, s, *args, **kwargs):
+        seen.append(s)
+        return parse(self, s, *args, **kwargs)
+
+    monkeypatch.setattr(MathTextParser, "parse", spy)
+    return seen
+
+
+def _save(figures):
+    for figure in figures:
+        figure.savefig(io.BytesIO(), format="png")
+        figure.savefig(io.BytesIO(), format="svg")  # SVG draws text as paths through its own parser
+
+
+def _drawn(figures):
+    return [t.get_text() for figure in figures for t in figure.findobj(Text) if t.get_visible() and t.get_text()]
+
+
+@pytest.mark.parametrize("name", list(CALLS))
+def test_text_from_the_data_is_drawn_as_written(name, parsed):
+    data, kwargs = _with_dollars(name)
+    before = {k: v for k, v in plt.rcParams.items() if k != "backend"}
+    res = _run(name, data, **kwargs)
+    assert {k: v for k, v in plt.rcParams.items() if k != "backend"} == before
+    _save(_figures(res))  # drawn after the call has returned, ticks included
+    assert parsed == []
+    texts = _drawn(_figures(res))
+    assert any(MONEY in t or BAD in t for t in texts)
+    assert not any("\\$" in t for t in texts)  # the text itself is not changed
+
+
+@pytest.mark.parametrize("name", WITH_AX)
+def test_text_written_on_a_callers_axes_is_drawn_as_written(name, parsed):
+    fig, ax = plt.subplots(subplot_kw={"projection": "polar"} if CALLS[name][3] else None)
+    ax.set_title("before")
+    fig.canvas.draw()  # the title, axis labels and ticks exist before the call
+    parsed.clear()
+    data, kwargs = _with_dollars(name)
+    res = _run(name, data, ax=ax, **kwargs)
+    assert res.figure is fig
+    _save([fig])
+    assert parsed == []
+    assert any(MONEY in t or BAD in t for t in _drawn([fig]))
+
+
+def test_the_callers_own_text_keeps_its_mathtext(parsed):
+    fig, ax = plt.subplots()
+    ax.text(0.5, 0.9, r"$\alpha$ = 0.05", transform=ax.transAxes)
+    data, kwargs = _with_dollars("lollipop")
+    _run("lollipop", data, ax=ax, **kwargs)
+    _save([fig])
+    assert set(parsed) == {r"$\alpha$ = 0.05"}
+
+
+def test_text_set_after_the_call_follows_matplotlib(parsed):
+    data = pd.DataFrame({"band": [MONEY, BAD, "$10-$20"], "sales": [3.0, 5.0, 4.0]})
+    res = vc.lollipop(data, x="band", y="sales")
+    res.axes.set_xlabel(r"Dose ($\mu$g)")
+    res.axes.set_title(r"$\alpha$ = 0.05")
+    res.axes.annotate(r"$\beta$", (0.5, 0.5), xycoords="axes fraction")
+    _save([res.figure])
+    assert set(parsed) == {r"Dose ($\mu$g)", r"$\alpha$ = 0.05", r"$\beta$"}
+    assert sorted(t.get_text() for t in res.axes.get_yticklabels()) == sorted(data["band"])
+
+
+def test_numbers_keep_matplotlibs_mathtext(parsed):
+    data, kwargs = _with_dollars("histogram")
+    with plt.rc_context({"axes.formatter.use_mathtext": True}):  # numeric tick labels in mathtext
+        res = _run("histogram", data, **kwargs)
+        ax = res.axes.flat[0]
+        made = len(ax.xaxis.majorTicks)
+        ax.xaxis.set_major_locator(MultipleLocator(5))  # more ticks, which Matplotlib adds when it draws
+        _save([res.figure])
+    assert len(ax.xaxis.majorTicks) > made
+    assert parsed and all(s.startswith("$\\mathdefault{") for s in parsed)
+
+
+def test_a_callers_log_axis_keeps_its_mathtext(parsed):
+    rng = np.random.default_rng(0)
+    data = pd.DataFrame({"arm": [MONEY, BAD] * 20, f"{BAD} score": 10 ** rng.uniform(0, 3, 40)})
+    fig, ax = plt.subplots()
+    ax.set_xscale("log")
+    fig.canvas.draw()
+    parsed.clear()
+    vc.raincloud(data, x="arm", y=f"{BAD} score", ax=ax)
+    _save([fig])
+    assert parsed and all(s.startswith("$\\mathdefault{10^{") for s in parsed)
+    assert sorted(t.get_text() for t in ax.get_yticklabels()) == [f"{MONEY}\n(n=20)", f"{BAD}\n(n=20)"]
+
+
+def test_animation_frames_draw_text_as_written(parsed):
+    data, kwargs = _with_dollars("animated_bubble")
+    res = _run("animated_bubble", data, **kwargs)
+    for i in range(len(res.info["frames"])):
+        res.info["animation"]._func(i)  # draw frame i as the animation would, after the call has returned
+        _save([res.figure])
+    assert parsed == []
+    assert BAD in res.axes.get_legend().get_title().get_text()
+
+
+def test_parse_math_is_off_only_while_a_call_runs():
+    data, kwargs = _with_dollars("lollipop")
+    with pytest.raises(KeyError):
+        _run("lollipop", data, **{**kwargs, "y": "nope"})
+    assert plt.rcParams["text.parse_math"] is True
+    with plt.rc_context({"text.parse_math": False}):  # a caller's own setting is kept
+        _run("lollipop", data, **kwargs)
+        assert plt.rcParams["text.parse_math"] is False

@@ -37,6 +37,7 @@ from ._core import (
     palette,
     select_columns,
     slot_colors,
+    text_as_written,
 )
 
 __all__ = ["period_bars", "timeseries_fill", "calendar_heatmap", "gantt", "duration_plot", "animated_bubble"]
@@ -753,6 +754,7 @@ def animated_bubble(
     xlim = (data[x].min() - pad_x, data[x].max() + pad_x)
     ylim = (data[y].min() - pad_y, data[y].max() + pad_y)
 
+    @text_as_written(ax)  # frames after the first are drawn once this call has returned
     def draw(i: int):
         ax.clear()
         cur = data[data[time] == frames[i]]

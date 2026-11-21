@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import math
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -15,8 +16,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
+from matplotlib.axis import Axis
+from matplotlib.category import StrCategoryFormatter
 from matplotlib.colors import is_color_like, to_hex, to_rgb
-from matplotlib.ticker import ScalarFormatter
+from matplotlib.figure import FigureBase
+from matplotlib.text import Text
+from matplotlib.ticker import FixedFormatter, FuncFormatter, ScalarFormatter
 from matplotlib.transforms import Bbox
 
 # Okabe & Ito (2008) "Color Universal Design" palette. The eight colours stay
@@ -255,10 +260,88 @@ def select_columns(data: pd.DataFrame, columns: Iterable[Any]) -> pd.DataFrame:
     return data[columns]
 
 
-def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
-    """Decorator: close the Matplotlib figures a plotting call opened if the call raises.
+#: Tick formatters that show text from the data, such as the labels given to ``set_xticks``.
+_LABEL_FORMATTERS = (FixedFormatter, FuncFormatter, StrCategoryFormatter)
 
-    Otherwise a failed call leaves a half-drawn figure registered with
+#: Matplotlib reads text with a pair of unescaped ``$`` as mathtext; text made under this setting is drawn as is.
+_NO_MATH = {"text.parse_math": False}
+
+
+def _artists(artist: Any) -> Iterator[Any]:
+    """*artist* and the artists under it; of an axis, only the axis label (not its ticks or offset text)."""
+    yield artist
+    for child in [artist.label] if isinstance(artist, Axis) else artist.get_children():
+        yield from _artists(child)
+
+
+class _Text:
+    """The text on the caller's Axes before a plotting call, so that the text the call writes can be told apart."""
+
+    def __init__(self, axes: Iterable[Axes]) -> None:
+        self.figures = list(dict.fromkeys(ax.figure for ax in axes))
+        found = [a for figure in self.figures for a in _artists(figure)]
+        self.texts = {t: t.get_text() for t in found if isinstance(t, Text)}
+        self.formatters = {a: (a.get_major_formatter(), a.get_minor_formatter()) for a in found if isinstance(a, Axis)}
+
+    def settle(self, figures: Iterable[Any]) -> None:
+        """Draw the text the call wrote in *figures* as written, and leave the rest to Matplotlib's own rules.
+
+        Text the call made or changed is drawn as written if it holds a
+        ``$``, and so are the tick labels of an axis the call gave such
+        labels to. All other text follows ``text.parse_math``, so a title
+        the caller sets later can still use mathtext, and so can the numbers
+        of a log axis or the ticks Matplotlib adds when it draws.
+        """
+        default = plt.rcParams["text.parse_math"]
+        for figure in dict.fromkeys([*figures, *self.figures]):
+            for artist in _artists(figure):
+                if isinstance(artist, Text) and self.texts.get(artist) != artist.get_text():
+                    artist.set_parse_math(default and "$" not in artist.get_text())
+                elif isinstance(artist, Axis):
+                    before = self.formatters.get(artist, (None, None))
+                    for ticks, formatter, old, locs in (
+                        (artist.majorTicks, artist.get_major_formatter(), before[0], artist.get_majorticklocs),
+                        (artist.minorTicks, artist.get_minor_formatter(), before[1], artist.get_minorticklocs),
+                    ):
+                        written = formatter is not old and isinstance(formatter, _LABEL_FORMATTERS)
+                        parse = default and not (written and any("$" in str(t) for t in formatter.format_ticks(locs())))
+                        for tick in ticks:
+                            tick.label1.set_parse_math(parse)
+                            tick.label2.set_parse_math(parse)
+                    artist.offsetText.set_parse_math(default)
+
+
+@contextlib.contextmanager
+def text_as_written(*axes: Axes) -> Iterator[None]:
+    """Draw the text made in the block, and the text it writes on *axes*, as written: a ``$`` never starts mathtext.
+
+    The plotting functions get this from :func:`cleanup_on_error`; it also
+    decorates callbacks that draw after the call has returned, such as
+    animation frames.
+    """
+    text = _Text(axes)
+    with plt.rc_context(_NO_MATH):
+        yield
+    text.settle([])
+
+
+def _figures(result: Any) -> list[Any]:
+    """The Matplotlib figures in a plotting function's *result* (none for a Plotly figure)."""
+    figure = result.figure if isinstance(result, VizResult) else None
+    return [f for f in (figure if isinstance(figure, list) else [figure]) if isinstance(f, FigureBase)]
+
+
+def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
+    """Decorator for the plotting functions: their text is drawn as written, and a failed call closes its figures.
+
+    Category values, column names and labels are drawn as written: a pair
+    of ``$`` in them never starts Matplotlib mathtext, so ``$5-$10`` keeps
+    its dollar signs and ``$a^$`` cannot fail when the figure is drawn,
+    during the call or when it is saved later. This holds for text the call
+    writes on a caller's *ax* too; other text there is left alone.
+    ``text.parse_math`` is off only while the call runs.
+
+    A failed call would otherwise leave a half-drawn figure registered with
     pyplot, which Jupyter or ``plt.show()`` would then display. Figures that
     existed before the call (such as the one holding a caller's *ax*) are
     left open.
@@ -266,12 +349,16 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         before = set(plt.get_fignums())
+        text = _Text(a for a in (*args, *kwargs.values()) if isinstance(a, Axes))
         try:
-            return func(*args, **kwargs)
+            with plt.rc_context(_NO_MATH):
+                result = func(*args, **kwargs)
         except BaseException:
             for num in set(plt.get_fignums()) - before:
                 plt.close(num)
             raise
+        text.settle(_figures(result))
+        return result
 
     return wrapper
 
