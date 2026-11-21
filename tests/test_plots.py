@@ -1,5 +1,7 @@
 """Behaviour of the plotting functions, including regressions for bugs in the original scripts."""
 
+import functools
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -27,58 +29,79 @@ def survey():
 LEVELS = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"]
 
 
+@functools.cache
+def _data(name):
+    """One shared dataset per name, built on first use.
+
+    Building them at import time turned any warning raised by a dataset into a
+    collection error for the whole file; built here, it fails only the tests
+    that use that dataset.
+    """
+    if name == "small":
+        return pd.DataFrame({"k": list("abcd"), "a": [3.0, 5, 2, 8], "b": [4.0, 1, 6, 7]})
+    return {"trial": datasets.trial, "meas": datasets.measurements, "survey": datasets.survey,
+            "sales": datasets.sales, "proj": datasets.projects, "edges": datasets.network}[name]()
+
+
 def _calls():
-    """Every public plotting function with valid arguments (used for the generic contract tests)."""
-    trial, meas, survey = datasets.trial(), datasets.measurements(), datasets.survey()
-    sales, proj, edges = datasets.sales(), datasets.projects(), datasets.network()
-    small = pd.DataFrame({"k": list("abcd"), "a": [3.0, 5, 2, 8], "b": [4.0, 1, 6, 7]})
+    """Every public plotting function with valid arguments (used for the generic contract tests).
+
+    The data is a dataset name, or a function that derives the data from the shared datasets.
+    """
     return {
-        "estimation_plot": (vc.estimation_plot, trial, dict(x="arm", y="score", n_resamples=500)),
-        "benchmark_bar": (vc.benchmark_bar, trial, dict(x="arm", y="score", threshold=50)),
-        "lollipop": (vc.lollipop, survey, dict(x="team", y="tenure_years")),
-        "dumbbell": (vc.dumbbell, small, dict(label="k", start="a", end="b")),
-        "divergent_bar": (vc.divergent_bar, small, dict(category="k", left="a", right="b")),
-        "centered_bar": (vc.centered_bar, trial, dict(x="arm", y="score")),
-        "likert": (vc.likert, survey, dict(items=["Tools are adequate", "Meetings are useful"], levels=LEVELS)),
-        "correlogram": (vc.correlogram, meas, dict()),
-        "compare_correlations": (vc.compare_correlations, meas, dict(group="group")),
-        "quadrant_plot": (vc.quadrant_plot, trial, dict(x="baseline", y="score")),
-        "histogram": (vc.histogram, trial, dict(x="score")),
-        "ridgeplot": (vc.ridgeplot, meas, dict(x="depth", group="group")),
-        "raincloud": (vc.raincloud, trial, dict(x="arm", y="score")),
-        "waffle": (vc.waffle, survey, dict(category="team")),
-        "percent_grid": (vc.percent_grid, trial, dict(column="improved")),
-        "stacked_percentages": (vc.stacked_percentages, survey, dict(group="team", category="remote")),
-        "donut_grid": (vc.donut_grid, small.set_index("k"), dict()),
-        "nested_pie": (vc.nested_pie, survey, dict(outer="team", inner="remote")),
-        "circular_bar": (vc.circular_bar, small, dict(label="k", value="a")),
-        "waterfall": (vc.waterfall, small, dict(label="k", value="a")),
-        "funnel": (vc.funnel, small.sort_values("a", ascending=False), dict(stage="k", value="a")),
-        "bullet": (vc.bullet, small, dict(label="k", value="a", target="b", bands=[2, 5, 9])),
-        "period_bars": (vc.period_bars, sales, dict(date="date", value="online")),
-        "timeseries_fill": (vc.timeseries_fill, sales.head(60), dict(time="date", series=["online", "store"])),
-        "calendar_heatmap": (vc.calendar_heatmap, sales, dict(date="date", value="online")),
-        "gantt": (vc.gantt, proj, dict(task="task", start="start", end="end", group="team")),
-        "duration_plot": (vc.duration_plot, proj, dict(label="task", start="start", end="end",
-                                                       inner_start="work_start", inner_end="work_end")),
-        "pca_plot": (vc.pca_plot, meas, dict(features=["length", "width", "depth", "mass"], group="group")),
-        "radar": (vc.radar, meas, dict(metrics=["length", "width", "depth", "mass"], group="group")),
-        "network_map": (vc.network_map, edges, dict(source="source", target="target", weight="strength")),
-        "animated_bubble": (vc.animated_bubble, sales.head(20).melt(id_vars="date", value_vars=["online", "store"])
-                            .assign(size=lambda d: d["value"]), dict(time="date", x="value", y="size", size="size",
-                                                                     color="variable")),
-        "profile_bars": (vc.profile_bars, meas, dict()),
-        "profile_boxes": (vc.profile_boxes, meas, dict()),
-        "profile_scatters": (vc.profile_scatters, meas, dict()),
+        "estimation_plot": (vc.estimation_plot, "trial", dict(x="arm", y="score", n_resamples=500)),
+        "benchmark_bar": (vc.benchmark_bar, "trial", dict(x="arm", y="score", threshold=50)),
+        "lollipop": (vc.lollipop, "survey", dict(x="team", y="tenure_years")),
+        "dumbbell": (vc.dumbbell, "small", dict(label="k", start="a", end="b")),
+        "divergent_bar": (vc.divergent_bar, "small", dict(category="k", left="a", right="b")),
+        "centered_bar": (vc.centered_bar, "trial", dict(x="arm", y="score")),
+        "likert": (vc.likert, "survey", dict(items=["Tools are adequate", "Meetings are useful"], levels=LEVELS)),
+        "correlogram": (vc.correlogram, "meas", dict()),
+        "compare_correlations": (vc.compare_correlations, "meas", dict(group="group")),
+        "quadrant_plot": (vc.quadrant_plot, "trial", dict(x="baseline", y="score")),
+        "histogram": (vc.histogram, "trial", dict(x="score")),
+        "ridgeplot": (vc.ridgeplot, "meas", dict(x="depth", group="group")),
+        "raincloud": (vc.raincloud, "trial", dict(x="arm", y="score")),
+        "waffle": (vc.waffle, "survey", dict(category="team")),
+        "percent_grid": (vc.percent_grid, "trial", dict(column="improved")),
+        "stacked_percentages": (vc.stacked_percentages, "survey", dict(group="team", category="remote")),
+        "donut_grid": (vc.donut_grid, lambda: _data("small").set_index("k"), dict()),
+        "nested_pie": (vc.nested_pie, "survey", dict(outer="team", inner="remote")),
+        "circular_bar": (vc.circular_bar, "small", dict(label="k", value="a")),
+        "waterfall": (vc.waterfall, "small", dict(label="k", value="a")),
+        "funnel": (vc.funnel, lambda: _data("small").sort_values("a", ascending=False), dict(stage="k", value="a")),
+        "bullet": (vc.bullet, "small", dict(label="k", value="a", target="b", bands=[2, 5, 9])),
+        "period_bars": (vc.period_bars, "sales", dict(date="date", value="online")),
+        "timeseries_fill": (vc.timeseries_fill, lambda: _data("sales").head(60),
+                            dict(time="date", series=["online", "store"])),
+        "calendar_heatmap": (vc.calendar_heatmap, "sales", dict(date="date", value="online")),
+        "gantt": (vc.gantt, "proj", dict(task="task", start="start", end="end", group="team")),
+        "duration_plot": (vc.duration_plot, "proj", dict(label="task", start="start", end="end",
+                                                         inner_start="work_start", inner_end="work_end")),
+        "pca_plot": (vc.pca_plot, "meas", dict(features=["length", "width", "depth", "mass"], group="group")),
+        "radar": (vc.radar, "meas", dict(metrics=["length", "width", "depth", "mass"], group="group")),
+        "network_map": (vc.network_map, "edges", dict(source="source", target="target", weight="strength")),
+        "animated_bubble": (vc.animated_bubble,
+                            lambda: _data("sales").head(20).melt(id_vars="date", value_vars=["online", "store"])
+                            .assign(size=lambda d: d["value"]),
+                            dict(time="date", x="value", y="size", size="size", color="variable")),
+        "profile_bars": (vc.profile_bars, "meas", dict()),
+        "profile_boxes": (vc.profile_boxes, "meas", dict()),
+        "profile_scatters": (vc.profile_scatters, "meas", dict()),
     }
 
 
 CALLS = _calls()
 
 
+def _call(name):
+    func, data, kwargs = CALLS[name]
+    return func, (data() if callable(data) else _data(data)), kwargs
+
+
 @pytest.mark.parametrize("name", list(CALLS))
 def test_returns_result_and_does_not_mutate_input(name):
-    func, data, kwargs = CALLS[name]
+    func, data, kwargs = _call(name)
     before = data.copy(deep=True)
     res = func(data, **kwargs)
     assert isinstance(res, vc.VizResult)
@@ -90,7 +113,7 @@ def test_returns_result_and_does_not_mutate_input(name):
 
 @pytest.mark.parametrize("name", [n for n in CALLS if n not in {"donut_grid", "upset"}])
 def test_missing_column_raises_keyerror(name):
-    func, data, kwargs = CALLS[name]
+    func, data, kwargs = _call(name)
     bad = {k: ("nope" if isinstance(v, str) and v in data.columns else v) for k, v in kwargs.items()}
     if bad == kwargs:
         pytest.skip("no column argument")
