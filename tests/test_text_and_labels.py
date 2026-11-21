@@ -275,6 +275,18 @@ def test_text_written_on_a_callers_axes_is_drawn_as_written(name, parsed):
     assert any(MONEY in t or BAD in t for t in _drawn([fig]))
 
 
+def test_text_an_earlier_call_wrote_on_the_figure_stays_as_written(parsed):
+    fig, (first, second, own) = plt.subplots(1, 3)
+    own.set_xticks([0, 1], [r"$\alpha$", r"$\beta$"])  # the caller's own tick labels, in mathtext
+    for name, ax in (("lollipop", first), ("waterfall", second)):
+        data, kwargs = _with_dollars(name)
+        _run(name, data, ax=ax, **kwargs)
+    _save([fig])
+    assert set(parsed) == {r"$\alpha$", r"$\beta$"}
+    ticks = [t.get_text() for t in (*first.get_xticklabels(), *first.get_yticklabels())]
+    assert any(BAD in t for t in ticks) and any(MONEY in t for t in ticks)
+
+
 def test_the_callers_own_text_keeps_its_mathtext(parsed):
     fig, ax = plt.subplots()
     ax.text(0.5, 0.9, r"$\alpha$ = 0.05", transform=ax.transAxes)
