@@ -116,6 +116,11 @@ def _threshold_text(thr: float, tol: float, compared: Any) -> str:
     return text[:-2] if text.endswith(".0") else text
 
 
+# Groups with fewer values are flagged. A 95% bootstrap interval for a mean difference covered the truth in 80% of
+# simulated normal datasets at 3 per group and 91-93% at 10 to 15; the Welch interval covered 94-98%.
+_SMALL_GROUP = 15
+
+
 @cleanup_on_error
 def estimation_plot(
     data: pd.DataFrame,
@@ -129,19 +134,32 @@ def estimation_plot(
     colors: Sequence[str] | str | None = None,
     seed: int = 0,
     figsize: tuple[float, float] = (8, 7),
+    ci: Literal["bca", "welch", "percentile"] = "bca",
 ) -> VizResult:
     """Show every observation and the effect size, not just a p-value.
 
     A Cumming-style estimation plot (Ho et al., 2019). The upper panel shows
     the raw data per group with each group's mean and t-based CI. The lower
     panel shows the difference of each group's mean from the *reference*
-    group: the bootstrap sampling distribution, the BCa confidence interval,
-    and a zero line. Showing the data instead of "dynamite" bars follows
-    Weissgerber et al. (2015).
+    group: the bootstrap sampling distribution, the confidence interval chosen
+    by *ci* (BCa by default), and a zero line. Showing the data instead of
+    "dynamite" bars follows Weissgerber et al. (2015).
 
     The returned table reports, for every comparison, the mean difference with
-    its bootstrap CI, Hedges' *g* with CI, and a Welch *t*-test p-value
-    adjusted for the number of comparisons (Holm by default).
+    its CI and its Welch *t* CI, Hedges' *g* with CI, and a Welch *t*-test
+    p-value adjusted for the number of comparisons (Holm by default).
+
+    Bootstrap intervals treat the spread of the sample as the spread of the
+    population, so with few observations they are too narrow: in simulations
+    of normal data the 95% BCa interval covered the true difference about 80%
+    of the time at 3 per group and 91–92% at 10, while the Welch interval
+    stayed at 94–98% (see Methodology). Groups with fewer than 15 values are
+    listed in ``info["small_groups"]``, and under a bootstrap *ci* a second
+    line of the lower panel's title names them (more than three are counted).
+    The BCa interval and the Welch p-value come from different methods, so at
+    small *n* the interval can exclude zero while p is above 0.05; the Welch
+    interval excludes zero exactly when the unadjusted p is below
+    ``1 - level``.
 
     Parameters
     ----------
@@ -173,12 +191,23 @@ def estimation_plot(
         is cycled). Defaults to the Okabe–Ito palette.
     seed
         Seed for jitter and bootstrap, so the figure is reproducible.
+    ci
+        Interval for the mean difference: ``"bca"`` (bias-corrected and
+        accelerated bootstrap, the default), ``"percentile"`` (bootstrap
+        percentile) or ``"welch"`` (Welch *t*, the interval that matches the
+        Welch p-value). It is the interval drawn in the lower panel and
+        reported in ``ci_low``/``ci_high``; the shaded curve is the bootstrap
+        distribution for every choice.
 
     Returns
     -------
     VizResult
         ``table`` has one row per group (``n``, ``mean``, ``sd``, CI) and
-        ``info["comparisons"]`` has one row per comparison.
+        ``info["comparisons"]`` has one row per comparison, with the *ci*
+        interval in ``ci_low``/``ci_high`` and the Welch interval in
+        ``welch_ci_low``/``welch_ci_high``. ``info["ci_method"]`` is *ci*, and
+        ``info["small_groups"]`` maps each group with fewer than 15 values to
+        its ``n`` (empty when every group has 15 or more).
 
     References
     ----------
@@ -194,6 +223,7 @@ def estimation_plot(
     check_numeric(data, y)
     check_finite(data, y)
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
+    check_choice("ci", ci, ["bca", "welch", "percentile"])
     check_not_reserved(["n", "mean", "sd", "ci_low", "ci_high"], x=x)
     st._check_level(level)
     check_count("n_resamples", n_resamples)
@@ -236,16 +266,21 @@ def estimation_plot(
         # Resample the data divided by a power of two (exact), so BCa's sums of powers neither overflow nor underflow.
         s = st._unit_scale(ref, samples[g])
         # The default statistic, mean(b) - mean(a), with ties to the estimate kept exact whatever the units.
-        est, lo, hi, dist = st._bootstrap((ref / s, samples[g] / s), None, level, n_resamples, "BCa", seed)
+        # The resamples do not depend on the method, so for ci="welch" the percentile run (no jackknife) gives the curve.
+        boot = "BCa" if ci == "bca" else "percentile"
+        est, lo, hi, dist = st._bootstrap((ref / s, samples[g] / s), None, level, n_resamples, boot, seed)
         est, lo, hi, dist = est * s, lo * s, hi * s, dist * s
+        w = st.welch_test(ref, samples[g], level)
+        if ci == "welch":
+            lo, hi = w["ci_low"], w["ci_high"]
         dens = _half_violin(dist)
         if dens is not None:
             grid, width = dens
             ax_diff.fill_betweenx(grid, i, i + width * 0.35, color=cols[i], alpha=0.35, lw=0)
         ax_diff.errorbar(i, est, yerr=[[est - lo], [hi - est]], fmt="o", color=foreground(ax_diff), ms=6, lw=2)
-        w = st.welch_test(ref, samples[g], level)
         h = st.hedges_g(ref, samples[g], level)
         comps.append({"group": g, "reference": reference, "difference": est, "ci_low": lo, "ci_high": hi,
+                      "welch_ci_low": w["ci_low"], "welch_ci_high": w["ci_high"],
                       "hedges_g": h["g"], "g_ci_low": h["ci_low"], "g_ci_high": h["ci_high"],
                       "welch_t": w["t"], "df": w["df"], "p": w["p"]})
     comps_df = pd.DataFrame(comps)
@@ -253,12 +288,20 @@ def estimation_plot(
     ax_diff.set_ylabel(f"Difference from\n{level_label(reference)}")
     ax_diff.set_xticks(range(len(groups)), [level_label(g) for g in groups])
     ax_diff.set_xlabel(x)
-    ax_diff.set_title(f"Mean difference with bootstrap {level_percent(level)} CI (BCa)", loc="left", fontsize="medium")
+    method = {"bca": "bootstrap {} CI (BCa)", "percentile": "bootstrap {} CI (percentile)", "welch": "Welch t {} CI"}
+    title = f"Mean difference with {method[ci].format(level_percent(level))}"
+    small_groups = {g: samples[g].size for g in groups if samples[g].size < _SMALL_GROUP}
+    if small_groups and ci != "welch":
+        # The caveat comes before the names, so long group names cut off at the figure edge do not hide it.
+        names = ", ".join(map(level_label, small_groups)) if len(small_groups) <= 3 else f"{len(small_groups)} groups"
+        title += f"\nBootstrap CIs tend to be too narrow for n < {_SMALL_GROUP} ({names})"
+    ax_diff.set_title(title, loc="left", fontsize="medium")
     for ax in (ax_raw, ax_diff):
         ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     return VizResult(fig, np.array([ax_raw, ax_diff]), pd.DataFrame(rows),
                      {"comparisons": comps_df, "level": level, "p_adjust": p_adjust, "reference": reference,
+                      "ci_method": ci, "small_groups": small_groups,
                       "dropped_missing_group": int(data[x].isna().sum())})
 
 
