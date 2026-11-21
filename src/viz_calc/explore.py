@@ -238,9 +238,9 @@ def profile_scatters(
 def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: int = 200) -> str:
     """Write figures (or :class:`VizResult` objects) to a PowerPoint file, one per slide.
 
-    Requires ``python-pptx`` (``pip install "viz_calc[pptx]"``). Images are
-    scaled to fit a 13.33 × 7.5 inch (16:9) slide while keeping their aspect
-    ratio.
+    Requires ``python-pptx``, installed with the ``pptx`` extra (see the
+    install section of *Getting started*). Images are scaled to fit a
+    13.33 × 7.5 inch (16:9) slide while keeping their aspect ratio.
 
     *figures* is one figure or result, or any iterable of them. *titles*
     gives one title per item in *figures*; a single string is the title of
