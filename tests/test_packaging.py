@@ -123,3 +123,16 @@ def test_every_third_party_import_is_a_declared_dependency():
     undeclared = {where: module for module, where in imports.items()
                   if _name(DISTRIBUTIONS.get(module, module)) not in declared}
     assert not undeclared, f"imported but not in pyproject.toml dependencies or extras: {undeclared}"
+
+
+def test_readme_images_load_from_the_package_page():
+    # README.md is the package's long description, and a package index resolves a relative src against
+    # its own site, so each image is the raw.githubusercontent.com URL of a file in this repository.
+    project = _pyproject()["project"]
+    text = (ROOT / project["readme"]).read_text(encoding="utf-8")
+    sources = re.findall(r'<img[^>]*\ssrc="([^"]+)"', text) + re.findall(r"!\[[^\]]*\]\(([^)\s]+)", text)
+    assert sources, "README.md has no images"
+    prefix = "https://raw.githubusercontent.com/elkronos/viz_calc/main/"
+    for src in sources:
+        assert src.startswith(prefix), f"README.md image {src!r} does not start with {prefix}"
+        assert (ROOT / src.removeprefix(prefix)).is_file(), f"README.md image {src!r} is not in the repository"

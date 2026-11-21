@@ -21,7 +21,7 @@ res.info["comparisons"]     # mean difference + bootstrap CI, Hedges' g, Holm-ad
 res.save("effect.png")
 ```
 
-<p align="center"><img src="docs/images/estimation_plot.png" width="560" alt="Estimation plot"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/elkronos/viz_calc/main/docs/images/estimation_plot.png" width="560" alt="Estimation plot"></p>
 
 ## Install
 
