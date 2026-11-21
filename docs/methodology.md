@@ -56,9 +56,34 @@ shifted.
 Bias-corrected and accelerated (BCa) intervals (Efron, 1987) from
 `scipy.stats.bootstrap`, 5,000 resamples, fixed seed. Each group is resampled
 independently. Used for the mean difference in `estimation_plot`, following
-estimation-statistics practice (Cumming, 2014; Ho et al., 2019).
+estimation-statistics practice (Cumming, 2014; Ho et al., 2019);
+`ci="percentile"` draws the bootstrap percentile interval instead and
+`ci="welch"` the Welch *t* interval.
 `stats.bootstrap_ci` bootstraps the mean of one sample or the difference in
 means of two unless given another statistic.
+
+With few observations bootstrap intervals are too narrow. The bootstrap
+distribution of a mean has the spread of the sample's plug-in variance
+(divisor $n$, not $n - 1$) and makes no allowance for that variance being
+estimated, which the *t* distribution does. In simulations of normal data
+with no true difference (300 to 1,000 datasets per size, 2,000 resamples),
+the 95% BCa interval for a difference in means covered zero in 61–64% of
+datasets at 2 per group, 79–81% at 3, 86–88% at 5, 91–92% at 10 and 15,
+92–94% at 20 and 94% at 30. The Welch interval covered 94–98% at every size.
+The percentile interval behaved like BCa (79% at 3 per group, 87% at 5, 91%
+at 10). Skewed (lognormal) data were worse for BCa, 79–90% from 3 to 20 per
+group, while Welch stayed at 96–98%.
+
+`estimation_plot` therefore always reports the Welch interval as well, in
+the `welch_ci_low` and `welch_ci_high` columns of `info["comparisons"]`, and
+records the drawn interval's method in `info["ci_method"]`. The Welch
+interval excludes zero exactly when the unadjusted Welch p-value is below
+`1 - level`. The BCa interval and the Welch p-value come from different
+methods and can disagree even without a multiplicity adjustment: at 6 per
+group and a true difference of 1.2 SD, "the BCa interval excludes zero" and
+"$p < 0.05$" disagreed in about one simulated dataset in six. Groups with
+fewer than 15 values are listed with their sizes in `info["small_groups"]`,
+and with a bootstrap interval the lower panel's title names them.
 
 BCa's bias correction counts the bootstrap values below the estimate, so
 values tied with it matter, and on data recorded to a fixed precision
