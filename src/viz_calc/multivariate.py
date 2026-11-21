@@ -22,6 +22,7 @@ from ._core import (
     check_count,
     check_dataframe,
     check_distinct,
+    check_finite,
     check_not_reserved,
     check_numeric,
     cleanup_on_error,
@@ -45,7 +46,8 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     when features are on different units; otherwise large-variance features
     dominate (Jolliffe & Cadima, 2016). A feature whose values are all
     identical cannot be standardized and raises ``ValueError``; unscaled, it
-    adds a component with zero variance. Component signs are fixed so that the
+    adds a component with zero variance. A feature holding an infinite value
+    raises ``ValueError`` either way. Component signs are fixed so that the
     largest-magnitude loading of each component is positive, making results
     reproducible.
 
@@ -61,6 +63,7 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     features = column_list("features", features, distinct=True)
     check_dataframe(data, features)
     check_numeric(data, *features)
+    check_finite(data, *features)
     X = select_columns(data, features).dropna()
     if len(X) < 3:
         raise ValueError("need at least three complete rows")
@@ -269,6 +272,7 @@ def radar(
     for m in metrics:
         check_distinct(group=group, metrics=m)
     check_numeric(data, *metrics)
+    check_finite(data, *metrics)
     check_choice("normalize", normalize, ["data", "groups", "none"])
     check_choice("stat", stat, ["mean", "median"])
     if len(metrics) < 3:

@@ -215,6 +215,7 @@ def period_bars(
     """
     check_dataframe(data, [date, value])
     check_numeric(data, value)
+    check_finite(data, value)
     check_choice("freq", freq, list(_PERIOD))
     check_choice("stat", stat, ["sum", "mean", "median", "count", "max", "min"])
     if trend_window is not None:
@@ -299,6 +300,7 @@ def timeseries_fill(
                          f"series={series!r}")
     check_not_reserved(["difference", "leader"], time=time, **{"first series": a, "second series": b})
     check_numeric(data, a, b)
+    check_finite(data, time, a, b)  # a numeric time column too
     if isinstance(alpha, bool) or not isinstance(alpha, numbers.Real) or not 0 <= alpha <= 1:
         raise ValueError(f"alpha must be a number from 0 to 1, got {alpha!r}")
     if labels is None:
@@ -384,6 +386,7 @@ def calendar_heatmap(
         raise ValueError(f"stat={stat!r} needs a value column; without one calendar_heatmap counts rows per day")
     if value is not None:
         check_numeric(data, value)
+        check_finite(data, value)
     check_has_values(data, date, value)
     cm = plt.get_cmap(cmap).with_extremes(bad=missing_color)  # an unknown cmap fails before any work is done
     d = pd.DataFrame({"day": _dates(data[date], date).dt.normalize()})  # tz-aware dates: local calendar day
