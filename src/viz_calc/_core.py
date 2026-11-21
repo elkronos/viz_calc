@@ -395,6 +395,23 @@ def category_order(values: pd.Series, order: Sequence[Any] | None = None, comple
         return present
 
 
+def level_mask(values: pd.Series, level: Any) -> pd.Series:
+    """``values == level``: which rows of *values* hold *level*, also for a column backed by a read-only array.
+
+    pandas before 2.2 cannot compare an object column whose array is
+    read-only (a frame built with ``copy=False`` over a read-only NumPy
+    array, for example) with a scalar ("buffer source array is read-only"),
+    so such a column is compared through a copy. ``isin`` is not used
+    because it misses ``numpy.datetime64`` values held in an object column.
+    """
+    try:
+        return values == level
+    except ValueError as exc:
+        if values.dtype != object or "read-only" not in str(exc):
+            raise
+        return values.copy() == level
+
+
 def _level_key(value: Any) -> Any:
     # On NumPy 1.x a numpy.datetime64 (or timedelta64) hashes differently from the equal pandas Timestamp
     # (Timedelta), so set lookups would miss; compare levels in their pandas form.

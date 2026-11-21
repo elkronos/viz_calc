@@ -34,6 +34,7 @@ from ._core import (
     column_list,
     get_ax,
     level_label,
+    level_mask,
     level_percent,
     palette,
     safe_sum,
@@ -218,8 +219,8 @@ def percent_grid(
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.2 * ncol, 3.6 * nrow), squeeze=False)
     rows = []
     for ax, f in zip(axes.flat, facets):
-        s = (data if f is None else data[data[facet] == f])[column].dropna()
-        n, k = int(s.size), int((s == success).sum())
+        s = (data if f is None else data[level_mask(data[facet], f)])[column].dropna()
+        n, k = int(s.size), int(level_mask(s, success).sum())
         p = k / n if n else np.nan
         lo, hi = st.wilson_ci(k, n, level)
         filled = (200 * k + n) // (2 * n) if n else 0  # exact, halves round up (round() would go to even)

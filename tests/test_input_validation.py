@@ -1,4 +1,6 @@
-"""Input checks shared by the charts: one column for two roles, infinite values and sums of nullable numbers."""
+"""Input checks shared by the charts: column roles, infinite values, read-only columns and nullable sums."""
+
+import contextlib
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,7 +10,7 @@ import pytest
 import viz_calc as vc
 from viz_calc import datasets
 from viz_calc import stats as st
-from viz_calc._core import check_finite, safe_sum
+from viz_calc._core import check_finite, level_mask, safe_sum
 
 SMALL = pd.DataFrame({"k": list("abcd"), "o": list("xxyy"), "a": [3.0, 5, 2, 8], "b": [4.0, 6, 3, 9]})
 
@@ -140,6 +142,94 @@ def test_lollipop_counts_may_include_infinite_values():
 
 def test_the_statistics_functions_keep_their_nan_results_for_infinite_input():
     assert np.isnan(st.correlation_test([np.inf] * 4, [1, 3, 2, 4])["r"])
+
+
+# --- groups are selected from read-only object columns -------------------------------------------------------------
+
+
+def _read_only(data):
+    """*data* with its text columns held in one read-only object array, as a frame built with ``copy=False`` has.
+
+    Categorical and string columns become object columns. Numbers and dates are copied.
+    """
+    text = [c for c in data.columns if not (pd.api.types.is_numeric_dtype(data[c])
+                                            or pd.api.types.is_datetime64_any_dtype(data[c]))]
+    labels = np.asfortranarray(data[text].to_numpy(dtype=object))  # each column a contiguous slice
+    labels.flags.writeable = False
+    out = pd.DataFrame(labels, columns=text, index=data.index, dtype=object, copy=False)
+    for c in data.columns:
+        if c not in text:
+            out[c] = data[c].to_numpy(copy=True)
+    return out
+
+
+SURVEY_ITEMS = ["Workload is manageable", "My manager supports me", "Tools are adequate"]
+READ_ONLY_CALLS = {
+    "estimation_plot": ("trial", lambda d: vc.estimation_plot(d, x="arm", y="score", n_resamples=50)),
+    "benchmark_bar": ("trial", lambda d: vc.benchmark_bar(d, x="arm", y="score")),
+    "lollipop": ("trial", lambda d: vc.lollipop(d, x="arm", y="score")),
+    "dumbbell": ("small", lambda d: vc.dumbbell(d, label="k", start="a", end="b")),
+    "divergent_bar": ("small", lambda d: vc.divergent_bar(d, category="o", left="a", right="b")),
+    "centered_bar": ("trial", lambda d: vc.centered_bar(d, x="arm", y="score")),
+    "likert": ("survey", lambda d: vc.likert(d, items=SURVEY_ITEMS, levels=sorted(set(d[SURVEY_ITEMS[0]].dropna())))),
+    "waffle": ("survey", lambda d: vc.waffle(d, category="team", value="tenure_years")),
+    "percent_grid": ("trial", lambda d: vc.percent_grid(d, column="site", success="North", facet="arm")),
+    "percent_grid without facet": ("trial", lambda d: vc.percent_grid(d, column="site", success="North")),
+    "stacked_percentages": ("trial", lambda d: vc.stacked_percentages(d, group="arm", category="site")),
+    "nested_pie": ("small", lambda d: vc.nested_pie(d, outer="o", inner="k", value="a")),
+    "circular_bar": ("small", lambda d: vc.circular_bar(d, label="k", value="a", group="o")),
+    "waterfall": ("small", lambda d: vc.waterfall(d, label="k", value="a")),
+    "funnel": ("small", lambda d: vc.funnel(d, stage="k", value="a")),
+    "bullet": ("small", lambda d: vc.bullet(d, label="k", value="a", target="b")),
+    "histogram facet": ("trial", lambda d: vc.histogram(d, x="score", facet="arm")),
+    "histogram hue": ("trial", lambda d: vc.histogram(d, x="score", hue="arm")),
+    "ridgeplot": ("trial", lambda d: vc.ridgeplot(d, x="score", group="arm")),
+    "raincloud": ("trial", lambda d: vc.raincloud(d, x="arm", y="score")),
+    "compare_correlations": ("measurements", lambda d: vc.compare_correlations(d, group="group")),
+    "quadrant_plot": ("trial", lambda d: vc.quadrant_plot(d, x="baseline", y="score", label="arm")),
+    "profile_bars": ("survey", lambda d: vc.profile_bars(d)),
+    "profile_boxes": ("trial", lambda d: vc.profile_boxes(d)),
+    "pca_plot": ("measurements", lambda d: vc.pca_plot(d, features=["length", "width", "depth"], group="group")),
+    "radar": ("measurements", lambda d: vc.radar(d, metrics=["length", "width", "depth"], group="group")),
+    "gantt": ("projects", lambda d: vc.gantt(d, task="task", start="start", end="end", group="team")),
+    "animated_bubble": ("trial", lambda d: vc.animated_bubble(d, time="site", x="baseline", y="score", size="baseline",
+                                                              color="arm")),
+}
+
+
+def _frame(name):
+    if name == "small":
+        return pd.DataFrame({"k": list("abcd"), "o": list("xxyy"), "a": [3.0, 5, 2, 8], "b": [4.0, 6, 3, 9]})
+    return getattr(datasets, name)()
+
+
+@pytest.mark.parametrize("name", list(READ_ONLY_CALLS))
+def test_charts_read_text_columns_backed_by_a_read_only_array(name):
+    # pandas before 2.2 cannot compare a read-only object array with a scalar; copy-on-write passes such arrays on.
+    source, call = READ_ONLY_CALLS[name]
+    modes = [contextlib.nullcontext()]
+    if int(pd.__version__.split(".")[0]) < 3:
+        modes.append(pd.option_context("mode.copy_on_write", True))
+    expected = call(_read_only(_frame(source)).copy()).table
+    for mode in modes:
+        with mode:
+            d = _read_only(_frame(source))
+            assert all(not d[c].to_numpy().flags.writeable for c in d.columns if d[c].dtype == object)
+            res = call(d)
+            if name == "animated_bubble":
+                res.info["animation"]._func(1)  # draw a later frame too
+            pd.testing.assert_frame_equal(res.table, expected)
+        plt.close("all")
+
+
+def test_level_mask_matches_rows_as_equality_does():
+    dates = pd.Series([np.datetime64("2024-01-01"), np.datetime64("2024-01-02")], dtype=object)
+    assert level_mask(dates, pd.Timestamp("2024-01-02")).tolist() == [False, True]  # isin([...]) finds neither
+    flags = pd.Series([1, 0, None], dtype=object)
+    assert level_mask(flags, True).tolist() == (flags == True).tolist() == [True, False, False]  # noqa: E712
+    frozen = np.array(["a", "b", "a"], dtype=object)
+    frozen.flags.writeable = False
+    assert level_mask(pd.Series(frozen, copy=False), "a").tolist() == [True, False, True]
 
 
 # --- sums of nullable numbers come back in NumPy dtypes -------------------------------------------------------------

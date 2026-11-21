@@ -34,6 +34,7 @@ from ._core import (
     exact_mean,
     get_ax,
     level_label,
+    level_mask,
     level_percent,
     palette,
     safe_sum,
@@ -184,7 +185,7 @@ def estimation_plot(
         raise ValueError(f"reference {reference!r} is not one of the groups {groups}")
     # The matching group itself: on NumPy 1.x a numpy.datetime64 and the equal Timestamp hash differently.
     reference = groups[groups.index(reference)]
-    samples = {g: data[y][data[x] == g].dropna().to_numpy(float) for g in groups}
+    samples = {g: data[y][level_mask(data[x], g)].dropna().to_numpy(float) for g in groups}
     small = [g for g, s in samples.items() if s.size < 2]
     if small:
         raise ValueError(f"groups need at least two observations: {small}")
@@ -315,7 +316,7 @@ def benchmark_bar(
     groups = category_order(data[x], order)
     rows = []
     for g in groups:
-        s = data[y][data[x] == g].dropna().to_numpy(float)
+        s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
         m, lo, hi = st.mean_ci(s, level)
         sd = st._sd(s)
         if s.size == 0:
@@ -349,7 +350,7 @@ def benchmark_bar(
     if show_points:
         rng = np.random.default_rng(0)
         for p, g in zip(pos, table[x]):
-            s = data[y][data[x] == g].dropna().to_numpy(float)
+            s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
             ax.scatter(p + _jitter(s.size, 0.18, rng), s, s=8, color="black", alpha=0.35, lw=0, zorder=4)
     ax.axhline(thr, color="black", ls="--", lw=1, zorder=5)
     ax.set_xticks(pos, [level_label(g) for g in table[x]])
@@ -653,7 +654,7 @@ def centered_bar(
     groups = category_order(data[x], order)
     rows = []
     for g in groups:
-        s = data[y][data[x] == g].dropna().to_numpy(float)
+        s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
         n, k = int(s.size), int((s >= thr - tol).sum())
         lo, hi = st.wilson_ci(k, n, level)
         rows.append({x: g, "n": n, "n_above": k, "p_above": k / n if n else np.nan,

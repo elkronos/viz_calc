@@ -29,6 +29,7 @@ from ._core import (
     exact_mean,
     get_ax,
     level_label,
+    level_mask,
     select_columns,
 )
 
@@ -231,7 +232,7 @@ def compare_correlations(
     groups = category_order(data[group], order)
     if len(groups) < 2:
         raise ValueError("need at least two groups")
-    per_group = {g: _pairwise(data[data[group] == g], cols, method) for g in groups}
+    per_group = {g: _pairwise(data[level_mask(data[group], g)], cols, method) for g in groups}
 
     frames = []
     for ga, gb in combinations(groups, 2):

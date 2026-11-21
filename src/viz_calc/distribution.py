@@ -28,6 +28,7 @@ from ._core import (
     cleanup_on_error,
     get_ax,
     level_label,
+    level_mask,
     palette,
 )
 
@@ -154,9 +155,9 @@ def histogram(
     width = np.diff(edges)
     rows = []
     for ax, f in zip(axes.flat, facets):
-        fdata = data if f is None else data[data[facet] == f]
+        fdata = data if f is None else data[level_mask(data[facet], f)]
         for h, col in zip(hues, cols):
-            s = fdata[x] if h is None else fdata[x][fdata[hue] == h]
+            s = fdata[x] if h is None else fdata[x][level_mask(fdata[hue], h)]
             s = s.dropna().to_numpy(float)
             counts, _ = np.histogram(s, bins=edges)
             if stat == "density":
@@ -236,7 +237,7 @@ def ridgeplot(
     values = data[x].dropna().to_numpy(float)
     pad = 0.05 * np.ptp(values) if np.ptp(values) else 1.0
     grid = np.linspace(values.min() - pad, values.max() + pad, 400)
-    dens = {g: _kde(data[x][data[group] == g].dropna().to_numpy(float), grid, bw_method) for g in groups}
+    dens = {g: _kde(data[x][level_mask(data[group], g)].dropna().to_numpy(float), grid, bw_method) for g in groups}
     peak = max((d.max() for d in dens.values() if d is not None), default=1.0)
     cols = palette(len(groups), colors)
     fig, ax = get_ax(ax, figsize=(8, 0.7 * len(groups) + 2))
@@ -245,7 +246,7 @@ def ridgeplot(
     for i, g in enumerate(groups):
         base = (len(groups) - 1 - i) * step
         d = dens[g]
-        s = data[x][data[group] == g]
+        s = data[x][level_mask(data[group], g)]
         if d is not None:
             y = base + d / peak
             ax.fill_between(grid, base, y, color=cols[i], alpha=0.8, zorder=2 * i + 1, lw=0)
@@ -297,7 +298,7 @@ def raincloud(
     fig, ax = get_ax(ax, figsize=(8, 1.4 * len(groups) + 1.5))
     rows = []
     for i, g in enumerate(groups):
-        s = data[y][data[x] == g].dropna().to_numpy(float)
+        s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
         pos = len(groups) - 1 - i
         if s.size:
             # Each group gets its own grid over its own range, so the density never suggests unseen values
