@@ -24,6 +24,10 @@
 - The plotting contract tests build their datasets on first use, so a warning
   from one dataset fails the tests that use it instead of stopping collection
   of the whole file.
+- A separate Attribution workflow fails a pull request or push to `main` when a
+  commit message, an added line, the PR title, the PR description or the
+  branch name carries an attribution trailer or names a writing tool. Its log
+  says where the match is, not what it is.
 
 ## 1.1.0
 
