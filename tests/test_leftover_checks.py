@@ -7,6 +7,9 @@ import pytest
 
 import viz_calc as vc
 from viz_calc import datasets
+from viz_calc._core import NEUTRAL
+
+METRICS = ["length", "width", "depth", "mass"]
 
 
 @pytest.fixture(scope="module")
@@ -100,3 +103,54 @@ def test_radar_keeps_the_float_mean_of_groups_that_vary(meas):
     t = vc.radar(d, metrics=["length", "width", "depth"], group="group").table
     expected = d.groupby("group")["length"].mean().reindex(t["group"]).tolist()
     assert t["length_mean"].tolist() == expected
+
+
+# --- rows with a missing group ---------------------------------------------------------------------------------------
+
+
+def _without_group(meas, convert=None):
+    d = meas.copy()
+    if convert is not None:
+        d["group"] = convert(d["group"])
+    d.loc[[0, 1, 60], "group"] = None
+    d.loc[[0, 1, 60], "length"] = [20.0, 30.0, 40.0]  # far above every other length
+    return d
+
+
+@pytest.mark.parametrize("convert", [
+    None,
+    lambda s: s.astype(object),
+    lambda s: s.astype("category"),
+    lambda s: s.map({"alpha": 1, "beta": 2, "gamma": 3}).astype("Int64"),
+], ids=["as built", "object", "Categorical", "Int64"])
+def test_radar_draws_rows_without_a_group_as_missing(meas, convert):
+    d = _without_group(meas, convert)
+    res = vc.radar(d, metrics=METRICS, group="group")
+    t = res.table
+    assert len(t) == 4 and t["group"].iloc[:3].notna().all() and pd.isna(t["group"].iloc[3])
+    assert t["length_mean"].iloc[3] == 30.0
+    assert t["width_mean"].iloc[3] == pytest.approx(d["width"][d["group"].isna()].mean())
+    assert t["length_scaled"].iloc[3] == pytest.approx((30.0 - d["length"].min()) / (40.0 - d["length"].min()))
+    assert [x.get_text() for x in res.axes.get_legend().get_texts()][-1] == "(missing)"
+    assert res.axes.get_lines()[-1].get_color() == NEUTRAL
+
+
+def test_radar_scales_groups_with_the_missing_group_included(meas):
+    t = vc.radar(_without_group(meas), metrics=METRICS, group="group", normalize="groups").table
+    assert t["length_scaled"].tolist()[3] == 1.0 and t["length_scaled"].min() == 0.0
+
+
+def test_radar_scales_data_from_the_rows_drawn_only(meas):
+    shown = meas[meas["group"].isin(["alpha", "beta"])]
+    t = vc.radar(meas, metrics=METRICS, group="group", order=["beta", "alpha"]).table
+    assert t["group"].tolist() == ["beta", "alpha"]
+    for m in METRICS:
+        lo, hi = shown[m].min(), shown[m].max()
+        expected = (shown.groupby("group")[m].mean().reindex(["beta", "alpha"]) - lo) / (hi - lo)
+        assert t[f"{m}_scaled"].tolist() == pytest.approx(expected.tolist(), abs=1e-12), m
+
+
+def test_radar_still_needs_one_named_group(meas):
+    with pytest.raises(ValueError, match="no non-missing values"):
+        vc.radar(meas.assign(group=None), metrics=METRICS, group="group")
+    assert plt.get_fignums() == []

@@ -269,7 +269,8 @@ def radar(
     Because metrics usually have different units, each axis is rescaled:
 
     * ``"data"`` (default): 0 = smallest and 1 = largest **observed value**
-      of the metric, so group summaries sit inside the range of the data.
+      of the metric in the rows drawn (a group left out of *order* does not
+      count), so group summaries sit inside the range of the data.
     * ``"groups"``: 0 = lowest group, 1 = highest group. Exaggerates small
       differences and always puts one group at the centre.
     * ``"none"``: raw values (only sensible when metrics share a unit).
@@ -280,11 +281,13 @@ def radar(
     same is exactly that value, so a constant metric such as 0.1 lands there
     too, whatever the group sizes.
 
-    A group with no data on a metric is left as a gap on that axis. *group*
-    cannot be one of the *metrics*. Raw and scaled values are in the
-    returned table. Radar charts are best for spotting profile *shapes*; the
-    enclosed area depends on the order of the metrics and should not be
-    compared.
+    Rows with a missing *group* are not dropped: they are drawn last, in
+    grey, as "(missing)", and their row of the table has a missing *group*.
+    *group* needs at least one non-missing value and cannot be one of the
+    *metrics*. A group with no data on a metric is left as a gap on that
+    axis. Raw and scaled values are in the returned table. Radar charts are
+    best for spotting profile *shapes*; the enclosed area depends on the
+    order of the metrics and should not be compared.
 
     An *ax* passed in must be a polar Axes, for example from
     ``plt.subplots(subplot_kw={"projection": "polar"})`` or
@@ -306,10 +309,19 @@ def radar(
                          "plt.subplots(subplot_kw={'projection': 'polar'}) or fig.add_subplot(projection='polar')")
     check_not_reserved([f"{m}_{suffix}" for suffix in (stat, "scaled") for m in metrics], group=group)
     groups = category_order(data[group], order)
-    raw = _group_stat(data.groupby(group, observed=True)[metrics], stat).reindex(groups)
+    grouped = data.groupby(group, observed=True)[metrics]
+    raw = _group_stat(grouped, stat).reindex(groups)
+    missing = data[group].isna().to_numpy()
+    rest = select_columns(data, metrics)[missing]  # rows without a group, drawn in grey as "(missing)"
+    if missing.any():
+        label = pd.Index(data[group][missing].iloc[:1])  # a missing value of the group column's own type
+        raw = pd.concat([raw, _group_stat(rest.groupby(np.zeros(len(rest), dtype=int)), stat).set_axis(label)])
     scaled = raw.copy()
     if normalize != "none":
-        ref = data[metrics].astype(float) if normalize == "data" else raw
+        ref = raw
+        if normalize == "data":  # the range of the rows drawn: a group left out of *order* does not count
+            ref = pd.concat([_floats(grouped.min()).reindex(groups), _floats(grouped.max()).reindex(groups),
+                             _floats(rest)])
         lo, span = ref.min(), (ref.max() - ref.min()).replace(0, np.nan)
         scaled = (raw - lo) / span
         flat = [m for m in metrics if pd.isna(span[m])]  # metric has one value only: put groups mid-scale
@@ -317,15 +329,17 @@ def radar(
             scaled[m] = raw[m].where(raw[m].isna(), 0.5)  # a group with no data stays missing (a gap)
     angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False)
     closed = np.r_[angles, angles[0]]
-    cols = palette(len(groups), colors)
+    names, cols = [level_label(g) for g in groups], palette(len(groups), colors)
+    if missing.any():
+        names, cols = names + ["(missing)"], cols + [NEUTRAL]
     if ax is None:
         fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={"polar": True})
     else:
         fig = ax.figure
-    for g, c in zip(groups, cols):
-        vals = scaled.loc[g].to_numpy(float)
+    for i, (name, c) in enumerate(zip(names, cols)):
+        vals = scaled.iloc[i].to_numpy(float)  # by position: the "(missing)" row has a missing label
         # Markers keep a group visible even when missing metrics break its outline into isolated points.
-        ax.plot(closed, np.r_[vals, vals[0]], color=c, lw=2, marker="o", ms=4, label=level_label(g))
+        ax.plot(closed, np.r_[vals, vals[0]], color=c, lw=2, marker="o", ms=4, label=name)
         if not np.isnan(vals).any():  # a polygon with a missing vertex would be misleading
             ax.fill(closed, np.r_[vals, vals[0]], color=c, alpha=0.12)
     ax.set_xticks(angles, metrics)
