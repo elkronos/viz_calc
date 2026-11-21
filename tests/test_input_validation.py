@@ -81,6 +81,8 @@ INFINITE_CALLS = {
     "benchmark_bar": (lambda d: vc.benchmark_bar(d, x="g", y="v"), "v"),
     "lollipop": (lambda d: vc.lollipop(d, x="g", y="v"), "v"),
     "lollipop sum": (lambda d: vc.lollipop(d, x="g", y="v", stat="sum"), "v"),
+    # A group's median can be finite with inf in it; inf is rejected all the same.
+    "lollipop median": (lambda d: vc.lollipop(d, x="g", y="v", stat="median"), "v"),
     "dumbbell": (lambda d: vc.dumbbell(d, label="k", start="v", end="w"), "w"),
     "divergent_bar": (lambda d: vc.divergent_bar(d, category="g", left="v", right="w"), "v"),
     "centered_bar": (lambda d: vc.centered_bar(d, x="g", y="v"), "v"),
@@ -97,6 +99,8 @@ INFINITE_CALLS = {
     "raincloud": (lambda d: vc.raincloud(d, x="g", y="v"), "v"),
     "correlogram": (lambda d: vc.correlogram(d, columns=["v", "w", "u"]), "u"),
     "correlogram default columns": (lambda d: vc.correlogram(d), "u"),
+    # Spearman ranks are defined for inf; inf is rejected all the same.
+    "correlogram spearman": (lambda d: vc.correlogram(d, columns=["v", "w", "u"], method="spearman"), "u"),
     "compare_correlations": (lambda d: vc.compare_correlations(d, group="g"), "w"),
     "quadrant_plot": (lambda d: vc.quadrant_plot(d, x="v", y="w"), "w"),
     "profile_boxes": (lambda d: vc.profile_boxes(d, categorical=["g"], numeric=["v", "w"]), "v"),
@@ -271,7 +275,8 @@ def test_animated_bubble_draws_a_frame_whose_only_row_has_no_size():
     ([1, 2, None, 4], "Int64", np.int64),
     ([1, 2, 3, 4], "Int64", np.int64),
     ([1.5, 2.0, None, 4.0], "Float64", np.float64),
-], ids=["Int64 with NA", "Int64 complete", "Float64 with NA"])
+    ([True, False, None, True], "boolean", np.int64),
+], ids=["Int64 with NA", "Int64 complete", "Float64 with NA", "boolean with NA"])
 def test_waffle_and_nested_pie_tables_hold_numpy_numbers(values, dtype, expected):
     d = pd.DataFrame({"c": list("abab"), "o": list("xxyy"), "v": pd.array(values, dtype=dtype)})
     waffle = vc.waffle(d, category="c", value="v", order=["a", "b"]).table
