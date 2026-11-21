@@ -91,13 +91,13 @@ def test_small_groups_are_listed_and_named_without_a_warning():
         res = vc.estimation_plot(d, "g", "y", reference="b", n_resamples=200)
     assert res.info["small_groups"] == {"a": 4, "c": 14}
     assert res.axes[1].get_title(loc="left").split("\n") == [
-        "Mean difference with bootstrap 95% CI (BCa)", "n < 15 in a, c: bootstrap CIs tend to be too narrow"]
+        "Mean difference with bootstrap 95% CI (BCa)", "Bootstrap CIs tend to be too narrow for n < 15 (a, c)"]
     welch = vc.estimation_plot(d, "g", "y", reference="b", n_resamples=200, ci="welch")
     assert welch.info["small_groups"] == {"a": 4, "c": 14}
     assert "\n" not in welch.axes[1].get_title(loc="left")
     many = pd.DataFrame({"g": np.repeat(list("pqrs"), 3), "y": rng.normal(size=12)})
     title = vc.estimation_plot(many, "g", "y", n_resamples=200, ci="percentile").axes[1].get_title(loc="left")
-    assert title.endswith("\nn < 15 in 4 groups: bootstrap CIs tend to be too narrow")
+    assert title.endswith("\nBootstrap CIs tend to be too narrow for n < 15 (4 groups)")
     big = vc.estimation_plot(datasets.trial(), "arm", "score", n_resamples=200)
     assert big.info["small_groups"] == {}
     assert big.axes[1].get_title(loc="left") == "Mean difference with bootstrap 95% CI (BCa)"

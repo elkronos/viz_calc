@@ -138,11 +138,12 @@ def estimation_plot(
     of normal data the 95% BCa interval covered the true difference about 80%
     of the time at 3 per group and 91–92% at 10, while the Welch interval
     stayed at 94–98% (see Methodology). Groups with fewer than 15 values are
-    listed in ``info["small_groups"]``, and a bootstrap *ci* names them under
-    the lower panel's title. The BCa interval and the Welch p-value come from
-    different methods, so at small *n* the interval can exclude zero while
-    p is above 0.05; the Welch interval excludes zero exactly when the
-    unadjusted p is below ``1 - level``.
+    listed in ``info["small_groups"]``, and under a bootstrap *ci* a second
+    line of the lower panel's title names them (more than three are counted).
+    The BCa interval and the Welch p-value come from different methods, so at
+    small *n* the interval can exclude zero while p is above 0.05; the Welch
+    interval excludes zero exactly when the unadjusted p is below
+    ``1 - level``.
 
     Parameters
     ----------
@@ -272,8 +273,9 @@ def estimation_plot(
     title = f"Mean difference with {method[ci].format(level_percent(level))}"
     small_groups = {g: samples[g].size for g in groups if samples[g].size < _SMALL_GROUP}
     if small_groups and ci != "welch":
+        # The caveat comes before the names, so long group names cut off at the figure edge do not hide it.
         names = ", ".join(map(level_label, small_groups)) if len(small_groups) <= 3 else f"{len(small_groups)} groups"
-        title += f"\nn < {_SMALL_GROUP} in {names}: bootstrap CIs tend to be too narrow"
+        title += f"\nBootstrap CIs tend to be too narrow for n < {_SMALL_GROUP} ({names})"
     ax_diff.set_title(title, loc="left", fontsize="medium")
     for ax in (ax_raw, ax_diff):
         ax.spines[["top", "right"]].set_visible(False)

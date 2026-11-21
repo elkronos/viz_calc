@@ -83,7 +83,8 @@ methods and can disagree even without a multiplicity adjustment: at 6 per
 group and a true difference of 1.2 SD, "the BCa interval excludes zero" and
 "$p < 0.05$" disagreed in about one simulated dataset in six. Groups with
 fewer than 15 values are listed with their sizes in `info["small_groups"]`,
-and with a bootstrap interval the lower panel's title names them.
+and with a bootstrap interval a second line of the lower panel's title gives
+the caveat and names them (more than three are counted).
 
 BCa's bias correction counts the bootstrap values below the estimate, so
 values tied with it matter, and on data recorded to a fixed precision
