@@ -24,7 +24,10 @@ nominal error rate when variances or group sizes differ and costs almost no
 power when they are equal (Welch, 1947; Delacre, Lakens & Leys, 2017).
 If both groups are constant the standard error is zero and $t = \pm\infty$
 with the sign of the difference ($p = 0$); two identical constants have no
-difference, so $t$ is `NaN` and $p = 1$. Used by `estimation_plot`.
+difference, so $t$ is `NaN` and $p = 1$. The Welch–Satterthwaite formula is
+0/0 there, so the reported degrees of freedom are Student's
+$n_A + n_B - 2$. Used by `estimation_plot`, whose `df` column shows the
+same value.
 
 ### Hedges' *g*
 Cohen's *d* with pooled SD, times the small-sample correction

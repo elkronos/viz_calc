@@ -2,6 +2,7 @@
 
 import itertools
 import math
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -164,6 +165,17 @@ def test_constant_groups_are_constant_whatever_their_binary_representation(a, b)
     assert np.isnan(st.hedges_g([a] * 3, [b] * 3)["g"])
     m, lo, hi = st.mean_ci([a] * 3)
     assert lo == hi == m
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")  # the BCa bootstrap of constant groups is degenerate
+def test_welch_df_of_two_constant_groups_is_the_documented_student_df():
+    # The Welch-Satterthwaite df is 0/0 when both groups are constant; n_a + n_b - 2 is reported instead.
+    assert st.welch_test([1, 1, np.nan], [2, 2, 2])["df"] == 3.0
+    df = pd.DataFrame({"g": ["a"] * 2 + ["b"] * 3, "y": [1.0] * 2 + [2.0] * 3})
+    assert vc.estimation_plot(df, "g", "y", n_resamples=200).info["comparisons"]["df"].item() == 3.0
+    assert "``n_a + n_b - 2``" in " ".join(st.welch_test.__doc__.split())
+    methodology = " ".join((Path(__file__).resolve().parents[1] / "docs" / "methodology.md").read_text("utf-8").split())
+    assert "0/0 there, so the reported degrees of freedom are Student's $n_A + n_B - 2$" in methodology
 
 
 @pytest.mark.parametrize("scale", [1e160, 1e-160, 1e300])

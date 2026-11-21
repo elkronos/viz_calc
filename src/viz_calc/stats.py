@@ -194,7 +194,9 @@ def welch_test(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> d
     ``df`` (Welch–Satterthwaite) and ``p``. When both groups are constant the
     standard error is zero: ``t`` is then ``±inf`` with the sign of the
     difference and ``p`` is 0; if the two constants are identical there is no
-    difference, so ``t`` is ``nan`` and ``p`` is 1. A constant group's mean is
+    difference, so ``t`` is ``nan`` and ``p`` is 1. The Welch–Satterthwaite
+    ``df`` is 0/0 there, so ``df`` is reported as the Student value
+    ``n_a + n_b - 2`` (non-missing values). A constant group's mean is
     its common value, so ``[0.1] * 3`` and ``[0.1] * 10`` count as identical.
 
     References
