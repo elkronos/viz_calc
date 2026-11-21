@@ -146,6 +146,25 @@ def check_numeric(data: pd.DataFrame, *columns: str) -> None:
         raise TypeError(f"column(s) must be numeric: {bad}")
 
 
+def check_finite(data: pd.DataFrame, *columns: str) -> None:
+    """Raise if a numeric column in *columns* holds ``inf`` or ``-inf``; missing values are allowed.
+
+    An infinite value would otherwise reach a sum, a mean or an axis limit
+    and give a wrong number or fail later with a message that does not name
+    the column.
+    """
+    def infinite(s: pd.Series) -> bool:
+        if pd.api.types.is_complex_dtype(s):
+            return bool(np.isinf(s.to_numpy()).any())
+        if not pd.api.types.is_float_dtype(s):  # integers and booleans cannot be infinite
+            return False
+        return bool(np.isinf(s.to_numpy(dtype=float, na_value=np.nan)).any())
+
+    bad = [c for c in dict.fromkeys(columns) if infinite(data[c])]
+    if bad:
+        raise ValueError(f"column(s) hold infinite values (inf or -inf): {bad}; drop or replace those rows first")
+
+
 def check_choice(name: str, value: Any, choices: Sequence[Any]) -> None:
     """Raise unless *value* is one of *choices*."""
     if value not in choices:

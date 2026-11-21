@@ -27,6 +27,7 @@ from ._core import (
     check_choice,
     check_count,
     check_dataframe,
+    check_finite,
     check_has_values,
     check_not_reserved,
     check_numeric,
@@ -725,6 +726,7 @@ def animated_bubble(
     for role, column in (("x", x), ("y", y), ("size", size)):  # the table averages these per time value
         _check_distinct(time=time, **{role: column})
     check_numeric(data, x, y, size)
+    check_finite(data, x, y, size)
     check_has_values(data, time, x, y, size)
     _check_positive("max_area", max_area)
     _check_positive("interval", interval)

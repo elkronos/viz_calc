@@ -212,6 +212,12 @@ same thing everywhere. The exceptions are listed here.
   a column: a `label` may also be the `value` (`waterfall`, `bullet`,
   `circular_bar`) or the `group` (`circular_bar`), `bullet`'s `value` may
   also be its `target`, and `histogram`'s `hue` may also be its `facet`.
+* **Infinite values.** A numeric column that holds inf or -inf raises an
+  error naming the column, before anything is drawn, in the charts for
+  comparing groups, correlations, distributions and part-to-whole (see the
+  [API reference](api.md)), in `profile_boxes` and `profile_scatters`, and
+  in `animated_bubble`. `sankey` and `network_map` reject infinite flows
+  and edge weights. Missing values are handled as each function describes.
 * **Grid width** of multi-panel figures is `col_wrap` in `histogram`,
   `percent_grid` and `donut_grid`, and `ncols` in the `profile_*` functions.
 * **Column labels** need not be strings: a column labelled 0 (from a

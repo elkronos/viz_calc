@@ -21,6 +21,7 @@ from ._core import (
     check_count,
     check_dataframe,
     check_distinct,
+    check_finite,
     check_has_values,
     check_numeric,
     cleanup_on_error,
@@ -46,6 +47,7 @@ def _numeric_columns(data: pd.DataFrame, columns: Sequence[str] | None) -> list[
         check_numeric(data, *columns)
     if len(columns) < 2:
         raise ValueError("need at least two numeric columns")
+    check_finite(data, *columns)
     check_has_values(data, *columns)
     return list(columns)
 
@@ -314,6 +316,7 @@ def quadrant_plot(
     check_dataframe(data, [x, y, label])
     check_distinct(x=x, y=y)
     check_numeric(data, x, y)
+    check_finite(data, x, y)
     check_choice("center", center, ["mean", "median"])
     check_choice("method", method, ["pearson", "spearman"])
     d = select_columns(data, [c for c in dict.fromkeys([x, y, label]) if c is not None]).dropna(subset=[x, y])

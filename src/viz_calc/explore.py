@@ -20,6 +20,7 @@ from ._core import (
     check_choice,
     check_count,
     check_dataframe,
+    check_finite,
     check_numeric,
     check_range,
     cleanup_on_error,
@@ -138,6 +139,7 @@ def profile_boxes(
         raise ValueError(f"categorical and numeric must be different columns; both name {shared}")
     check_dataframe(data, [*cat, *num])
     check_numeric(data, *num)
+    check_finite(data, *num)
     pairs = [(c, n) for c in cat for n in num if c != n]
     if not pairs:
         raise ValueError("no (categorical, numeric) column pairs found; adjust max_levels")
@@ -208,6 +210,7 @@ def profile_scatters(
         columns = [c for c in data.columns if pd.api.types.is_numeric_dtype(data[c])
                    and not pd.api.types.is_bool_dtype(data[c]) and data[c].nunique() >= min_levels]
     check_numeric(data, *columns)
+    check_finite(data, *columns)
     pairs = list(combinations(columns, 2))
     if not pairs:
         raise ValueError(f"need at least two numeric columns with ≥{min_levels} distinct values")

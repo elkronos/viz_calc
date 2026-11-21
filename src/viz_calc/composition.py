@@ -26,6 +26,7 @@ from ._core import (
     check_choice,
     check_dataframe,
     check_distinct,
+    check_finite,
     check_has_values,
     check_not_reserved,
     check_numeric,
@@ -72,6 +73,7 @@ def _aggregate(data: pd.DataFrame, category: str, value: str | None) -> pd.Serie
         counts = data[category].value_counts(sort=False)
         return counts[counts > 0]  # a Categorical also counts its unused categories; drop them, as the sums do
     check_numeric(data, value)
+    check_finite(data, value)
     if (data[value] < 0).any():  # per row: summing first would net a negative row against the others
         raise ValueError("waffle values must be non-negative")
     return safe_sum(data[value], data[category])
@@ -351,6 +353,7 @@ def donut_grid(
         raise ValueError("donut_grid needs at least one category column: columns= is empty or data has no "
                          "numeric (non-boolean) columns")
     check_numeric(data, *columns)
+    check_finite(data, *columns)
     missing = _missing_rows(data, columns)
     if missing:
         raise ValueError(f"donut_grid needs a value in every cell of {columns}; row(s) {missing} have missing "
@@ -425,6 +428,7 @@ def nested_pie(
         agg = grouped.size().rename("value")
     else:
         check_numeric(data, value)
+        check_finite(data, value)
         if (data[value] < 0).any():
             raise ValueError("nested_pie values must be non-negative")
         agg = safe_sum(data[value], [data[outer], data[inner]], dropna=False).rename("value")
@@ -508,6 +512,7 @@ def circular_bar(
     check_dataframe(data, [label, value, group])
     check_distinct(value=value, group=group)
     check_numeric(data, value)
+    check_finite(data, value)
     check_has_values(data, label, value)
     _check_count("gap", gap, minimum=0)
     _check_real("inner_radius", inner_radius, minimum=0)
@@ -606,6 +611,7 @@ def waterfall(
     check_dataframe(data, [label, value])
     check_choice("values_are", values_are, ["changes", "levels"])
     check_numeric(data, value)
+    check_finite(data, value)
     colors = slot_colors(colors, ("increase", "decrease", "total"))
     check_has_values(data, label)
     missing = _missing_rows(data, [value], label)
@@ -678,6 +684,7 @@ def funnel(
     if stage == value:
         raise ValueError(f"stage and value must be different columns; both are {stage!r}")
     check_numeric(data, value)
+    check_finite(data, value)
     check_has_values(data, stage, value)
     missing = _missing_rows(data, [value], stage)
     if missing:
@@ -782,6 +789,7 @@ def bullet(
     if label in reserved:
         raise ValueError(f"rename the label column {label!r}: the table uses {reserved} for its output columns")
     check_numeric(data, value, *([target] if target is not None else []), *band_cols)
+    check_finite(data, value, *([target] if target is not None else []), *band_cols)
     check_has_values(data, label, value)
     n = len(data)
     if ax is not None and n != 1:

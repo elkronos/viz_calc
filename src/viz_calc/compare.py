@@ -25,6 +25,7 @@ from ._core import (
     check_count,
     check_dataframe,
     check_distinct,
+    check_finite,
     check_has_values,
     check_not_reserved,
     check_numeric,
@@ -169,6 +170,7 @@ def estimation_plot(
     check_dataframe(data, [x, y])
     check_distinct(x=x, y=y)
     check_numeric(data, y)
+    check_finite(data, y)
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     check_not_reserved(["n", "mean", "sd", "ci_low", "ci_high"], x=x)
     st._check_level(level)
@@ -302,6 +304,7 @@ def benchmark_bar(
     check_dataframe(data, [x, y])
     check_distinct(x=x, y=y)
     check_numeric(data, y)
+    check_finite(data, y)
     check_choice("error", error, ["ci", "se", "sd"])
     check_choice("classify", classify, ["ci", "mean"])
     check_not_reserved(["n", "mean", "sd", "se", "ci_low", "ci_high", "status"], x=x)
@@ -401,6 +404,7 @@ def lollipop(
         if y is None:
             raise ValueError(f"stat={stat!r} needs a y column")
         check_numeric(data, y)
+        check_finite(data, y)
         if stat == "sum":  # in float where an int64 sum could wrap around
             agg = safe_sum(data[y], data[x], sort=True)
         else:
@@ -489,6 +493,7 @@ def dumbbell(
     check_distinct(start=start, end=end)
     check_not_reserved(["change", "pct_change"], label=label, start=start, end=end)
     check_numeric(data, start, end)
+    check_finite(data, start, end)
     check_has_values(data, start, end)
     colors = slot_colors(colors, ("start", "end"))
     table = data[list(dict.fromkeys([label, start, end]))].copy()
@@ -566,6 +571,7 @@ def divergent_bar(
     check_dataframe(data, [category, left, right])
     check_distinct(category=category, left=left, right=right)
     check_numeric(data, left, right)
+    check_finite(data, left, right)
     check_has_values(data, category, left, right)
     colors = slot_colors(colors, ("left", "right"))
     values = select_columns(data, [category, left, right])
@@ -639,6 +645,7 @@ def centered_bar(
     check_dataframe(data, [x, y])
     check_distinct(x=x, y=y)
     check_numeric(data, y)
+    check_finite(data, y)
     check_not_reserved(["n", "n_above", "p_above", "ci_low", "ci_high", "p_below"], x=x)
     st._check_level(level)
     colors = slot_colors(colors, ("at_or_above", "below"))
