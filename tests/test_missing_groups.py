@@ -52,7 +52,7 @@ def test_centered_bar_threshold_comes_from_the_rows_drawn(trial_gaps, threshold)
     same = vc.centered_bar(kept, x="arm", y="score", threshold=threshold)
     assert res.info["threshold"] == same.info["threshold"]
     assert res.table["n_above"].tolist() == same.table["n_above"].tolist()
-    assert res.table["n_above"].sum() >= 50  # the outliers no longer lift the mean above almost every score
+    assert res.table["n_above"].sum() >= 50  # the outliers without an arm do not lift the mean above almost every score
     assert res.info["dropped_missing_group"] == 5 and same.info["dropped_missing_group"] == 0
     assert res.axes.get_title(loc="left") == same.axes.get_title(loc="left")
 
@@ -164,6 +164,15 @@ def test_divergent_bar_sums_a_missing_category_last_in_grey(sort, dtype):
     assert left[-1].get_facecolor() == right[-1].get_facecolor() == GREY
     assert left[0].get_facecolor() != GREY and right[0].get_facecolor() != GREY
     assert [t.get_text() for t in res.axes.get_legend().get_texts()] == ["l", "r"]
+
+
+@pytest.mark.parametrize("sort", [False, True])
+def test_divergent_bar_draws_a_missing_category_last_when_it_comes_first(sort):
+    # The missing category appears first in the data and has the smallest total.
+    df = pd.DataFrame({"c": [None, "a", "b"], "l": [1.0, 5, 6], "r": [1.0, 5, 6]})
+    res = vc.divergent_bar(df, category="c", left="l", right="r", sort=sort)
+    assert res.table["c"].isna().tolist() == [False, False, True]
+    assert _ticks(res.axes.get_yticklabels()) == ["a", "b", "(missing)"]
 
 
 @pytest.mark.parametrize("stat", ["mean", "sum", "count"])
