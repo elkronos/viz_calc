@@ -103,6 +103,37 @@ def test_categorical_mixing_offset_and_offsetless_dates_gives_the_clear_error(ca
         call(d.astype({"s": "category"}))
 
 
+_KEEP_TZ_CALLS = [
+    lambda d: vc.gantt(d, "t", "s", "e"),
+    lambda d: vc.duration_plot(d, "t", "s", "e", "s", "e"),
+    lambda d: vc.timeseries_fill(d.assign(a=[1.0, 2.0], b=[2.0, 1.0]), time="e", series=["a", "b"]),
+]
+
+
+@pytest.mark.parametrize("call", _KEEP_TZ_CALLS)
+@pytest.mark.parametrize("offset", ["-04:00", "Z", "-04"])
+def test_one_offset_and_an_offsetless_value_give_the_clear_error(call, offset):
+    # pandas 2.2 and 2.3 parse this column without complaint and give "17:00" the other value's offset
+    d = pd.DataFrame({"t": ["a", "b"], "s": [f"2024-06-03 09:00{offset}", f"2024-06-04 09:00{offset}"],
+                      "e": [f"2024-06-03 17:00{offset}", "2024-06-04 17:00"]})
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "Could not infer format", UserWarning)  # "-04" on some versions
+        with pytest.raises(ValueError, match="'e' mixes values with and without a UTC offset"):
+            call(d)
+
+
+@pytest.mark.parametrize("call", _KEEP_TZ_CALLS)
+@pytest.mark.parametrize("ends", [["2024-06-03 17:00-04", "2024-06-04 17:00-04"],
+                                  ["2024-06-03 17:00 UTC", "2024-06-04 17:00 UTC"],
+                                  ["2024-06-03T17:00:00.5+05:30", "2024-06-04T17:00:00.5+0530"]])
+def test_offsets_written_any_way_are_accepted(call, ends):
+    d = pd.DataFrame({"t": ["a", "b"], "s": ["2024-06-03T09:00Z", "2024-06-04T09:00Z"], "e": ends})
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "Could not infer format", UserWarning)
+        res = call(d)
+    assert res.table["e"].dt.tz is not None
+
+
 # --- animated_bubble ---------------------------------------------------------------------------------------------
 
 

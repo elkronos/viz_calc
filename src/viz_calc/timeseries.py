@@ -43,6 +43,24 @@ __all__ = ["period_bars", "timeseries_fill", "calendar_heatmap", "gantt", "durat
 
 _PERIOD = {"day": "D", "week": "W", "month": "M", "quarter": "Q", "year": "Y"}
 
+# A clock time followed by a UTC offset at the end of the text: "Z", "+01:00", "+0100" or "+01"
+_HAS_OFFSET = re.compile(r"\d:\d\d(?::\d\d(?:[.,]\d+)?)?\s*(?:[Zz]|[+-]\d\d(?::?\d\d)?)\s*$")
+
+
+def _lacks_offset(values: pd.Series) -> bool:
+    """Whether any of *values* (text or datetimes, none missing) has no UTC offset.
+
+    Text that ends in a clock time and an offset is accepted without parsing;
+    every other value is parsed on its own, so zones written another way
+    (``"UTC"``, ``"GMT"``) count as offsets too.
+    """
+    for v in pd.unique(values.to_numpy(dtype=object)):
+        if isinstance(v, str) and _HAS_OFFSET.search(v):
+            continue
+        if pd.Timestamp(v).tzinfo is None:
+            return True
+    return False
+
 
 def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = False) -> pd.Series:
     """Parse *s* to datetimes, strictly.
@@ -56,7 +74,9 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
     With ``keep_tz=False`` timezone-aware values become naive local wall-clock
     times, so each value lands on the calendar day it was recorded in. With
     ``keep_tz=True`` time zones are kept (mixed offsets become UTC), so
-    elapsed times and instants stay exact.
+    elapsed times and instants stay exact, and text that mixes values with
+    and without a UTC offset raises on every pandas version (pandas 2.2 and
+    2.3 would give the offset-less values the others' offset).
 
     With ``dayfirst=True`` numeric dates such as ``"05/01/2021"`` are read
     day first (5 January). It is not meant for ISO 8601 strings, which
@@ -91,13 +111,13 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
             raise ValueError(f"column {name!r} could not be parsed as dates; use one consistent format, "
                              "ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
         if keep_tz:
-            # A list, not s.map(): mapping a Categorical can return a Categorical, which has no .all().
-            has_zone = [pd.Timestamp(v).tzinfo is not None for v in s[utc.notna()]]  # blanks don't count
-            if not all(has_zone):  # an offset-less value would silently be read as UTC
-                raise ValueError(f"column {name!r} mixes values with and without a UTC offset; make them consistent")
             out = utc
         else:  # the strings are valid ISO 8601, so element-wise parsing is unambiguous
             out = pd.to_datetime(s.map(lambda v: pd.NaT if pd.isna(v) else pd.Timestamp(v).tz_localize(None)))
+    # An offset-less value is read as UTC (utc=True) or, on pandas 2.2 and 2.3, given the others' offset
+    if keep_tz and out is not s and getattr(out.dtype, "tz", None) is not None:
+        if _lacks_offset(s[out.notna().to_numpy()]):  # blanks don't count
+            raise ValueError(f"column {name!r} mixes values with and without a UTC offset; make them consistent")
     if not keep_tz and getattr(out.dt, "tz", None) is not None:
         out = out.dt.tz_localize(None)
     return out
