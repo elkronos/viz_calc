@@ -8,7 +8,7 @@ import pytest
 from scipy import stats as sps
 
 import viz_calc as vc
-from viz_calc import multivariate
+from viz_calc import datasets, multivariate
 
 # --- the confidence ellipse is Hotelling's T² region for the group mean ------------------------------------------
 
@@ -60,3 +60,53 @@ def test_confidence_ellipse_covers_the_true_mean_at_its_level(n):
         for _ in range(reps)
     )
     assert hits / reps == pytest.approx(0.95, abs=0.02)
+
+
+# --- PCA input: constant features and Arrow-backed columns --------------------------------------------------------
+
+FEATURES = ["length", "width", "depth", "mass"]
+
+
+@pytest.mark.parametrize("c", [0.1, 1 / 3, 0.5, 7.0])
+def test_pca_rejects_a_constant_feature_whatever_its_binary_value(c):
+    # The float mean of 0.1 or 1/3 is off by an ulp, so the SD came out near 3e-17 instead of 0 and the constant
+    # column was standardized into a component holding 20% of the variance.
+    m = datasets.measurements().assign(c=c)
+    with pytest.raises(ValueError, match=r"constant feature\(s\) cannot be scaled: \['c'\]"):
+        vc.pca(m, [*FEATURES, "c"])
+    with pytest.raises(ValueError, match=r"constant feature\(s\) cannot be scaled: \['c'\]"):
+        vc.pca_plot(m, [*FEATURES, "c"], group="group")
+
+
+@pytest.mark.parametrize("c", [0.1, 1 / 3])
+def test_unscaled_pca_gives_a_constant_feature_no_variance(c):
+    m = datasets.measurements()
+    got = vc.pca(m.assign(c=c), [*FEATURES, "c"], scale=False)
+    dyadic = vc.pca(m.assign(c=0.5), [*FEATURES, "c"], scale=False)
+    assert got["eigenvalues"].iloc[-1] == 0.0
+    pd.testing.assert_series_equal(got["explained_variance_ratio"], dyadic["explained_variance_ratio"])
+
+
+def test_pca_of_ordinary_features_is_unchanged():
+    m = datasets.measurements()
+    m.loc[3, "width"] = np.nan
+    X = m[FEATURES].dropna()
+    Z = ((X - X.mean()) / X.std(ddof=1)).to_numpy(float)
+    S = np.linalg.svd(Z, full_matrices=False)[1]
+    assert vc.pca(m, FEATURES)["eigenvalues"].to_numpy().tolist() == (S**2 / (len(X) - 1)).tolist()
+
+
+@pytest.mark.parametrize("backend", ["pyarrow", "numpy_nullable"])
+def test_pca_accepts_arrow_backed_and_nullable_features(backend):
+    # pandas 2.0 raised NotImplementedError ('ArrowExtensionArray does not support reshape') when centring.
+    if backend == "pyarrow":
+        pytest.importorskip("pyarrow")
+    m = datasets.measurements()
+    converted = m.assign(**m[FEATURES].convert_dtypes(dtype_backend=backend))
+    assert all(isinstance(t, pd.api.extensions.ExtensionDtype) for t in converted[FEATURES].dtypes)
+    want, got = vc.pca(m, FEATURES), vc.pca(converted, FEATURES)
+    for key in ("scores", "loadings"):
+        pd.testing.assert_frame_equal(got[key], want[key])
+    pd.testing.assert_series_equal(got["eigenvalues"], want["eigenvalues"])
+    pd.testing.assert_frame_equal(vc.pca_plot(converted, FEATURES, group="group").table,
+                                  vc.pca_plot(m, FEATURES, group="group").table)

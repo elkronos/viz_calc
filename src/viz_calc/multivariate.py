@@ -41,7 +41,9 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     Rows with a missing feature are dropped. With ``scale=True`` features are
     standardized first (a correlation-matrix PCA), which is the right default
     when features are on different units; otherwise large-variance features
-    dominate (Jolliffe & Cadima, 2016). Component signs are fixed so that the
+    dominate (Jolliffe & Cadima, 2016). A feature whose values are all
+    identical cannot be standardized and raises ``ValueError``; unscaled, it
+    adds a component with zero variance. Component signs are fixed so that the
     largest-magnitude loading of each component is positive, making results
     reproducible.
 
@@ -60,13 +62,20 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     X = select_columns(data, features).dropna()
     if len(X) < 3:
         raise ValueError("need at least three complete rows")
-    Z = X - X.mean()
+    # Plain NumPy floats: pandas 2.0 cannot centre Arrow-backed columns (an ArrowExtensionArray has no reshape).
+    X = pd.DataFrame(X.to_numpy(dtype=float, na_value=np.nan), index=X.index, columns=X.columns)
+    # The float mean of a constant column such as 0.1 is off by an ulp, so centring leaves rounding noise (an SD
+    # near 3e-17) that scaling would blow up into a whole component; constant columns are found by their values.
+    constant = (X.max() == X.min()).to_numpy()
+    Z = (X - X.mean()).to_numpy(copy=True)
+    Z[:, constant] = 0.0
     if scale:
-        sd = X.std(ddof=1).replace(0, np.nan)
-        if sd.isna().any():
-            raise ValueError(f"constant feature(s) cannot be scaled: {list(sd[sd.isna()].index)}")
+        sd = X.std(ddof=1).to_numpy()
+        flat = constant | ~(sd > 0)  # an SD of 0 or nan (infinite values) cannot be divided by either
+        if flat.any():
+            raise ValueError(f"constant feature(s) cannot be scaled: {[f for f, c in zip(features, flat) if c]}")
         Z = Z / sd
-    U, S, Vt = np.linalg.svd(Z.to_numpy(float), full_matrices=False)
+    U, S, Vt = np.linalg.svd(Z, full_matrices=False)
     signs = np.sign(Vt[np.arange(len(Vt)), np.abs(Vt).argmax(axis=1)])
     Vt *= signs[:, None]
     U *= signs[None, :]
