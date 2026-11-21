@@ -44,6 +44,11 @@ INFINITE_CALLS = {
     "timeseries_fill first": (lambda d: vc.timeseries_fill(d, time="date", series=["v", "w"]), "v"),
     "timeseries_fill second": (lambda d: vc.timeseries_fill(d, time="date", series=["v", "w"]), "w"),
     "timeseries_fill numeric time": (lambda d: vc.timeseries_fill(d, time="year", series=["v", "w"]), "year"),
+    "timeseries_fill object time": (
+        lambda d: vc.timeseries_fill(d.assign(year=d["year"].astype(object)), time="year", series=["v", "w"]), "year"),
+    "timeseries_fill Categorical time": (
+        lambda d: vc.timeseries_fill(d.assign(year=d["year"].astype("category")), time="year", series=["v", "w"]),
+        "year"),
     "calendar_heatmap": (lambda d: vc.calendar_heatmap(d, date="date", value="v"), "v"),
     "calendar_heatmap max": (lambda d: vc.calendar_heatmap(d, date="date", value="v", stat="max"), "v"),
     "radar": (lambda d: vc.radar(d, metrics=["v", "w", "u"], group="g"), "w"),

@@ -300,7 +300,7 @@ def timeseries_fill(
                          f"series={series!r}")
     check_not_reserved(["difference", "leader"], time=time, **{"first series": a, "second series": b})
     check_numeric(data, a, b)
-    check_finite(data, time, a, b)  # a numeric time column too
+    check_finite(data, a, b)
     if isinstance(alpha, bool) or not isinstance(alpha, numbers.Real) or not 0 <= alpha <= 1:
         raise ValueError(f"alpha must be a number from 0 to 1, got {alpha!r}")
     if labels is None:
@@ -327,6 +327,7 @@ def timeseries_fill(
         # readings in the repeated hour of a daylight-saving change are not merged.
         col = numeric if numeric is not None else _dates(col, time, keep_tz=True)
     d[time] = _numpy_numbers(col)
+    check_finite(d, time)  # a numeric time column too, also years stored as objects or in a Categorical
     d = d.dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
     t = d[time]
     tz = getattr(t.dtype, "tz", None)
