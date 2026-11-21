@@ -157,6 +157,25 @@ def check_numeric(data: pd.DataFrame, *columns: str) -> None:
         raise TypeError(f"column(s) must be numeric: {bad}")
 
 
+def check_finite(data: pd.DataFrame, *columns: str) -> None:
+    """Raise if a numeric column in *columns* holds ``inf`` or ``-inf``; missing values are allowed.
+
+    An infinite value would otherwise reach a sum, a mean or an axis limit
+    and give a wrong number or fail later with a message that does not name
+    the column.
+    """
+    def infinite(s: pd.Series) -> bool:
+        if pd.api.types.is_complex_dtype(s):
+            return bool(np.isinf(s.to_numpy()).any())
+        if not pd.api.types.is_float_dtype(s):  # integers and booleans cannot be infinite
+            return False
+        return bool(np.isinf(s.to_numpy(dtype=float, na_value=np.nan)).any())
+
+    bad = [c for c in dict.fromkeys(columns) if infinite(data[c])]
+    if bad:
+        raise ValueError(f"column(s) hold infinite values (inf or -inf): {bad}; drop or replace those rows first")
+
+
 def check_choice(name: str, value: Any, choices: Sequence[Any]) -> None:
     """Raise unless *value* is one of *choices*."""
     if value not in choices:
@@ -500,6 +519,23 @@ def category_order(values: pd.Series, order: Sequence[Any] | None = None, comple
         return present
 
 
+def level_mask(values: pd.Series, level: Any) -> pd.Series:
+    """``values == level``: which rows of *values* hold *level*, also for a column backed by a read-only array.
+
+    pandas before 2.2 cannot compare an object column whose array is
+    read-only (a frame built with ``copy=False`` over a read-only NumPy
+    array, for example) with a scalar ("buffer source array is read-only"),
+    so such a column is compared through a copy. ``isin`` is not used
+    because it misses ``numpy.datetime64`` values held in an object column.
+    """
+    try:
+        return values == level
+    except ValueError as exc:
+        if values.dtype != object or "read-only" not in str(exc):
+            raise
+        return values.copy() == level
+
+
 def _level_key(value: Any) -> Any:
     # On NumPy 1.x a numpy.datetime64 (or timedelta64) hashes differently from the equal pandas Timestamp
     # (Timedelta), so set lookups would miss; compare levels in their pandas form.
@@ -604,20 +640,23 @@ def exact_mean(values: Any) -> float:
     return float(sum(map(Fraction, parts)) / len(v))
 
 
-def safe_sum(values: pd.Series, by: pd.Series | None = None, sort: bool = False, min_count: int = 0) -> Any:
+def safe_sum(values: pd.Series, by: Any = None, sort: bool = False, min_count: int = 0,
+             dropna: bool = True) -> Any:
     """Sum of *values* (per group of *by*) that cannot wrap around, with ``NaN`` rather than ``pd.NA`` for missing.
 
     Integer sums in int64 wrap around silently, so where an integer sum
     reaches 2**62 (a margin for float rounding) it is taken in float instead.
     Otherwise integer sums stay exact. A result in a nullable dtype (``Int64``,
     ``Float64``) comes back as a NumPy one: int64 when nothing is missing,
-    float64 with ``NaN`` otherwise, which Matplotlib can draw. *sort* and
-    *min_count* are passed on to the pandas ``groupby`` and ``sum``.
+    float64 with ``NaN`` otherwise, which Matplotlib can draw. *by* is a
+    Series or a list of them. *sort*, *dropna* (``False`` makes missing keys
+    a group of their own) and *min_count* are passed on to the pandas
+    ``groupby`` and ``sum``.
     """
     def total(v: pd.Series) -> Any:
         if by is None:
             return v.sum(min_count=min_count)
-        return v.groupby(by, sort=sort, observed=True).sum(min_count=min_count)
+        return v.groupby(by, sort=sort, observed=True, dropna=dropna).sum(min_count=min_count)
 
     if pd.api.types.is_integer_dtype(values) and not pd.api.types.is_bool_dtype(values):
         floats = total(pd.Series(values.to_numpy(dtype=float, na_value=np.nan), index=values.index))

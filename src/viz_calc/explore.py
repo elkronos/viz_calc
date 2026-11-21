@@ -20,11 +20,13 @@ from ._core import (
     check_choice,
     check_count,
     check_dataframe,
+    check_finite,
     check_numeric,
     check_range,
     cleanup_on_error,
     column_list,
     level_label,
+    level_mask,
     require,
     select_columns,
 )
@@ -124,7 +126,8 @@ def profile_boxes(
     associations can be looked at first. Columns with no values are left
     out; a pair given explicitly that has no complete rows gets ``n=0``, a
     missing eta-squared and an empty panel. A constant numeric column has no
-    variance to explain, so its eta-squared is missing too.
+    variance to explain, so its eta-squared is missing too. *categorical* and
+    *numeric*, when both are given, may not name the same column.
     """
     check_dataframe(data)
     check_count("max_levels", max_levels)
@@ -133,8 +136,12 @@ def profile_boxes(
     cat, num = _split(data, max_levels)
     cat = column_list("categorical", categorical, distinct=True) if categorical is not None else cat
     num = column_list("numeric", numeric, distinct=True) if numeric is not None else num
+    shared = [c for c in cat if c in num] if categorical is not None and numeric is not None else []
+    if shared:
+        raise ValueError(f"categorical and numeric must be different columns; both name {shared}")
     check_dataframe(data, [*cat, *num])
     check_numeric(data, *num)
+    check_finite(data, *num)
     pairs = [(c, n) for c in cat for n in num if c != n]
     if not pairs:
         raise ValueError("no (categorical, numeric) column pairs found; adjust max_levels")
@@ -164,7 +171,7 @@ def profile_boxes(
                 ax.set_title(f"{r.numeric} by {r.categorical}  (n=0)", fontsize="small", loc="left")
                 continue
             levels = category_order(d.iloc[:, 0])
-            ax.boxplot([d.iloc[:, 1][d.iloc[:, 0] == lv] for lv in levels], showfliers=True,
+            ax.boxplot([d.iloc[:, 1][level_mask(d.iloc[:, 0], lv)] for lv in levels], showfliers=True,
                        flierprops={"markersize": 2, "markeredgecolor": NEUTRAL}, medianprops={"color": OKABE_ITO[5]})
             ax.set_xticks(range(1, len(levels) + 1), [level_label(lv) for lv in levels], rotation=45, ha="right")
             ax.set_title(f"{r.numeric} by {r.categorical}  (η²={r.eta_squared:.2f})", fontsize="small", loc="left")
@@ -209,6 +216,7 @@ def profile_scatters(
         columns = [c for c in data.columns if pd.api.types.is_numeric_dtype(data[c])
                    and not pd.api.types.is_bool_dtype(data[c]) and data[c].nunique() >= min_levels]
     check_numeric(data, *columns)
+    check_finite(data, *columns)
     pairs = list(combinations(columns, 2))
     if not pairs:
         raise ValueError(f"need at least two numeric columns with ≥{min_levels} distinct values")

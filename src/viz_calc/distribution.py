@@ -19,6 +19,8 @@ from ._core import (
     check_choice,
     check_count,
     check_dataframe,
+    check_distinct,
+    check_finite,
     check_has_values,
     check_not_reserved,
     check_numeric,
@@ -26,6 +28,7 @@ from ._core import (
     cleanup_on_error,
     get_ax,
     level_label,
+    level_mask,
     palette,
 )
 
@@ -108,7 +111,10 @@ def histogram(
     Gebiete*, 57, 453–476.
     """
     check_dataframe(data, [x, hue, facet])
+    check_distinct(x=x, hue=hue)
+    check_distinct(x=x, facet=facet)  # hue and facet may share a column
     check_numeric(data, x)
+    check_finite(data, x)
     check_has_values(data, x)
     check_choice("stat", stat, ["count", "density", "percent"])
     rules = ["fd", "scott", "sturges", "auto"]
@@ -149,9 +155,9 @@ def histogram(
     width = np.diff(edges)
     rows = []
     for ax, f in zip(axes.flat, facets):
-        fdata = data if f is None else data[data[facet] == f]
+        fdata = data if f is None else data[level_mask(data[facet], f)]
         for h, col in zip(hues, cols):
-            s = fdata[x] if h is None else fdata[x][fdata[hue] == h]
+            s = fdata[x] if h is None else fdata[x][level_mask(fdata[hue], h)]
             s = s.dropna().to_numpy(float)
             counts, _ = np.histogram(s, bins=edges)
             if stat == "density":
@@ -221,15 +227,17 @@ def ridgeplot(
         tallest peak: from 0 (no overlap) up to, but not including, 1.
     """
     check_dataframe(data, [x, group])
+    check_distinct(x=x, group=group)
     check_not_reserved(_SUMMARY, group=group)
     check_numeric(data, x)
+    check_finite(data, x)
     overlap = check_range("overlap", overlap, 0, 1, include_high=False)
     check_has_values(data, x)
     groups = category_order(data[group], order)
     values = data[x].dropna().to_numpy(float)
     pad = 0.05 * np.ptp(values) if np.ptp(values) else 1.0
     grid = np.linspace(values.min() - pad, values.max() + pad, 400)
-    dens = {g: _kde(data[x][data[group] == g].dropna().to_numpy(float), grid, bw_method) for g in groups}
+    dens = {g: _kde(data[x][level_mask(data[group], g)].dropna().to_numpy(float), grid, bw_method) for g in groups}
     peak = max((d.max() for d in dens.values() if d is not None), default=1.0)
     cols = palette(len(groups), colors)
     fig, ax = get_ax(ax, figsize=(8, 0.7 * len(groups) + 2))
@@ -238,7 +246,7 @@ def ridgeplot(
     for i, g in enumerate(groups):
         base = (len(groups) - 1 - i) * step
         d = dens[g]
-        s = data[x][data[group] == g]
+        s = data[x][level_mask(data[group], g)]
         if d is not None:
             y = base + d / peak
             ax.fill_between(grid, base, y, color=cols[i], alpha=0.8, zorder=2 * i + 1, lw=0)
@@ -279,8 +287,10 @@ def raincloud(
     visualization. *Wellcome Open Research*, 4, 63.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_not_reserved(_SUMMARY, x=x)
     check_numeric(data, y)
+    check_finite(data, y)
     check_has_values(data, y)
     groups = category_order(data[x], order)
     cols = palette(len(groups), colors)
@@ -288,7 +298,7 @@ def raincloud(
     fig, ax = get_ax(ax, figsize=(8, 1.4 * len(groups) + 1.5))
     rows = []
     for i, g in enumerate(groups):
-        s = data[y][data[x] == g].dropna().to_numpy(float)
+        s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
         pos = len(groups) - 1 - i
         if s.size:
             # Each group gets its own grid over its own range, so the density never suggests unseen values

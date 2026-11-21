@@ -132,7 +132,8 @@ def pca_plot(
 
     Axis labels give the share of variance each component explains. Rows
     whose *group* is missing are still scored and drawn, in grey as
-    ``(missing)`` and without an ellipse.
+    ``(missing)`` and without an ellipse. *group* cannot be one of the
+    *features*; to colour by a feature, pass a copy of it under another name.
 
     The table has one row per scored row: ``row`` (its index label in
     *data*, a tuple for a ``MultiIndex``; named ``index`` when *group* is
@@ -161,6 +162,9 @@ def pca_plot(
     """
     features = column_list("features", features, distinct=True)
     check_dataframe(data, [*features, group])
+    if group is not None and group in features:
+        raise ValueError(f"group column {group!r} cannot also be one of features; to colour by a feature, "
+                         "pass a copy of it under another name")
     check_choice("ellipse", ellipse, ["data", "confidence", None])
     coverage = st._check_level(level)
     if isinstance(loadings, np.bool_):

@@ -26,6 +26,8 @@ from ._core import (
     center_labels,
     check_choice,
     check_dataframe,
+    check_distinct,
+    check_finite,
     check_has_values,
     check_not_reserved,
     check_numeric,
@@ -33,8 +35,10 @@ from ._core import (
     column_list,
     get_ax,
     level_label,
+    level_mask,
     level_percent,
     palette,
+    safe_sum,
     select_columns,
     slot_colors,
     text_color,
@@ -66,29 +70,15 @@ def _missing_rows(data: pd.DataFrame, columns: Sequence[str], label: str | None 
     return (data.index if label is None else data[label])[rows].tolist()
 
 
-def _sum(values: pd.Series, by: Any = None, dropna: bool = True) -> Any:
-    """Sum of *values* (per group of *by*), in float where an integer sum could wrap around.
-
-    *by* is a Series or a list of them; with ``dropna=False`` missing keys form groups too.
-    """
-    total = values.sum() if by is None else values.groupby(by, sort=False, observed=True, dropna=dropna).sum()
-    if pd.api.types.is_integer_dtype(values):
-        # int64 sums wrap around silently; past 2**62 (a margin for float rounding) sum in float instead
-        floats = pd.Series(values.to_numpy(dtype=float, na_value=np.nan), index=values.index)
-        floats = floats.sum() if by is None else floats.groupby(by, sort=False, observed=True, dropna=dropna).sum()
-        if (np.abs(floats) >= 2.0**62).any():
-            return floats
-    return total
-
-
 def _aggregate(data: pd.DataFrame, category: str, value: str | None) -> pd.Series:
     if value is None:
         counts = data[category].value_counts(sort=False)
         return counts[counts > 0]  # a Categorical also counts its unused categories; drop them, as the sums do
     check_numeric(data, value)
+    check_finite(data, value)
     if (data[value] < 0).any():  # per row: summing first would net a negative row against the others
         raise ValueError("waffle values must be non-negative")
-    return _sum(data[value], data[category])
+    return safe_sum(data[value], data[category])
 
 
 @cleanup_on_error
@@ -117,13 +107,14 @@ def waffle(
     size) must be positive integers.
     """
     check_dataframe(data, [category, value])
+    check_distinct(category=category, value=value)
     check_not_reserved(["value", "percent", "tiles"], category=category)
     _check_count("rows", rows)
     _check_count("columns", columns)
     check_has_values(data, category, value)
     totals = _aggregate(data, category, value)
     unknown = data[category].isna()  # rows without a category still count towards the total
-    unknown_total = int(unknown.sum()) if value is None else _sum(data[value][unknown])  # not .loc: True is a label
+    unknown_total = int(unknown.sum()) if value is None else safe_sum(data[value][unknown])  # not .loc: True is a label
     if not ((totals > 0).any() or unknown_total > 0):  # not totals.sum(), which can overflow
         raise ValueError("waffle needs a positive total; every value is zero")
     if order is not None:  # must list every category, or the shares would be renormalized over a subset
@@ -207,6 +198,7 @@ def percent_grid(
         proportions (0–1). A group with ``n = 0`` has ``nan`` for all three.
     """
     check_dataframe(data, [column, facet])
+    check_distinct(column=column, facet=facet)
     _check_count("col_wrap", col_wrap)
     st._check_level(level)
     colors = slot_colors(colors, ("success", "other"))
@@ -228,8 +220,8 @@ def percent_grid(
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.2 * ncol, 3.6 * nrow), squeeze=False)
     rows = []
     for ax, f in zip(axes.flat, facets):
-        s = (data if f is None else data[data[facet] == f])[column].dropna()
-        n, k = int(s.size), int((s == success).sum())
+        s = (data if f is None else data[level_mask(data[facet], f)])[column].dropna()
+        n, k = int(s.size), int(level_mask(s, success).sum())
         p = k / n if n else np.nan
         lo, hi = st.wilson_ci(k, n, level)
         filled = (200 * k + n) // (2 * n) if n else 0  # exact, halves round up (round() would go to even)
@@ -363,6 +355,7 @@ def donut_grid(
         raise ValueError("donut_grid needs at least one category column: columns= is empty or data has no "
                          "numeric (non-boolean) columns")
     check_numeric(data, *columns)
+    check_finite(data, *columns)
     missing = _missing_rows(data, columns)
     if missing:
         raise ValueError(f"donut_grid needs a value in every cell of {columns}; row(s) {missing} have missing "
@@ -416,16 +409,16 @@ def nested_pie(
     Sub-category wedges use lighter shades of their parent's colour and sit
     directly outside it, so the hierarchy is visible. With *value* omitted,
     rows are counted. Values must be non-negative, with a positive total;
-    missing values count as zero. *outer* and *inner* must be different
-    columns, each with at least one non-missing value. Rows with a missing
-    *outer* or *inner* category are not dropped: they are drawn in grey as
-    "(missing)" (a missing *outer* last) and count towards the total.
+    missing values count as zero. *outer*, *inner* and *value* must be
+    different columns, and *outer* and *inner* each need at least one
+    non-missing value. Rows with a missing *outer* or *inner* category are
+    not dropped: they are drawn in grey as "(missing)" (a missing *outer*
+    last) and count towards the total.
     Neither category column may be named ``"value"``, ``"percent_of_total"``
     or ``"percent_of_parent"``, as those name the table's output columns.
     """
     check_dataframe(data, [outer, inner, value])
-    if outer == inner:
-        raise ValueError(f"outer and inner must be different columns; both are {outer!r}")
+    check_distinct(outer=outer, inner=inner, value=value)
     reserved = [c for c in (outer, inner) if c in ("value", "percent_of_total", "percent_of_parent")]
     if reserved:
         raise ValueError(f"rename column(s) {reserved}: 'value', 'percent_of_total' and 'percent_of_parent' are the "
@@ -437,9 +430,10 @@ def nested_pie(
         agg = grouped.size().rename("value")
     else:
         check_numeric(data, value)
+        check_finite(data, value)
         if (data[value] < 0).any():
             raise ValueError("nested_pie values must be non-negative")
-        agg = _sum(data[value], [data[outer], data[inner]], dropna=False).rename("value")
+        agg = safe_sum(data[value], [data[outer], data[inner]], dropna=False).rename("value")
     agg = agg.reset_index()
     if not (agg["value"] > 0).any():  # not agg["value"].sum(), which can overflow
         raise ValueError("nested_pie needs a positive total; every value is zero or missing")
@@ -499,7 +493,8 @@ def circular_bar(
     leaves an empty (labelled) slot, but *label* and *value* each need at
     least one non-missing value. Rows with a missing *group* are drawn in
     grey as a final "(missing)" cluster, not dropped (all of them, if the
-    *group* column has no values).
+    *group* column has no values). *label* may also be the *value* or the
+    *group* column, but *group* and *value* must be different columns.
 
     Parameters
     ----------
@@ -517,7 +512,9 @@ def circular_bar(
     if ax is not None and getattr(ax, "name", None) != "polar":
         raise ValueError("circular_bar needs a polar Axes, e.g. plt.subplot(projection='polar')")
     check_dataframe(data, [label, value, group])
+    check_distinct(value=value, group=group)
     check_numeric(data, value)
+    check_finite(data, value)
     check_has_values(data, label, value)
     _check_count("gap", gap, minimum=0)
     _check_real("inner_radius", inner_radius, minimum=0)
@@ -616,6 +613,7 @@ def waterfall(
     check_dataframe(data, [label, value])
     check_choice("values_are", values_are, ["changes", "levels"])
     check_numeric(data, value)
+    check_finite(data, value)
     colors = slot_colors(colors, ("increase", "decrease", "total"))
     check_has_values(data, label)
     missing = _missing_rows(data, [value], label)
@@ -688,6 +686,7 @@ def funnel(
     if stage == value:
         raise ValueError(f"stage and value must be different columns; both are {stage!r}")
     check_numeric(data, value)
+    check_finite(data, value)
     check_has_values(data, stage, value)
     missing = _missing_rows(data, [value], stage)
     if missing:
@@ -755,9 +754,10 @@ def bullet(
     Parameters
     ----------
     bands
-        Either a list of column names holding each row's band upper limits,
-        or a list of finite numeric limits shared by every row; not a mix of
-        the two, and not a lone string (use ``["good"]`` for one column).
+        Either a list of column names holding each row's band upper limits
+        (each named once), or a list of finite numeric limits shared by
+        every row; not a mix of the two, and not a lone string (use
+        ``["good"]`` for one column).
         Ascending order. Entries that are all labels in ``data.columns``
         (e.g. ``[2, 3]`` for integer-labelled columns) are column names.
     ax
@@ -785,11 +785,13 @@ def bullet(
                          f"got {bands!r}")
     if not band_cols and not all(isinstance(b, numbers.Real) and math.isfinite(b) for b in bands):
         raise ValueError(f"bands must be a list of column names or of finite numbers, got {bands!r}")
+    column_list("bands", band_cols, distinct=True)  # a column named twice would draw an empty band
     check_dataframe(data, [label, value, target, *band_cols])
     reserved = ["value"] + (["target", "pct_of_target"] if target is not None else [])
     if label in reserved:
         raise ValueError(f"rename the label column {label!r}: the table uses {reserved} for its output columns")
     check_numeric(data, value, *([target] if target is not None else []), *band_cols)
+    check_finite(data, value, *([target] if target is not None else []), *band_cols)
     check_has_values(data, label, value)
     n = len(data)
     if ax is not None and n != 1:

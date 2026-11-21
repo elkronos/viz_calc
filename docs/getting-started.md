@@ -223,6 +223,25 @@ same thing everywhere. The exceptions are listed here.
   order applies to one particular argument it is named after it:
   `hue_order`/`facet_order` in `histogram`, `facet_order` in `percent_grid`,
   and `group_order`/`category_order` in `stacked_percentages`.
+* **One column in two roles.** A column given as both the groups and the
+  numbers raises an error before anything is drawn: `x` and `y` in the group
+  comparisons, `x` and `hue` or `facet` in `histogram`, `x` and `group` in
+  `ridgeplot`, `category` and `value` in `waffle`, `outer` or `inner` and
+  `value` in `nested_pie`, `group` and `value` in `circular_bar`, a column in
+  both the `categorical` and the `numeric` list of `profile_boxes`, and a
+  `group` that is also one of the `features` of `pca_plot`. So does one column
+  for both ends of a change (`start` and `end`, `left` and `right`), and for
+  both the outcome and the panels of `percent_grid` (`column` and `facet`).
+  Roles that read naturally together may share a column: a `label` may also be
+  the `value` (`waterfall`, `bullet`, `circular_bar`) or the `group`
+  (`circular_bar`), `bullet`'s `value` may also be its `target`, and
+  `histogram`'s `hue` may also be its `facet`.
+* **Infinite values.** A numeric column that holds inf or -inf raises an
+  error naming the column, before anything is drawn, in the charts for
+  comparing groups, correlations, distributions and part-to-whole (see the
+  [API reference](api.md)), in `profile_boxes` and `profile_scatters`, and
+  in `animated_bubble`. `sankey` and `network_map` reject infinite flows
+  and edge weights. Missing values are handled as each function describes.
 * **Grid width** of multi-panel figures is `col_wrap` in `histogram`,
   `percent_grid` and `donut_grid`, and `ncols` in the `profile_*` functions.
 * **Column labels** need not be strings: a column labelled 0 (from a

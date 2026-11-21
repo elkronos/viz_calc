@@ -21,6 +21,7 @@ from ._core import (
     check_count,
     check_dataframe,
     check_distinct,
+    check_finite,
     check_has_values,
     check_numeric,
     cleanup_on_error,
@@ -28,6 +29,7 @@ from ._core import (
     exact_mean,
     get_ax,
     level_label,
+    level_mask,
     select_columns,
 )
 
@@ -46,6 +48,7 @@ def _numeric_columns(data: pd.DataFrame, columns: Sequence[str] | None) -> list[
         check_numeric(data, *columns)
     if len(columns) < 2:
         raise ValueError("need at least two numeric columns")
+    check_finite(data, *columns)
     check_has_values(data, *columns)
     return list(columns)
 
@@ -229,7 +232,7 @@ def compare_correlations(
     groups = category_order(data[group], order)
     if len(groups) < 2:
         raise ValueError("need at least two groups")
-    per_group = {g: _pairwise(data[data[group] == g], cols, method) for g in groups}
+    per_group = {g: _pairwise(data[level_mask(data[group], g)], cols, method) for g in groups}
 
     frames = []
     for ga, gb in combinations(groups, 2):
@@ -314,6 +317,7 @@ def quadrant_plot(
     check_dataframe(data, [x, y, label])
     check_distinct(x=x, y=y)
     check_numeric(data, x, y)
+    check_finite(data, x, y)
     check_choice("center", center, ["mean", "median"])
     check_choice("method", method, ["pearson", "spearman"])
     d = select_columns(data, [c for c in dict.fromkeys([x, y, label]) if c is not None]).dropna(subset=[x, y])

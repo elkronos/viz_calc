@@ -26,6 +26,7 @@ from ._core import (
     check_count,
     check_dataframe,
     check_distinct,
+    check_finite,
     check_has_values,
     check_not_reserved,
     check_numeric,
@@ -34,6 +35,7 @@ from ._core import (
     exact_mean,
     get_ax,
     level_label,
+    level_mask,
     level_percent,
     palette,
     safe_sum,
@@ -168,7 +170,9 @@ def estimation_plot(
     new data presentation paradigm. *PLoS Biology*, 13(4), e1002128.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_numeric(data, y)
+    check_finite(data, y)
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     check_not_reserved(["n", "mean", "sd", "ci_low", "ci_high"], x=x)
     st._check_level(level)
@@ -182,7 +186,7 @@ def estimation_plot(
         raise ValueError(f"reference {reference!r} is not one of the groups {groups}")
     # The matching group itself: on NumPy 1.x a numpy.datetime64 and the equal Timestamp hash differently.
     reference = groups[groups.index(reference)]
-    samples = {g: data[y][data[x] == g].dropna().to_numpy(float) for g in groups}
+    samples = {g: data[y][level_mask(data[x], g)].dropna().to_numpy(float) for g in groups}
     small = [g for g, s in samples.items() if s.size < 2]
     if small:
         raise ValueError(f"groups need at least two observations: {small}")
@@ -300,7 +304,9 @@ def benchmark_bar(
     how to read pictures of data. *American Psychologist*, 60(2), 170–180.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_numeric(data, y)
+    check_finite(data, y)
     check_choice("error", error, ["ci", "se", "sd"])
     check_choice("classify", classify, ["ci", "mean"])
     check_not_reserved(["n", "mean", "sd", "se", "ci_low", "ci_high", "status"], x=x)
@@ -311,7 +317,7 @@ def benchmark_bar(
     groups = category_order(data[x], order)
     rows = []
     for g in groups:
-        s = data[y][data[x] == g].dropna().to_numpy(float)
+        s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
         m, lo, hi = st.mean_ci(s, level)
         sd = st._sd(s)
         if s.size == 0:
@@ -345,7 +351,7 @@ def benchmark_bar(
     if show_points:
         rng = np.random.default_rng(0)
         for p, g in zip(pos, table[x]):
-            s = data[y][data[x] == g].dropna().to_numpy(float)
+            s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
             ax.scatter(p + _jitter(s.size, 0.18, rng), s, s=8, color="black", alpha=0.35, lw=0, zorder=4)
     ax.axhline(thr, color="black", ls="--", lw=1, zorder=5)
     ax.set_xticks(pos, [level_label(g) for g in table[x]])
@@ -391,6 +397,7 @@ def lollipop(
     79(387), 531–554.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_choice("stat", stat, ["mean", "median", "sum", "count"])
     check_choice("sort", sort, ["descending", "ascending", None])
     check_not_reserved(["value"], x=x)
@@ -399,6 +406,7 @@ def lollipop(
         if y is None:
             raise ValueError(f"stat={stat!r} needs a y column")
         check_numeric(data, y)
+        check_finite(data, y)
         if stat == "sum":  # in float where an int64 sum could wrap around
             agg = safe_sum(data[y], data[x], sort=True)
         else:
@@ -487,6 +495,7 @@ def dumbbell(
     check_distinct(start=start, end=end)
     check_not_reserved(["change", "pct_change"], label=label, start=start, end=end)
     check_numeric(data, start, end)
+    check_finite(data, start, end)
     check_has_values(data, start, end)
     colors = slot_colors(colors, ("start", "end"))
     table = data[list(dict.fromkeys([label, start, end]))].copy()
@@ -564,6 +573,7 @@ def divergent_bar(
     check_dataframe(data, [category, left, right])
     check_distinct(category=category, left=left, right=right)
     check_numeric(data, left, right)
+    check_finite(data, left, right)
     check_has_values(data, category, left, right)
     colors = slot_colors(colors, ("left", "right"))
     values = select_columns(data, [category, left, right])
@@ -645,7 +655,9 @@ def centered_bar(
         A tuple of two colours: ``(at_or_above, below)``.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_numeric(data, y)
+    check_finite(data, y)
     check_not_reserved(["n", "n_above", "p_above", "ci_low", "ci_high", "p_below"], x=x)
     st._check_level(level)
     colors = slot_colors(colors, ("at_or_above", "below"))
@@ -653,7 +665,7 @@ def centered_bar(
     groups = category_order(data[x], order)
     rows = []
     for g in groups:
-        s = data[y][data[x] == g].dropna().to_numpy(float)
+        s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
         n, k = int(s.size), int((s >= thr - tol).sum())
         lo, hi = st.wilson_ci(k, n, level)
         rows.append({x: g, "n": n, "n_above": k, "p_above": k / n if n else np.nan,

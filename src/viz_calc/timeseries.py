@@ -27,6 +27,7 @@ from ._core import (
     check_choice,
     check_count,
     check_dataframe,
+    check_finite,
     check_has_values,
     check_not_reserved,
     check_numeric,
@@ -35,6 +36,7 @@ from ._core import (
     get_ax,
     level_label,
     palette,
+    safe_sum,
     select_columns,
     slot_colors,
     text_as_written,
@@ -178,14 +180,8 @@ def _numpy_numbers(s: pd.Series) -> pd.Series:
 
 
 def _sum_by(values: pd.Series, by: pd.Series) -> pd.Series:
-    """Sum of *values* per group of *by*, in float where an int64 sum could wrap around."""
-    total = values.groupby(by).sum()
-    if pd.api.types.is_integer_dtype(values):
-        # int64 sums wrap around silently; past 2**62 (a margin for float rounding) sum in float instead
-        floats = values.astype(float).groupby(by).sum()
-        if (floats.abs() >= 2.0**62).any():
-            return floats
-    return total
+    """Sum of *values* per group of *by*, in key order, in float where an int64 sum could wrap around."""
+    return safe_sum(values, by, sort=True)
 
 
 @cleanup_on_error
@@ -755,7 +751,8 @@ def animated_bubble(
     Two choices keep frames comparable: bubble **area** is proportional to
     *size* using one scale for the whole animation (not rescaled per frame),
     and the axes limits are fixed across frames. Colours map to *color*
-    categories consistently.
+    categories consistently, and every category keeps its legend entry in
+    every frame. A row without *x*, *y* or *size* is left out of its frame.
 
     Frames play in time order: numbers and datetimes sorted, text that reads
     as numbers or dates in numeric or chronological order (``"9/1/2020"``
@@ -792,6 +789,7 @@ def animated_bubble(
     for role, column in (("x", x), ("y", y), ("size", size)):  # the table averages these per time value
         _check_distinct(time=time, **{role: column})
     check_numeric(data, x, y, size)
+    check_finite(data, x, y, size)
     check_has_values(data, time, x, y, size)
     _check_positive("max_area", max_area)
     _check_positive("interval", interval)
@@ -825,10 +823,13 @@ def animated_bubble(
                 sub, name = cur[cur[color].isna()], "(missing)"
             else:
                 sub, name = cur[cur[color] == c], level_label(c)
+            # A bubble without a position or size is not drawn: a scatter whose sizes are all missing fails when the
+            # figure is rendered. An empty scatter still draws, and keeps the group's legend entry in every frame.
+            sub = sub.dropna(subset=list(dict.fromkeys([x, y, size])))
             ax.scatter(sub[x], sub[y], s=sub[size] / smax * max_area, color=col, alpha=0.65, edgecolors="white",
                        label=name)
             if label is not None:  # label only the bubbles that are drawn, and only when there is a label
-                for _, r in sub.dropna(subset=[x, y, size, label]).iterrows():
+                for _, r in sub.dropna(subset=[label]).iterrows():
                     ax.annotate(str(r[label]), (r[x], r[y]), fontsize=7, ha="center", va="center")
         ax.set_xlim(*xlim)
         ax.set_ylim(*ylim)
