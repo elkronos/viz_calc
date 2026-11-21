@@ -111,6 +111,22 @@ def test_bullet_marks_past_the_last_band_follow_the_face(dark_style):
     assert to_hex(light.get_lines()[0].get_color()) == "#000000" and light.patches[-1].get_edgecolor()[3] == 0
 
 
+@pytest.mark.parametrize("dark", [False, True], ids=["default style", "dark style"])
+def test_nested_pie_shades_of_a_white_parent_stay_apart(dark):
+    data = pd.DataFrame({"outer": np.repeat([f"P{i}" for i in range(8)], 3), "inner": ["a", "b", "c"] * 8})
+    with plt.rc_context():
+        if dark:
+            plt.style.use("dark_background")  # the eighth default colour is white
+            res = vc.nested_pie(data, outer="outer", inner="inner")
+        else:
+            res = vc.nested_pie(data, outer="outer", inner="inner", colors=["white", *vc.OKABE_ITO[:7]])
+    wedges = [to_hex(w.get_facecolor()) for w in res.axes.patches]
+    parents, shades = wedges[:8], wedges[8:]
+    assert "#ffffff" in parents
+    for k, parent in enumerate(parents):
+        assert len({parent, *shades[3 * k:3 * k + 3]}) == 4, (parent, shades[3 * k:3 * k + 3])
+
+
 def test_upset_bars_and_dots_stay_visible_under_a_dark_style(dark_style):
     res = vc.upset(datasets.memberships(), max_intersections=15)
     ax_bar, ax_mat, _ = res.axes

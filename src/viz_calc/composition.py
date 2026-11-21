@@ -415,13 +415,15 @@ def nested_pie(
 ) -> VizResult:
     """Two-level donut: *outer* categories on the inner ring, *inner* sub-categories around them.
 
-    Sub-category wedges use lighter shades of their parent's colour and sit
-    directly outside it, so the hierarchy is visible. With *value* omitted,
-    rows are counted. Values must be non-negative, with a positive total;
-    missing values count as zero. *outer* and *inner* must be different
-    columns, each with at least one non-missing value. Rows with a missing
-    *outer* or *inner* category are not dropped: they are drawn in grey as
-    "(missing)" (a missing *outer* last) and count towards the total.
+    Sub-category wedges use lighter shades of their parent's colour (darker
+    ones for a white parent, such as the eighth default colour under a dark
+    style) and sit directly outside it, so the hierarchy is visible. With
+    *value* omitted, rows are counted. Values must be non-negative, with a
+    positive total; missing values count as zero. *outer* and *inner* must
+    be different columns, each with at least one non-missing value. Rows
+    with a missing *outer* or *inner* category are not dropped: they are
+    drawn in grey as "(missing)" (a missing *outer* last) and count towards
+    the total.
     Neither category column may be named ``"value"``, ``"percent_of_total"``
     or ``"percent_of_parent"``, as those name the table's output columns.
     """
@@ -459,7 +461,8 @@ def nested_pie(
     child_cols = []
     for i, c in enumerate(base_cols):
         rgb = np.array(to_rgb(c))
-        child_cols += [tuple(rgb + (1 - rgb) * t) for t in np.linspace(0.25, 0.65, int((codes == i).sum()))]
+        end = np.zeros(3) if (rgb == 1).all() else np.ones(3)  # white has no lighter shades: shade towards black
+        child_cols += [tuple(rgb + (end - rgb) * t) for t in np.linspace(0.25, 0.65, int((codes == i).sum()))]
     child_cols = [NEUTRAL if gap else c for c, gap in zip(child_cols, agg[inner].isna())]
 
     def name(v: Any) -> str:
