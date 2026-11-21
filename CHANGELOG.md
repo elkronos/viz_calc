@@ -63,6 +63,38 @@
   `--no-isolation` builds, are affected.
 - The package metadata lists Python 3.10 to 3.13, the versions CI tests, and
   links to the changelog and the issue tracker.
+- `benchmark_bar` and `centered_bar` take `threshold="mean"` and `"median"` from
+  the observations they draw, the rows in the groups on the axis, instead of
+  from every value of `y`. Rows with a missing `x`, and groups left out of
+  `order`, no longer move the threshold. With 5 of the 120 `datasets.trial()`
+  rows given no arm and a score of 500, the benchmark was 70.40 while the drawn
+  rows average 51.72, so every arm read "below" and `centered_bar` counted 0, 2
+  and 3 scores at or above it; now the threshold is 51.72, every arm is
+  "indistinguishable" and the counts are 14, 23 and 23. On data without a
+  missing `x` and without an `order` subset the threshold is unchanged.
+  `threshold="mean"` or `"median"` raises a clear error when no group drawn has
+  a value of `y`.
+- `estimation_plot`, `benchmark_bar`, `centered_bar`, `raincloud` and
+  `compare_correlations` still leave out rows whose group is missing, so they
+  never enter a Welch test or a p-value adjustment as a group of their own, and
+  now say so in their docstrings and count them in
+  `info["dropped_missing_group"]` (0 when there are none).
+- `period_bars`, `timeseries_fill`, `calendar_heatmap`, `radar`, `pca` and
+  `pca_plot` also raise a `ValueError` naming the column when a numeric column
+  holds `inf` or `-inf`, before anything is drawn, as the other charts do;
+  `timeseries_fill` checks a numeric time column too, years stored as objects or
+  in a Categorical included. Before, the results depended on the pandas version
+  or the message did not name the column: with one infinite value in
+  `datasets.sales().head(90)["online"]`, `period_bars` reported the first month
+  as inf (with a NumPy RuntimeWarning) on pandas 3.1 and as 0.0 on pandas 2.0;
+  `radar` gave a group holding an infinite value an infinite or NaN mean and
+  scaled every other group to 0; `calendar_heatmap` drew every day in one
+  colour, with a colour bar running from -0.1 to 0.1; `pca` and `pca_plot`
+  failed with "constant feature(s) cannot be scaled", and `pca(scale=False)`
+  with "SVD did not converge".
+- `radar` raises a clear error when `group` is also one of its `metrics`, like
+  `pca_plot` and the other charts that reject one column passed for two roles.
+  It drew one profile per distinct value of that metric.
 
 ### Fixed
 - `datasets.sales()` and `calendar_heatmap` read `DatetimeIndex.day_of_week`
@@ -276,6 +308,46 @@
   ("The default of observed=False is deprecated") on pandas 2.1 to 2.3. Neither
   warns on pandas 2.0.0 to 3.1.1 now; the error bars and the `sankey` table are
   unchanged.
+- `lollipop`, `divergent_bar`, `stacked_percentages` (`group`), `percent_grid`
+  (`facet`), `histogram` (`hue` and `facet`) and `ridgeplot` dropped rows with a
+  missing group without a trace: 5 of 120 rows vanished from a `lollipop` of
+  `datasets.trial()`, and 4 of 300 from `stacked_percentages` of
+  `datasets.survey()`, whose bars added up to 296. They now draw those rows as a
+  last group named "(missing)", in grey where colour marks the group, as
+  `waffle`, `nested_pie`, `circular_bar`, `gantt` and `pca_plot` already do,
+  whatever the `order` arguments list. Its rows in the table hold the missing
+  value in the group column. Charts of data without a missing group are
+  unchanged.
+- `estimation_plot`'s BCa interval for a mean difference is too narrow in small
+  groups: in simulations a nominal 95% interval covered the true difference
+  61–67% of the time at 2 per group, about 80% at 3 and 91–92% at 10, and with 3
+  per group it could exclude zero in the same row as a Welch p of 0.12.
+  `info["comparisons"]` now also has `welch_ci_low` and `welch_ci_high`, the
+  Welch t interval, which excludes zero exactly when the unadjusted Welch p is
+  below `1 - level`; they follow `ci_high`, so the columns after it move two
+  places. `ci="welch"` or `ci="percentile"` draws and reports the Welch or the
+  bootstrap percentile interval in `ci_low`/`ci_high` instead of BCa, and
+  `info["ci_method"]` records which one is shown. `ci="bca"` stays the default
+  and its intervals are unchanged. Groups with fewer than 15 values are listed
+  with their sizes in `info["small_groups"]`, and with a bootstrap interval the
+  lower panel's title gets a second line, "Bootstrap CIs tend to be too narrow
+  for n < 15" followed by their names (or their number, above three); no warning
+  is raised.
+- `radar(normalize="groups")` put a constant metric such as 0.1 or 1/3 at the
+  ends of the axis when the groups had different sizes, because the float mean
+  of a constant group can be off by an ulp: with groups of 43, 50 and 50 rows, a
+  constant 1/3 was scaled to [1, 0, 0] on every pandas version and a constant
+  0.1 to [0, 1, 1] on pandas 2.0 to 2.3. A group whose values are all the same
+  now gets exactly that value as its mean, so the `_mean` column shows the
+  constant and the metric sits mid-scale at 0.5, as a constant 0.5 already did.
+- `radar` no longer drops rows with a missing group: like `waffle`,
+  `nested_pie`, `circular_bar` and `pca_plot`, it draws them last, in grey, as
+  "(missing)", with their own row in the table (the group is missing there).
+  Under `normalize="groups"` the "(missing)" profile counts as a group, so it
+  can set either end of an axis. `normalize="data"` takes each axis range from
+  the rows drawn, so groups left out of `order=` no longer stretch it: in
+  `datasets.measurements()` with `order=["alpha", "beta"]`, the scaled lengths
+  are 0.38 and 0.68 instead of 0.31 and 0.54.
 
 ### Documentation
 - The `to_pptx` docstring and the walkthroughs point to the install section
@@ -319,6 +391,18 @@
   and pins the README image URL to the tag. It also gives the commits for
   tagging 1.0.0 (`b2cc93d`) and 1.1.0 (`8fa3974`), which were never tagged, and
   their release date, 2026-09-28.
+- The Conventions section of Getting started lists which charts draw a
+  "(missing)" group, which leave those rows out and count them, and which rows
+  `threshold="mean"` is taken from.
+- The methodology page gives the measured coverage of the BCa, percentile and
+  Welch intervals from 2 to 30 per group. The comparing-groups walkthrough no
+  longer calls the bootstrap CI assumption-free, and its note on a CI and a
+  p-value that disagree also covers the two coming from different methods, not
+  only the multiplicity adjustment.
+- Getting started's Conventions list `period_bars`, `timeseries_fill`,
+  `calendar_heatmap`, `pca_plot` and `radar` among the charts that reject
+  infinite values, and `radar`'s `group` among the roles that cannot share a
+  column with the numbers.
 
 ### Development
 - CI also runs every Monday against the newest dependency releases, and can be
