@@ -105,6 +105,13 @@ These functions have no `ax=` and always create their own figure:
 | `animated_bubble` | the animation redraws its own figure |
 | `sankey` | returns a Plotly figure, as does `network_map(interactive=True)` |
 
+## Text in charts
+
+In the Plotly figures (`sankey` and `network_map(interactive=True)`) node
+names are escaped, so `<`, `>` and `&` in them show as typed: a node named
+`<a href=...>` is not read as Plotly's HTML markup and cannot become a link.
+`sankey`'s `title=` is passed through unchanged and may use that markup.
+
 ## Using the statistics without a chart
 
 All the methods are public in [`viz_calc.stats`](api.md#statistics):
