@@ -10,6 +10,7 @@ page of the documentation.
 
 from __future__ import annotations
 
+import inspect
 import numbers
 from collections.abc import Callable, Sequence
 from fractions import Fraction
@@ -290,6 +291,10 @@ def bootstrap_ci(
     return estimate, lo, hi
 
 
+# SciPy 1.15 renamed bootstrap's random_state to rng. Deciding once, rather than retrying on TypeError, keeps a
+# TypeError raised by the statistic from rerunning the whole bootstrap.
+_RNG_KEYWORD = "rng" if "rng" in inspect.signature(_st.bootstrap).parameters else "random_state"
+
 _BOOTSTRAP_ONE_PIECE = 2000  # largest sample bootstrapped unbatched; two at 5,000 resamples peak near 450 MB
 _BOOTSTRAP_BATCH_VALUES = 2**22  # values per sample held at once when batching
 
@@ -311,10 +316,8 @@ def _bootstrap(samples, statistic, level, n_resamples, method, seed):
         # They consume the random stream in a different order, so above the threshold a seeded
         # interval differs from the unbatched one by Monte Carlo noise; at or below it nothing changes.
         kwargs["batch"] = max(1, _BOOTSTRAP_BATCH_VALUES // largest)
-    try:
-        res = _st.bootstrap(data, statistic, rng=np.random.default_rng(seed), **kwargs)
-    except TypeError:  # SciPy < 1.15 names the argument random_state
-        res = _st.bootstrap(data, statistic, random_state=np.random.default_rng(seed), **kwargs)
+    kwargs[_RNG_KEYWORD] = np.random.default_rng(seed)
+    res = _st.bootstrap(data, statistic, **kwargs)
     lo, hi = res.confidence_interval
     return estimate, float(lo), float(hi), np.asarray(res.bootstrap_distribution)
 
