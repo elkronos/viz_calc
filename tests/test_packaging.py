@@ -1,6 +1,8 @@
 """The package metadata in pyproject.toml agrees with the code and with the CI workflow."""
 
+import ast
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -13,6 +15,7 @@ except ModuleNotFoundError:  # Python 3.10; pytest depends on tomli there
 ROOT = Path(__file__).resolve().parents[1]
 CI = ROOT / ".github" / "workflows" / "ci.yml"
 RUNTIME_EXTRAS = ("network", "interactive", "pptx")  # "all" combines these; "dev" and "docs" are tooling
+DISTRIBUTIONS = {"dateutil": "python-dateutil", "PIL": "pillow", "pptx": "python-pptx"}  # import name -> package
 REQUIREMENT = re.compile(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*(.*)")
 
 
@@ -86,3 +89,37 @@ def test_build_backend_floor_writes_the_license_fields():
     data = _pyproject()
     assert isinstance(data["project"]["license-files"], list)
     assert _version(_floors(data["build-system"]["requires"])["hatchling"]) >= (1, 27)
+
+
+def _third_party_imports() -> dict[str, str]:
+    """{top-level module: a place it is imported} for each non-stdlib module the package imports.
+
+    A module loaded with ``require("module", extra)`` counts as imported.
+    """
+    found = {}
+    for path in sorted((ROOT / "src" / "viz_calc").rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                names = [node.module]
+            elif (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "require"
+                  and node.args and isinstance(node.args[0], ast.Constant)):
+                names = [node.args[0].value]
+            else:
+                continue
+            for name in names:
+                top = name.split(".")[0]
+                if top not in sys.stdlib_module_names and top != "viz_calc":
+                    found.setdefault(top, f"{path.name}:{node.lineno}")
+    return found
+
+
+def test_every_third_party_import_is_a_declared_dependency():
+    imports = _third_party_imports()
+    if not imports:
+        pytest.skip("the package source is not next to the tests")
+    declared = {_name(req) for req in _runtime_requirements()}
+    undeclared = {where: module for module, where in imports.items()
+                  if _name(DISTRIBUTIONS.get(module, module)) not in declared}
+    assert not undeclared, f"imported but not in pyproject.toml dependencies or extras: {undeclared}"

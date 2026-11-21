@@ -23,6 +23,8 @@ dependencies = [
     "pandas>=2.0",
     "matplotlib>=3.7",
     "scipy>=1.11.1",
+    "python-dateutil>=2.8.2",
+    "pillow",
 ]
 
 [project.optional-dependencies]

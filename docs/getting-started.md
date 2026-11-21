@@ -20,6 +20,8 @@ pip install "viz_calc[all] @ git+https://github.com/elkronos/viz_calc"
 ```
 
 Python 3.10+ with NumPy ≥ 1.24.1, pandas ≥ 2.0, Matplotlib ≥ 3.7 and SciPy ≥ 1.11.1.
+The package also lists python-dateutil ≥ 2.8.2 and Pillow, which pandas and
+Matplotlib already install.
 
 ## The one pattern to learn
 
