@@ -250,7 +250,7 @@ def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: i
     Only Matplotlib figures are supported; save Plotly figures with
     ``figure.write_image`` or ``VizResult.save``.
     """
-    check_range("dpi", dpi, 1, np.inf, include_high=False)
+    dpi = check_range("dpi", dpi, 1, np.inf, include_high=False)
     pptx = require("pptx", "pptx")
     from PIL import Image
     from pptx.util import Inches, Pt
