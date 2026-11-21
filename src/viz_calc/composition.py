@@ -757,18 +757,20 @@ def bullet(
 
     Parameters
     ----------
-    bar_color
-        Colour of the measure. ``None`` is ``"#222222"``, as Few specifies.
-        The target line is black. Both stay dark on the bands, which are
-        light greys in any style; in a panel without bands they sit on the
-        axes face, so on a dark face (``dark_background``) they are
-        ``"#dddddd"`` and white instead.
     bands
         Either a list of column names holding each row's band upper limits,
         or a list of finite numeric limits shared by every row; not a mix of
         the two, and not a lone string (use ``["good"]`` for one column).
         Ascending order. Entries that are all labels in ``data.columns``
         (e.g. ``[2, 3]`` for integer-labelled columns) are column names.
+    bar_color
+        Colour of the measure. ``None`` is ``"#222222"``, as Few specifies,
+        and the target line is black. Both read on the bands, which are
+        light greys in any style. A mark on the axes face instead (no bands,
+        or past the last band) follows the face, so on a dark face
+        (``dark_background``) a target there is white, a bar without bands
+        is ``"#dddddd"`` and a bar that runs past the bands has a white
+        outline.
     ax
         An Axes to draw into. Only for single-row *data* (one bullet graph);
         with more rows it raises ``ValueError``, since each row needs its own
@@ -830,15 +832,18 @@ def bullet(
         for lim, g in zip(sorted(limits), greys):
             ax.barh(0, lim - prev, left=prev, height=1, color=g)
             prev = lim
-        # The bands are light greys in any style; without them the bar and target sit on the axes face.
-        ink, bar = ("black", "#222222") if limits else (foreground(ax), foreground(ax, "#222222"))
-        ax.barh(0, vals[i], height=0.35, color=bar if bar_color is None else bar_color)
+        # The bands are light greys in any style. Past the last band, or with no bands, marks sit on the axes face.
+        reach = max(limits, default=-math.inf)  # the bands cover the axis from its start up to here
+        ink = foreground(ax)  # "black" on a light face, white on a dark one
+        bar = bar_color if bar_color is not None else "#222222" if limits else foreground(ax, "#222222")
+        past = bar_color is None and bool(limits) and ink != "black" and max(vals[i], 0.0) > reach
+        ax.barh(0, vals[i], height=0.35, color=bar, **({"edgecolor": ink} if past else {}))
         if target is not None:
-            ax.plot([targets[i]] * 2, [-0.35, 0.35], color=ink, lw=2.5)
+            ax.plot([targets[i]] * 2, [-0.35, 0.35], color="black" if targets[i] <= reach else ink, lw=2.5)
         pad = 0.02 * (top - bottom)
         ax.set_xlim(bottom - (pad if bottom < 0 else 0), top + pad)
         if bottom < 0:
-            ax.axvline(0, color=ink, lw=0.8)
+            ax.axvline(0, color="black" if 0 <= reach else ink, lw=0.8)
         ax.set_yticks([0], [level_label(row[label])])
         ax.set_ylim(-0.5, 0.5)
         ax.spines[["top", "right", "left"]].set_visible(False)

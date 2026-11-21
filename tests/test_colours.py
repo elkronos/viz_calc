@@ -96,6 +96,21 @@ def test_bullet_marks_follow_the_face_without_bands_and_stay_dark_on_them(dark_s
     assert to_hex(custom.axes[0].patches[-1].get_facecolor()) == to_hex("tab:blue")
 
 
+def test_bullet_marks_past_the_last_band_follow_the_face(dark_style):
+    data = pd.DataFrame({"kpi": ["past", "inside"], "value": [250, 150], "target": [280, 170]})
+    res = vc.bullet(data, label="kpi", value="value", target="target", bands=[100, 200])
+    past, inside = res.axes
+    face = past.get_facecolor()
+    bar = past.patches[-1]
+    assert _contrast(past.get_lines()[0].get_color(), face) >= 3  # the target beyond the bands
+    assert to_hex(bar.get_facecolor()) == "#222222" and _contrast(bar.get_edgecolor(), face) >= 3
+    assert to_hex(inside.get_lines()[0].get_color()) == "#000000"
+    assert inside.patches[-1].get_edgecolor()[3] == 0
+    with plt.style.context("default"):
+        light = vc.bullet(data, label="kpi", value="value", target="target", bands=[100, 200]).axes[0]
+    assert to_hex(light.get_lines()[0].get_color()) == "#000000" and light.patches[-1].get_edgecolor()[3] == 0
+
+
 def test_upset_bars_and_dots_stay_visible_under_a_dark_style(dark_style):
     res = vc.upset(datasets.memberships(), max_intersections=15)
     ax_bar, ax_mat, _ = res.axes
