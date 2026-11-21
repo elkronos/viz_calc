@@ -68,7 +68,7 @@ def sales(seed: int = 3) -> pd.DataFrame:
     days = pd.date_range("2023-01-01", "2024-12-31", freq="D")
     t = np.arange(days.size)
     season = 1 + 0.25 * np.sin(2 * np.pi * (t - 80) / 365.25)
-    weekly = np.where(days.weekday >= 5, 0.7, 1.05)
+    weekly = np.where(days.day_of_week >= 5, 0.7, 1.05)
     online = 1000 * season * weekly * (1 + t / 1500) + rng.normal(0, 90, days.size)
     store = 1150 * season[::-1] * weekly + rng.normal(0, 90, days.size)
     return pd.DataFrame({"date": days, "online": online.round(0), "store": store.round(0),

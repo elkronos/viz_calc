@@ -349,7 +349,7 @@ def calendar_heatmap(
         first_monday = days[0] - pd.Timedelta(days=days[0].weekday())
         week = ((days - first_monday).days // 7).to_numpy()
         grid = np.full((7, week.max() + 1), np.nan)
-        grid[days.weekday, week] = vals.to_numpy()
+        grid[days.day_of_week, week] = vals.to_numpy()
         mesh = ax.pcolormesh(np.ma.masked_invalid(grid), cmap=cm, vmin=vmin, vmax=vmax, edgecolors="white", linewidth=1)
         ax.set_facecolor(missing_color)
         ax.set_aspect("equal")
