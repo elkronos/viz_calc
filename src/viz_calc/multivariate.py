@@ -234,6 +234,24 @@ def pca_plot(
     return VizResult(fig, ax, table, {**res, "ellipses": ellipses, "components": (pc_x, pc_y)})
 
 
+def _floats(frame: pd.DataFrame) -> pd.DataFrame:
+    """*frame* as NumPy floats, with NaN for missing values (also in nullable and Arrow columns)."""
+    return pd.DataFrame(frame.to_numpy(dtype=float, na_value=np.nan), index=frame.index, columns=frame.columns)
+
+
+def _group_stat(grouped: Any, stat: str) -> pd.DataFrame:
+    """*stat* of each column of *grouped* per group, as floats; the mean of a constant group is its value exactly.
+
+    The floating-point mean of ``[0.1] * 3`` is off by an ulp (see ``stats._mean``), so groups of different sizes
+    holding one constant would get different means, which ``normalize="groups"`` spreads over the whole axis.
+    """
+    value = _floats(grouped.agg(stat))
+    if stat == "mean":
+        lo, hi = _floats(grouped.min()), _floats(grouped.max())
+        value = value.mask(lo == hi, lo)
+    return value
+
+
 @cleanup_on_error
 def radar(
     data: pd.DataFrame,
@@ -255,6 +273,12 @@ def radar(
     * ``"groups"``: 0 = lowest group, 1 = highest group. Exaggerates small
       differences and always puts one group at the centre.
     * ``"none"``: raw values (only sensible when metrics share a unit).
+
+    An axis with nothing to scale (every value of the metric the same under
+    ``"data"``, every group's *stat* the same under ``"groups"``) puts the
+    groups mid-scale, at 0.5. The mean of a group whose values are all the
+    same is exactly that value, so a constant metric such as 0.1 lands there
+    too, whatever the group sizes.
 
     A group with no data on a metric is left as a gap on that axis. *group*
     cannot be one of the *metrics*. Raw and scaled values are in the
@@ -282,8 +306,7 @@ def radar(
                          "plt.subplots(subplot_kw={'projection': 'polar'}) or fig.add_subplot(projection='polar')")
     check_not_reserved([f"{m}_{suffix}" for suffix in (stat, "scaled") for m in metrics], group=group)
     groups = category_order(data[group], order)
-    raw = data.groupby(group, observed=True)[metrics].agg(stat).reindex(groups)
-    raw = pd.DataFrame(raw.to_numpy(dtype=float, na_value=np.nan), index=raw.index, columns=raw.columns)
+    raw = _group_stat(data.groupby(group, observed=True)[metrics], stat).reindex(groups)
     scaled = raw.copy()
     if normalize != "none":
         ref = data[metrics].astype(float) if normalize == "data" else raw

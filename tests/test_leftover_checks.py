@@ -77,3 +77,26 @@ def test_period_bars_count_and_calendar_heatmap_row_counts_ignore_other_columns(
     d = TIMED.assign(x=np.inf)  # a column in no role
     assert vc.period_bars(d, date="date", value="v", stat="count").table["n"].tolist() == [3, 9]
     assert vc.calendar_heatmap(d, date="date").table["value"].sum() == 12
+
+
+# --- a constant metric in groups of different sizes ---------------------------------------------------------------
+
+
+def _unequal_groups(meas):
+    return meas.drop(meas.index[meas["group"] == "alpha"][:7])  # 43, 50 and 50 rows
+
+
+@pytest.mark.parametrize("normalize", ["groups", "data"])
+@pytest.mark.parametrize("constant", [0.1, 1 / 3, 0.5])
+def test_radar_puts_a_constant_metric_mid_scale_whatever_the_group_sizes(meas, constant, normalize):
+    d = _unequal_groups(meas).assign(c=constant)
+    t = vc.radar(d, metrics=["length", "width", "c"], group="group", normalize=normalize).table
+    assert t["c_mean"].tolist() == [constant] * 3  # exactly, not off by an ulp
+    assert t["c_scaled"].tolist() == [0.5] * 3
+
+
+def test_radar_keeps_the_float_mean_of_groups_that_vary(meas):
+    d = _unequal_groups(meas)
+    t = vc.radar(d, metrics=["length", "width", "depth"], group="group").table
+    expected = d.groupby("group")["length"].mean().reindex(t["group"]).tolist()
+    assert t["length_mean"].tolist() == expected
