@@ -1,6 +1,7 @@
-"""Input checks shared by the charts: column roles, infinite values, read-only columns and nullable sums."""
+"""Input checks shared by the charts: column roles, infinite and missing values, read-only columns, sums."""
 
 import contextlib
+from io import BytesIO
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -230,6 +231,37 @@ def test_level_mask_matches_rows_as_equality_does():
     frozen = np.array(["a", "b", "a"], dtype=object)
     frozen.flags.writeable = False
     assert level_mask(pd.Series(frozen, copy=False), "a").tolist() == [True, False, True]
+
+
+# --- animated_bubble skips bubbles it cannot draw ------------------------------------------------------------------
+
+
+def _render_every_frame(res):
+    for i in range(len(res.info["frames"])):
+        res.info["animation"]._func(i)
+        res.figure.savefig(BytesIO(), format="png")
+
+
+@pytest.mark.parametrize("dtype", ["float64", "Float64"])
+@pytest.mark.parametrize("frame", [0, 2], ids=["first frame", "later frame"])
+def test_animated_bubble_draws_a_group_whose_only_bubble_has_no_size(frame, dtype):
+    d = pd.DataFrame({"t": [0, 0, 1, 1, 2, 2], "g": ["a", "b"] * 3, "x": [1.0, 2, 3, 4, 5, 6],
+                      "y": [6.0, 5, 4, 3, 2, 1], "s": pd.array([1.0, 2, 3, 4, 5, 6], dtype=dtype)})
+    d.loc[2 * frame, "s"] = None  # group a's only bubble in that frame
+    res = vc.animated_bubble(d, time="t", x="x", y="y", size="s", color="g", label="g")
+    _render_every_frame(res)
+    res.info["animation"]._func(frame)
+    texts = [t.get_text() for t in res.axes.texts]
+    assert "a" not in texts and "b" in texts  # the size-less bubble is neither drawn nor labelled
+    assert [t.get_text() for t in res.axes.get_legend().get_texts()] == ["a", "b"]
+
+
+def test_animated_bubble_draws_a_frame_whose_only_row_has_no_size():
+    d = pd.DataFrame({"t": [0, 1, 2], "x": [1.0, 2, 3], "y": [3.0, 2, 1], "s": [1.0, np.nan, 3]})
+    res = vc.animated_bubble(d, time="t", x="x", y="y", size="s")
+    _render_every_frame(res)
+    res.info["animation"]._func(1)
+    assert sum(len(c.get_offsets()) for c in res.axes.collections) == 0
 
 
 # --- sums of nullable numbers come back in NumPy dtypes -------------------------------------------------------------

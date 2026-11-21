@@ -690,7 +690,8 @@ def animated_bubble(
     Two choices keep frames comparable: bubble **area** is proportional to
     *size* using one scale for the whole animation (not rescaled per frame),
     and the axes limits are fixed across frames. Colours map to *color*
-    categories consistently.
+    categories consistently, and every category keeps its legend entry in
+    every frame. A row without *x*, *y* or *size* is left out of its frame.
 
     Frames play in time order: numbers and datetimes sorted, text that reads
     as numbers or dates in numeric or chronological order (``"9/1/2020"``
@@ -759,10 +760,13 @@ def animated_bubble(
                 sub, name = cur[cur[color].isna()], "(missing)"
             else:
                 sub, name = cur[cur[color] == c], level_label(c)
+            # A bubble without a position or size is not drawn: a scatter whose sizes are all missing fails when the
+            # figure is rendered. An empty scatter still draws, and keeps the group's legend entry in every frame.
+            sub = sub.dropna(subset=list(dict.fromkeys([x, y, size])))
             ax.scatter(sub[x], sub[y], s=sub[size] / smax * max_area, color=col, alpha=0.65, edgecolors="white",
                        label=name)
             if label is not None:  # label only the bubbles that are drawn, and only when there is a label
-                for _, r in sub.dropna(subset=[x, y, size, label]).iterrows():
+                for _, r in sub.dropna(subset=[label]).iterrows():
                     ax.annotate(str(r[label]), (r[x], r[y]), fontsize=7, ha="center", va="center")
         ax.set_xlim(*xlim)
         ax.set_ylim(*ylim)
