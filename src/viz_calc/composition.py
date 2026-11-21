@@ -410,9 +410,9 @@ def nested_pie(
     rows are counted. Values must be non-negative, with a positive total;
     missing values count as zero. *outer*, *inner* and *value* must be
     different columns, and *outer* and *inner* each need at least one
-    non-missing value. Rows with a missing
-    *outer* or *inner* category are not dropped: they are drawn in grey as
-    "(missing)" (a missing *outer* last) and count towards the total.
+    non-missing value. Rows with a missing *outer* or *inner* category are
+    not dropped: they are drawn in grey as "(missing)" (a missing *outer*
+    last) and count towards the total.
     Neither category column may be named ``"value"``, ``"percent_of_total"``
     or ``"percent_of_parent"``, as those name the table's output columns.
     """
