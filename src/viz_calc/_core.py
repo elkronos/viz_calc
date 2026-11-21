@@ -281,7 +281,6 @@ class _Text:
         self.figures = list(dict.fromkeys(ax.figure for ax in axes))
         found = [a for figure in self.figures for a in _artists(figure)]
         self.texts = {t: t.get_text() for t in found if isinstance(t, Text)}
-        self.labels = {str(a.get_label()) for a in found if "$" in str(a.get_label())}
         self.formatters = {a: (a.get_major_formatter(), a.get_minor_formatter()) for a in found if isinstance(a, Axis)}
         self.parse = {a: (a.majorTicks[0].label1.get_parse_math(), a.minorTicks[0].label1.get_parse_math())
                       for a in self.formatters}
@@ -290,21 +289,19 @@ class _Text:
         """Draw the text the call wrote in *figures* as written, and leave the rest to Matplotlib's own rules.
 
         Text the call made or changed is drawn as written if it holds a
-        ``$`` (a legend entry that repeats the label of an artist the caller
-        drew keeps its mathtext), and so are the tick labels of an axis the
-        call gave such labels to. The tick labels of an axis whose formatter
-        the call left alone keep the setting they had before the call, so
-        those an earlier call wrote on the same figure stay as written. All
-        other text follows ``text.parse_math``, so a title the caller sets
-        later can still use mathtext, and so can the numbers of a log axis
-        or the ticks Matplotlib adds when it draws.
+        ``$``, and so are the tick labels of an axis the call gave such
+        labels to. The tick labels of an axis whose formatter the call left
+        alone keep the setting they had before the call, so those an earlier
+        call wrote on the same figure stay as written. All other text
+        follows ``text.parse_math``, so a title the caller sets later can
+        still use mathtext, and so can the numbers of a log axis or the
+        ticks Matplotlib adds when it draws.
         """
         default = plt.rcParams["text.parse_math"]
         for figure in dict.fromkeys([*figures, *self.figures]):
             for artist in _artists(figure):
                 if isinstance(artist, Text) and self.texts.get(artist) != artist.get_text():
-                    text = artist.get_text()
-                    artist.set_parse_math(default and ("$" not in text or text in self.labels))
+                    artist.set_parse_math(default and "$" not in artist.get_text())
                 elif isinstance(artist, Axis):
                     before = self.formatters.get(artist, (None, None))
                     kept = self.parse.get(artist, (None, None))
