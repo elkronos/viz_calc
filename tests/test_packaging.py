@@ -83,6 +83,21 @@ def test_numpy_floor_skips_1_24_0():
     assert _version(floor) >= (1, 24, 1)
 
 
+def test_version_is_written_once():
+    # The build reads the version from __version__, so a release bump cannot change one copy and miss the other.
+    import viz_calc
+
+    data = _pyproject()
+    assert "version" not in data["project"], "pyproject.toml repeats the version written in __version__"
+    assert "version" in data["project"].get("dynamic", [])
+    source = ROOT / data["tool"]["hatch"]["version"]["path"]
+    assert source == ROOT / "src" / "viz_calc" / "__init__.py"
+    # hatchling's default pattern for a version file: the build takes the first match and fails without one.
+    pattern = re.compile(r"""^(?:__version__|VERSION) *= *(['"])v?(.+?)\1""", re.M | re.I)
+    found = [version for _, version in pattern.findall(source.read_text(encoding="utf-8"))]
+    assert found == [viz_calc.__version__]
+
+
 def test_build_backend_floor_writes_the_license_fields():
     # hatchling before 1.26 rejects the list form of project.license-files, and 1.26 writes the legacy
     # License field. 1.27 is the first release that writes License-Expression and License-File.
