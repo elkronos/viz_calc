@@ -91,14 +91,16 @@ def _offset(*samples: np.ndarray) -> float:
     """A value to subtract from every sample before taking deviations from the mean: 0, or one of the values.
 
     Deviations ``x - mean`` lose digits when the values sit far from zero next
-    to their spread: with an offset of ``2**53`` or ``1e12`` the rounded mean
-    is off by about as much as the values differ, and *t*, *g*, *r* and
-    eta-squared come out wrong although every value is exact. When the spread
-    of all values is below ``2**-20`` of their magnitude (the deviations would
-    lose more than 20 of the 53 bits), the value nearest zero is returned;
-    every value is then within a factor of two of it, so the subtraction is
-    exact (Sterbenz's lemma) and none of those statistics change. Otherwise
-    the result is 0, so ordinary data give bit-identical results.
+    to their spread: with an offset of ``1e12`` on data spread over tens they
+    keep about 17 of their 53 bits, and at ``2**53`` the rounded mean is off
+    by about as much as the values differ, so *t*, *g*, *r*, eta-squared and
+    the bootstrap's tie tolerance go wrong although every value is exact.
+    When the spread of all values is below ``2**-20`` of their magnitude (the
+    deviations would lose more than 20 of the 53 bits), the value nearest zero
+    is returned; every value is then within a factor of two of it, so the
+    subtraction is exact (Sterbenz's lemma) and none of those statistics
+    change. Otherwise the result is 0, so ordinary data give bit-identical
+    results.
     """
     present = [s for s in samples if s.size]
     if not present:
@@ -382,7 +384,8 @@ def _bootstrap(samples, statistic, level, n_resamples, method, seed):
     """Like :func:`bootstrap_ci` but also returns the bootstrap distribution.
 
     A *statistic* of ``None`` stands for the default of :func:`bootstrap_ci`,
-    with ties to the estimate kept exact (see :func:`_tie_exact`).
+    with ties to the estimate kept exact (see :func:`_tie_exact`) and values
+    far from zero shifted first (see :func:`_offset`).
     """
     level = _check_level(level)
     default = statistic is None
@@ -393,6 +396,13 @@ def _bootstrap(samples, statistic, level, n_resamples, method, seed):
     data = tuple(_clean(s) for s in samples)
     if any(d.size < 2 for d in data):
         raise ValueError("each sample needs at least two non-missing values")
+    shift = _offset(*data) if default else 0.0
+    if shift:
+        # Values far from zero next to their spread are bootstrapped shifted (exact; see _offset), so the tie
+        # tolerance below scales with their spread. A mean moves with the shift; a difference in means does not.
+        back = shift if len(data) == 1 else 0.0
+        estimate, lo, hi, dist = _bootstrap(tuple(d - shift for d in data), None, level, n_resamples, method, seed)
+        return estimate + back, lo + back, hi + back, dist + back
     estimate = float(statistic(*data))
     if all(np.ptp(d) == 0 for d in data):  # every resample equals the data: the interval is the estimate itself
         return estimate, estimate, estimate, np.full(n_resamples, estimate)

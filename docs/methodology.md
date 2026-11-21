@@ -44,11 +44,12 @@ squaring deviations; the rescaling is exact, so ordinary results are
 unchanged and magnitudes beyond about $10^{\pm 154}$ no longer overflow or
 underflow (which used to give $g = 0$). When all values sit far from zero
 next to their spread (a spread below $2^{-20}$ of their magnitude, as with an
-offset of $10^{12}$ on data spread over tens), the rounded mean would be off
-by about as much as the values differ. Welch's test, *g*, Pearson's *r* and
-eta-squared then first subtract the value nearest zero, which is exact
-there, so an offset that leaves the values exact does not change them.
-Other data are not shifted.
+offset of $10^{12}$ on data spread over tens), deviations from the rounded
+mean lose the values' low digits; at an offset of $2^{53}$ the mean is off by
+about as much as the values differ. Welch's test, *g*, Pearson's *r*,
+eta-squared and the default bootstrap statistics then first subtract the
+value nearest zero, which is exact there, so an offset that leaves the values
+exact does not change them. Other data are not shifted.
 
 ### Bootstrap confidence intervals
 Bias-corrected and accelerated (BCa) intervals (Efron, 1987) from
@@ -66,10 +67,11 @@ above or below it, depending on the summation order and on the units: two
 groups holding the same values $[1,1,1,2,1]$ and $[1,1,1,1,2]$ gave −0.4
 to 0.4 in units but −0.4 to 0.6 in tenths. With the default statistics a
 bootstrap value that differs from the estimate by less than $2^{-40}$ times
-the largest magnitude in the data counts as a tie. That is far above the
-rounding error of a mean and far below the gap between two distinct
-bootstrap values of recorded data, so the interval does not depend on the
-units. Every other bootstrap value is used exactly as computed.
+the largest magnitude in the data counts as a tie, after the exact shift for
+values far from zero described above. That is far above the rounding error
+of a mean and far below the gap between two distinct bootstrap values of
+recorded data, so the interval does not depend on the units. Every other
+bootstrap value is used exactly as computed.
 
 ### Wilson score interval for a proportion
 $\dfrac{\hat p + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat p(1-\hat p)}{n} + \frac{z^2}{4n^2}}}{1 + z^2/n}$.

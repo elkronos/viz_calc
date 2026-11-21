@@ -310,6 +310,23 @@ def test_tie_handling_leaves_bootstraps_without_near_ties_bit_identical():
                                                                     method=method)
 
 
+@pytest.mark.parametrize("offset", [1e9, 1e12, 1.7e12, -(2.0**50)])
+def test_bootstrap_interval_does_not_change_with_an_exact_offset(offset):
+    # The tie tolerance followed the magnitude of the data, so at an offset of 1e12 (epoch milliseconds) bootstrap
+    # values a whole step from the estimate counted as ties: both limits came out nan.
+    a, b = (np.asarray(v) for v in _TIED["counts"])  # whole numbers, exact at these offsets
+    want = st.bootstrap_ci(a, b, n_resamples=2000)
+    assert st.bootstrap_ci(a + offset, b + offset, n_resamples=2000) == pytest.approx(want, rel=1e-12, abs=1e-12)
+    one = st.bootstrap_ci(b + offset, n_resamples=2000)
+    assert tuple(v - offset for v in one) == pytest.approx(st.bootstrap_ci(b, n_resamples=2000),
+                                                           abs=2 * np.spacing(abs(offset)))
+    d = pd.DataFrame({"g": ["a"] * a.size + ["b"] * b.size, "y": np.r_[a, b]})
+    cols = ["difference", "ci_low", "ci_high"]
+    unit = vc.estimation_plot(d, "g", "y", n_resamples=2000).info["comparisons"][cols].iloc[0].tolist()
+    shifted = vc.estimation_plot(d.assign(y=d["y"] + offset), "g", "y", n_resamples=2000).info["comparisons"][cols]
+    assert shifted.iloc[0].tolist() == pytest.approx(unit, rel=1e-12, abs=1e-12)
+
+
 # --- values far from zero and constant columns -------------------------------------------------------------------
 
 
