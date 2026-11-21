@@ -13,7 +13,7 @@ import viz_calc as vc
 
 
 def test_centered_bar_with_one_group_warns_nothing():
-    # pandas 2.1 to 2.3 warned when Matplotlib called float() on a one-element Series of error bar sizes.
+    # pandas 2.0 to 2.3 warned when Matplotlib 3.8 or later called float() on a one-element Series of error bar sizes.
     d = pd.DataFrame({"g": ["a"] * 4, "v": [1.0, 2, 3, 4]})
     with warnings.catch_warnings():
         warnings.simplefilter("error")
