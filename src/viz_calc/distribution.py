@@ -19,6 +19,7 @@ from ._core import (
     check_choice,
     check_count,
     check_dataframe,
+    check_distinct,
     check_has_values,
     check_not_reserved,
     check_numeric,
@@ -108,6 +109,8 @@ def histogram(
     Gebiete*, 57, 453–476.
     """
     check_dataframe(data, [x, hue, facet])
+    check_distinct(x=x, hue=hue)
+    check_distinct(x=x, facet=facet)  # hue and facet may share a column
     check_numeric(data, x)
     check_has_values(data, x)
     check_choice("stat", stat, ["count", "density", "percent"])
@@ -221,6 +224,7 @@ def ridgeplot(
         tallest peak: from 0 (no overlap) up to, but not including, 1.
     """
     check_dataframe(data, [x, group])
+    check_distinct(x=x, group=group)
     check_not_reserved(_SUMMARY, group=group)
     check_numeric(data, x)
     check_range("overlap", overlap, 0, 1, include_high=False)
@@ -279,6 +283,7 @@ def raincloud(
     visualization. *Wellcome Open Research*, 4, 63.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_not_reserved(_SUMMARY, x=x)
     check_numeric(data, y)
     check_has_values(data, y)

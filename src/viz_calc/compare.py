@@ -167,6 +167,7 @@ def estimation_plot(
     new data presentation paradigm. *PLoS Biology*, 13(4), e1002128.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_numeric(data, y)
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     check_not_reserved(["n", "mean", "sd", "ci_low", "ci_high"], x=x)
@@ -299,6 +300,7 @@ def benchmark_bar(
     how to read pictures of data. *American Psychologist*, 60(2), 170–180.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_numeric(data, y)
     check_choice("error", error, ["ci", "se", "sd"])
     check_choice("classify", classify, ["ci", "mean"])
@@ -390,6 +392,7 @@ def lollipop(
     79(387), 531–554.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_choice("stat", stat, ["mean", "median", "sum", "count"])
     check_choice("sort", sort, ["descending", "ascending", None])
     check_not_reserved(["value"], x=x)
@@ -634,6 +637,7 @@ def centered_bar(
         A tuple of two colours: ``(at_or_above, below)``.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_numeric(data, y)
     check_not_reserved(["n", "n_above", "p_above", "ci_low", "ci_high", "p_below"], x=x)
     st._check_level(level)

@@ -123,7 +123,8 @@ def profile_boxes(
     numeric column's variance explained by the grouping), so the strongest
     associations can be looked at first. Columns with no values are left
     out; a pair given explicitly that has no complete rows gets ``n=0``, a
-    missing eta-squared and an empty panel.
+    missing eta-squared and an empty panel. *categorical* and *numeric*, when
+    both are given, may not name the same column.
     """
     check_dataframe(data)
     check_count("max_levels", max_levels)
@@ -132,6 +133,9 @@ def profile_boxes(
     cat, num = _split(data, max_levels)
     cat = column_list("categorical", categorical, distinct=True) if categorical is not None else cat
     num = column_list("numeric", numeric, distinct=True) if numeric is not None else num
+    shared = [c for c in cat if c in num] if categorical is not None and numeric is not None else []
+    if shared:
+        raise ValueError(f"categorical and numeric must be different columns; both name {shared}")
     check_dataframe(data, [*cat, *num])
     check_numeric(data, *num)
     pairs = [(c, n) for c in cat for n in num if c != n]

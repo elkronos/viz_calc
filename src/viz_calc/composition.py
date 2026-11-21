@@ -25,6 +25,7 @@ from ._core import (
     abbreviate,
     check_choice,
     check_dataframe,
+    check_distinct,
     check_has_values,
     check_not_reserved,
     check_numeric,
@@ -102,6 +103,7 @@ def waffle(
     size) must be positive integers.
     """
     check_dataframe(data, [category, value])
+    check_distinct(category=category, value=value)
     check_not_reserved(["value", "percent", "tiles"], category=category)
     _check_count("rows", rows)
     _check_count("columns", columns)
@@ -192,6 +194,7 @@ def percent_grid(
         proportions (0–1). A group with ``n = 0`` has ``nan`` for all three.
     """
     check_dataframe(data, [column, facet])
+    check_distinct(column=column, facet=facet)
     _check_count("col_wrap", col_wrap)
     st._check_level(level)
     colors = slot_colors(colors, ("success", "other"))
@@ -401,16 +404,16 @@ def nested_pie(
     Sub-category wedges use lighter shades of their parent's colour and sit
     directly outside it, so the hierarchy is visible. With *value* omitted,
     rows are counted. Values must be non-negative, with a positive total;
-    missing values count as zero. *outer* and *inner* must be different
-    columns, each with at least one non-missing value. Rows with a missing
+    missing values count as zero. *outer*, *inner* and *value* must be
+    different columns, and *outer* and *inner* each need at least one
+    non-missing value. Rows with a missing
     *outer* or *inner* category are not dropped: they are drawn in grey as
     "(missing)" (a missing *outer* last) and count towards the total.
     Neither category column may be named ``"value"``, ``"percent_of_total"``
     or ``"percent_of_parent"``, as those name the table's output columns.
     """
     check_dataframe(data, [outer, inner, value])
-    if outer == inner:
-        raise ValueError(f"outer and inner must be different columns; both are {outer!r}")
+    check_distinct(outer=outer, inner=inner, value=value)
     reserved = [c for c in (outer, inner) if c in ("value", "percent_of_total", "percent_of_parent")]
     if reserved:
         raise ValueError(f"rename column(s) {reserved}: 'value', 'percent_of_total' and 'percent_of_parent' are the "
@@ -484,7 +487,8 @@ def circular_bar(
     leaves an empty (labelled) slot, but *label* and *value* each need at
     least one non-missing value. Rows with a missing *group* are drawn in
     grey as a final "(missing)" cluster, not dropped (all of them, if the
-    *group* column has no values).
+    *group* column has no values). *label* may also be the *value* or the
+    *group* column, but *group* and *value* must be different columns.
 
     Parameters
     ----------
@@ -502,6 +506,7 @@ def circular_bar(
     if ax is not None and getattr(ax, "name", None) != "polar":
         raise ValueError("circular_bar needs a polar Axes, e.g. plt.subplot(projection='polar')")
     check_dataframe(data, [label, value, group])
+    check_distinct(value=value, group=group)
     check_numeric(data, value)
     check_has_values(data, label, value)
     _check_count("gap", gap, minimum=0)
@@ -740,9 +745,10 @@ def bullet(
     Parameters
     ----------
     bands
-        Either a list of column names holding each row's band upper limits,
-        or a list of finite numeric limits shared by every row; not a mix of
-        the two, and not a lone string (use ``["good"]`` for one column).
+        Either a list of column names holding each row's band upper limits
+        (each named once), or a list of finite numeric limits shared by
+        every row; not a mix of the two, and not a lone string (use
+        ``["good"]`` for one column).
         Ascending order. Entries that are all labels in ``data.columns``
         (e.g. ``[2, 3]`` for integer-labelled columns) are column names.
     ax
@@ -770,6 +776,7 @@ def bullet(
                          f"got {bands!r}")
     if not band_cols and not all(isinstance(b, numbers.Real) and math.isfinite(b) for b in bands):
         raise ValueError(f"bands must be a list of column names or of finite numbers, got {bands!r}")
+    column_list("bands", band_cols, distinct=True)  # a column named twice would draw an empty band
     check_dataframe(data, [label, value, target, *band_cols])
     reserved = ["value"] + (["target", "pct_of_target"] if target is not None else [])
     if label in reserved:
