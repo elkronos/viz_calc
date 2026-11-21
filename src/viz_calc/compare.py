@@ -35,6 +35,7 @@ from ._core import (
     exact_mean,
     foreground,
     get_ax,
+    group_key,
     level_label,
     level_mask,
     level_percent,
@@ -55,25 +56,40 @@ def _jitter(n: int, width: float, rng: np.random.Generator) -> np.ndarray:
 _TIE = 4 * np.finfo(float).eps  # a floating-point rounding difference, relative to the data's scale
 
 
-def _threshold(data: pd.DataFrame, y: str, threshold: Any) -> tuple[float, float]:
-    """``(value, tie tolerance)`` for a *threshold* option: a number, or ``"mean"``/``"median"`` of *y*.
+def _check_threshold(threshold: Any) -> None:
+    """Raise unless *threshold* is a finite number, ``"mean"`` or ``"median"``."""
+    if isinstance(threshold, str) and threshold in ("mean", "median"):
+        return
+    if isinstance(threshold, Real) and not isinstance(threshold, bool) and np.isfinite(float(threshold)):
+        return
+    raise ValueError(f"threshold must be a finite number, 'mean' or 'median', got {threshold!r}")
+
+
+def _drawn_rows(values: pd.Series, groups: Sequence[Any]) -> np.ndarray:
+    """Which rows of the group column *values* hold one of *groups*: the rows the chart draws."""
+    drawn = np.zeros(len(values), dtype=bool)
+    for g in groups:
+        drawn |= level_mask(values, g).to_numpy(dtype=bool, na_value=False)
+    return drawn
+
+
+def _threshold(values: pd.Series, threshold: Any) -> tuple[float, float]:
+    """``(value, tie tolerance)`` for a valid *threshold* option: a number, or ``"mean"``/``"median"`` of *values*.
 
     ``"mean"`` is the correctly rounded mean, and the tolerance is the rounding
     error the data can carry, so a value that equals the mean in decimal is
     not pushed to one side of it by floating-point arithmetic.
     """
-    values = data[y].to_numpy(dtype=float, na_value=np.nan)
-    values = values[~np.isnan(values)]
-    if values.size == 0:
-        raise ValueError(f"column {y!r} has no non-missing values")
-    if isinstance(threshold, str) and threshold in ("mean", "median"):
-        if threshold == "median":
-            return float(np.median(values)), 0.0
-        thr, scale = exact_mean(values), float(np.mean(np.abs(values)))
-        return thr, (_TIE * scale if np.isfinite(thr) and np.isfinite(scale) else 0.0)
-    if isinstance(threshold, Real) and not isinstance(threshold, bool) and np.isfinite(float(threshold)):
+    if not isinstance(threshold, str):
         return float(threshold), 0.0
-    raise ValueError(f"threshold must be a finite number, 'mean' or 'median', got {threshold!r}")
+    v = values.to_numpy(dtype=float, na_value=np.nan)
+    v = v[~np.isnan(v)]
+    if v.size == 0:
+        raise ValueError(f"threshold={threshold!r} needs a value of {values.name!r} in one of the groups drawn")
+    if threshold == "median":
+        return float(np.median(v)), 0.0
+    thr, scale = exact_mean(v), float(np.mean(np.abs(v)))
+    return thr, (_TIE * scale if np.isfinite(thr) and np.isfinite(scale) else 0.0)
 
 
 def _threshold_text(thr: float, tol: float, compared: Any) -> str:
@@ -132,7 +148,10 @@ def estimation_plot(
     data
         Long-format data: one row per observation.
     x
-        Grouping column.
+        Grouping column. Rows with a missing *x* belong to no group, so they
+        are left out of every group and comparison;
+        ``info["dropped_missing_group"]`` counts them (0 when there are
+        none).
     y
         Numeric outcome column.
     reference
@@ -239,7 +258,8 @@ def estimation_plot(
         ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     return VizResult(fig, np.array([ax_raw, ax_diff]), pd.DataFrame(rows),
-                     {"comparisons": comps_df, "level": level, "p_adjust": p_adjust, "reference": reference})
+                     {"comparisons": comps_df, "level": level, "p_adjust": p_adjust, "reference": reference,
+                      "dropped_missing_group": int(data[x].isna().sum())})
 
 
 def _half_violin(values: np.ndarray, points: int = 200):
@@ -281,13 +301,18 @@ def benchmark_bar(
     2005). Individual points are overlaid by default (Weissgerber et al.,
     2015).
 
+    Rows with a missing *x* belong to no group, so they are left out of the
+    bars and of the threshold; ``info["dropped_missing_group"]`` counts them
+    (0 when there are none).
+
     Parameters
     ----------
     threshold
-        A number, or ``"mean"``/``"median"`` of all observations of *y*.
-        ``"mean"`` is correctly rounded, and group means or CI limits that
-        differ from the threshold only by floating-point rounding count as
-        equal to it.
+        A number, or ``"mean"``/``"median"`` of the observations of *y* that
+        are drawn: those in the groups on the axis, so a group left out of
+        *order* does not count either. ``"mean"`` is correctly rounded, and
+        group means or CI limits that differ from the threshold only by
+        floating-point rounding count as equal to it.
     error
         What the error bars show: ``"ci"``, ``"se"`` or ``"sd"``.
     classify
@@ -314,9 +339,11 @@ def benchmark_bar(
     check_not_reserved(["n", "mean", "sd", "se", "ci_low", "ci_high", "status"], x=x)
     st._check_level(level)
     colors = slot_colors(colors, ("below", "above", "indistinguishable"))
-    thr, tol = _threshold(data, y, threshold)
+    check_has_values(data, y)
+    _check_threshold(threshold)
 
     groups = category_order(data[x], order)
+    thr, tol = _threshold(data[y][_drawn_rows(data[x], groups)], threshold)
     rows = []
     for g in groups:
         s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
@@ -365,7 +392,8 @@ def benchmark_bar(
     ax.legend(handles=[Patch(color=color_for[s], label=s) for s in present], frameon=False, loc="upper left",
               bbox_to_anchor=(1.01, 1))
     ax.spines[["top", "right"]].set_visible(False)
-    return VizResult(fig, ax, table, {"threshold": thr, "error": error, "classify": classify, "level": level})
+    return VizResult(fig, ax, table, {"threshold": thr, "error": error, "classify": classify, "level": level,
+                                      "dropped_missing_group": int(data[x].isna().sum())})
 
 
 @cleanup_on_error
@@ -393,6 +421,10 @@ def lollipop(
     or the rows when *y* is not given. The aggregated values are in the
     table's ``value`` column, so *x* cannot be named ``"value"``.
 
+    Rows with a missing *x* are not dropped: they form a "(missing)"
+    category, drawn last (after the sorted ones) and in grey. Its row in the
+    table holds the missing value in the *x* column.
+
     References
     ----------
     Cleveland, W. S., & McGill, R. (1984). Graphical perception. *JASA*,
@@ -404,35 +436,41 @@ def lollipop(
     check_choice("sort", sort, ["descending", "ascending", None])
     check_not_reserved(["value"], x=x)
     check_has_values(data, x, y)
+    key = group_key(data[x])
     if stat != "count":
         if y is None:
             raise ValueError(f"stat={stat!r} needs a y column")
         check_numeric(data, y)
         check_finite(data, y)
         if stat == "sum":  # in float where an int64 sum could wrap around
-            agg = safe_sum(data[y], data[x], sort=True)
+            agg = safe_sum(data[y], key, sort=True, dropna=False)
         else:
-            agg = data.groupby(x, observed=True)[y].agg(stat)
+            agg = data.groupby(key, observed=True, dropna=False)[y].agg(stat)
     elif y is not None:
-        agg = data.groupby(x, observed=True)[y].count()
+        agg = data.groupby(key, observed=True, dropna=False)[y].count()
     else:
-        agg = data.groupby(x, observed=True).size()
+        agg = data.groupby(key, observed=True, dropna=False).size()
     table = agg.rename("value").reset_index()
     if sort is not None:
         table = table.sort_values("value", ascending=(sort == "ascending"), ignore_index=True)
+    missing = table[x].isna().to_numpy()
+    if missing.any():  # the rows without an x come last, whatever their value
+        last = np.argsort(missing, kind="stable")
+        table, missing = table.iloc[last].reset_index(drop=True), missing[last]
+    dot = [NEUTRAL if m else color for m in missing] if missing.any() else color
 
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)) if horizontal else (8, 5))
     pos = np.arange(len(table))
     if horizontal:
         pos = pos[::-1]  # first row at the top
     alphas = np.where(table["value"] < threshold, 0.3, 1.0) if threshold is not None else np.ones(len(table))
-    for p, v, a in zip(pos, table["value"], alphas):
+    for p, v, a, m in zip(pos, table["value"], alphas, missing):
         if horizontal:
-            ax.hlines(p, 0, v, color=color, alpha=a, lw=1.5)
+            ax.hlines(p, 0, v, color=NEUTRAL if m else color, alpha=a, lw=1.5)
         else:
-            ax.vlines(p, 0, v, color=color, alpha=a, lw=1.5)
+            ax.vlines(p, 0, v, color=NEUTRAL if m else color, alpha=a, lw=1.5)
     xs, ys = (table["value"], pos) if horizontal else (pos, table["value"])
-    ax.scatter(xs, ys, s=90, color=color, alpha=alphas, zorder=3)
+    ax.scatter(xs, ys, s=90, color=dot, alpha=alphas, zorder=3)
     if labels:
         for p, v in zip(pos, table["value"]):
             if horizontal:
@@ -441,7 +479,7 @@ def lollipop(
             else:
                 ax.annotate(abbreviate(v), (p, v), xytext=(0, 8 if v >= 0 else -8), textcoords="offset points",
                             ha="center", va="bottom" if v >= 0 else "top", fontsize=9)
-    ticks = [level_label(v) for v in table[x]]
+    ticks = ["(missing)" if m else level_label(v) for v, m in zip(table[x], missing)]
     label = f"{stat} of {y}" if stat != "count" else "count"
     fmt = AbbrevFormatter()
     if horizontal:
@@ -565,7 +603,9 @@ def divergent_bar(
     column are all missing keeps a missing value there (and no bar), rather
     than a 0. Categories are drawn bottom to
     top in the order of a ``Categorical`` column, and in the order they
-    first appear otherwise.
+    first appear otherwise. Rows with a missing *category* are not dropped:
+    they are summed into a "(missing)" category, drawn last (at the top) and
+    in grey, with the missing value in the table's *category* column.
 
     Parameters
     ----------
@@ -583,17 +623,23 @@ def divergent_bar(
         raise ValueError("divergent_bar expects non-negative values in both columns")
     by_levels = isinstance(data[category].dtype, pd.CategoricalDtype)  # grouping sorts a Categorical by its categories
     # By position; safe_sum sums in float where int64 could wrap, and gives NaN (not pd.NA) for an all-missing category.
-    sums = [safe_sum(values.iloc[:, i], values.iloc[:, 0], sort=by_levels, min_count=1) for i in (1, 2)]
+    sums = [safe_sum(values.iloc[:, i], group_key(values.iloc[:, 0]), sort=by_levels, min_count=1, dropna=False)
+            for i in (1, 2)]
     table = pd.concat(sums, axis=1, keys=[left, right]).rename_axis(category).reset_index()
     if sort:  # by a separate key, so a column named "total" cannot be overwritten
         total = table[left].fillna(0) + table[right].fillna(0)
         table = table.iloc[np.argsort(total.to_numpy(), kind="stable")].reset_index(drop=True)
+    missing = table[category].isna().to_numpy()
+    if missing.any():  # the rows without a category come last, whatever their total
+        last = np.argsort(missing, kind="stable")
+        table, missing = table.iloc[last].reset_index(drop=True), missing[last]
+    left_colors, right_colors = ([NEUTRAL if m else c for m in missing] if missing.any() else c for c in colors)
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)))
     pos = np.arange(len(table))
-    ax.barh(pos, -table[left], color=colors[0], label=left_label or left)
-    ax.barh(pos, table[right], color=colors[1], label=right_label or right)
+    ax.barh(pos, -table[left], color=left_colors, label=left_label or left)
+    ax.barh(pos, table[right], color=right_colors, label=right_label or right)
     ax.axvline(0, color=foreground(ax), lw=0.8)
-    ax.set_yticks(pos, [level_label(v) for v in table[category]])
+    ax.set_yticks(pos, ["(missing)" if m else level_label(v) for v, m in zip(table[category], missing)])
     ax.xaxis.set_major_formatter(AbbrevFormatter(absolute=True))
     lim = max(table[left].max(), table[right].max()) * 1.1
     ax.set_xlim(-lim, lim)
@@ -644,12 +690,18 @@ def centered_bar(
     (Wilson, 1927), which behave well for small groups and extreme
     proportions (Brown, Cai & DasGupta, 2001).
 
+    Rows with a missing *x* belong to no group, so they are left out of the
+    bars and of the threshold; ``info["dropped_missing_group"]`` counts them
+    (0 when there are none).
+
     Parameters
     ----------
     threshold
-        A number, or ``"mean"``/``"median"`` of all observations of *y*.
-        ``"mean"`` is correctly rounded, and values that differ from it only
-        by floating-point rounding count as on it (so at-or-above).
+        A number, or ``"mean"``/``"median"`` of the observations of *y* that
+        are drawn: those in the groups on the axis, so a group left out of
+        *order* does not count either. ``"mean"`` is correctly rounded, and
+        values that differ from it only by floating-point rounding count as
+        on it (so at-or-above).
     level
         Confidence level of the Wilson intervals, strictly between 0 and 1
         (``0.95``, not ``95``).
@@ -664,8 +716,11 @@ def centered_bar(
     check_not_reserved(["n", "n_above", "p_above", "ci_low", "ci_high", "p_below"], x=x)
     st._check_level(level)
     colors = slot_colors(colors, ("at_or_above", "below"))
-    thr, tol = _threshold(data, y, threshold)
+    check_has_values(data, y)
+    _check_threshold(threshold)
     groups = category_order(data[x], order)
+    drawn = data[y][_drawn_rows(data[x], groups)]
+    thr, tol = _threshold(drawn, threshold)
     rows = []
     for g in groups:
         s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
@@ -675,7 +730,7 @@ def centered_bar(
                      "ci_low": float(lo), "ci_high": float(hi), "p_below": (n - k) / n if n else np.nan})
     table = pd.DataFrame(rows)
 
-    shown = _threshold_text(thr, tol, data[y].to_numpy(dtype=float, na_value=np.nan))
+    shown = _threshold_text(thr, tol, drawn.to_numpy(dtype=float, na_value=np.nan))
     fig, ax = get_ax(ax)
     pos = np.arange(len(table))
     up = ax.bar(pos, table["p_above"], color=colors[0], label=f"≥ {shown}")
@@ -699,7 +754,8 @@ def centered_bar(
     ax.set_title(f"Share of {y} above/below {shown} (error bars: {level_percent(level)} Wilson CI)", loc="left")
     ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1, 1))
     ax.spines[["top", "right"]].set_visible(False)
-    return VizResult(fig, ax, table, {"threshold": thr, "level": level})
+    return VizResult(fig, ax, table, {"threshold": thr, "level": level,
+                                      "dropped_missing_group": int(data[x].isna().sum())})
 
 
 @cleanup_on_error

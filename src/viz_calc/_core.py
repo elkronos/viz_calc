@@ -563,6 +563,39 @@ def level_mask(values: pd.Series, level: Any) -> pd.Series:
         return values.copy() == level
 
 
+def with_missing(levels: Sequence[Any], values: pd.Series) -> list[Any]:
+    """*levels*, then ``None`` if *values* has missing values: the level of the rows whose group is missing.
+
+    :func:`group_mask` selects those rows and :func:`group_label` names the
+    level "(missing)".
+    """
+    return [*levels, None] if values.isna().any() else list(levels)
+
+
+def group_mask(values: pd.Series, level: Any) -> pd.Series:
+    """:func:`level_mask`, except that the level ``None`` selects the missing values."""
+    return values.isna() if level is None else level_mask(values, level)
+
+
+def group_label(level: Any) -> str:
+    """:func:`level_label`, except that the level ``None`` reads "(missing)"."""
+    return "(missing)" if level is None else level_label(level)
+
+
+def group_key(values: pd.Series) -> pd.Series:
+    """*values* as a key for ``groupby(dropna=False)``, which makes its missing values a group of their own.
+
+    pandas before 3.0 gets that wrong for a dictionary-encoded Arrow column,
+    which ``read_parquet(dtype_backend="pyarrow")`` returns for a
+    Categorical: it drops the missing values, or adds them to the last level
+    when sorting. Such a column is grouped by its decoded values.
+    """
+    dtype = values.dtype
+    if isinstance(dtype, pd.ArrowDtype) and dtype.type is pd.CategoricalDtype.type:  # a dictionary-encoded column
+        return values.astype(pd.ArrowDtype(dtype.pyarrow_dtype.value_type))
+    return values
+
+
 def _level_key(value: Any) -> Any:
     # On NumPy 1.x a numpy.datetime64 (or timedelta64) hashes differently from the equal pandas Timestamp
     # (Timedelta), so set lookups would miss; compare levels in their pandas form.
