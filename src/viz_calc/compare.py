@@ -101,7 +101,7 @@ def _threshold_text(thr: float, tol: float, compared: Any) -> str:
 
 
 # Groups with fewer values are flagged. A 95% bootstrap interval for a mean difference covered the truth in 80% of
-# simulated normal datasets at 3 per group and 91-92% at 10 to 15; the Welch interval covered 94-98%.
+# simulated normal datasets at 3 per group and 91-93% at 10 to 15; the Welch interval covered 94-98%.
 _SMALL_GROUP = 15
 
 

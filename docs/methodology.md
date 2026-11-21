@@ -66,13 +66,13 @@ With few observations bootstrap intervals are too narrow. The bootstrap
 distribution of a mean has the spread of the sample's plug-in variance
 (divisor $n$, not $n - 1$) and makes no allowance for that variance being
 estimated, which the *t* distribution does. In simulations of normal data
-with no true difference (300 to 1,000 datasets per size, 2,000 resamples),
-the 95% BCa interval for a difference in means covered zero in 61–64% of
-datasets at 2 per group, 79–81% at 3, 86–88% at 5, 91–92% at 10 and 15,
-92–94% at 20 and 94% at 30. The Welch interval covered 94–98% at every size.
-The percentile interval behaved like BCa (79% at 3 per group, 87% at 5, 91%
-at 10). Skewed (lognormal) data were worse for BCa, 79–90% from 3 to 20 per
-group, while Welch stayed at 96–98%.
+with no true difference (300 to 3,000 datasets per size, 2,000 resamples),
+the 95% BCa interval for a difference in means covered zero in 61–67% of
+datasets at 2 per group, 79–82% at 3, 86–89% at 5, 91–92% at 10, 91–93% at
+15, 92–94% at 20 and 94% at 30. The Welch interval covered 94–98% at every
+size. The percentile interval behaved like BCa (79–82% at 3 per group,
+87–90% at 5, 91–92% at 10). Skewed (lognormal) data were worse for BCa,
+78–90% from 3 to 20 per group, while Welch stayed at 96–98%.
 
 `estimation_plot` therefore always reports the Welch interval as well, in
 the `welch_ci_low` and `welch_ci_high` columns of `info["comparisons"]`, and
