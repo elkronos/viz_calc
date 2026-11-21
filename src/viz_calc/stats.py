@@ -87,6 +87,32 @@ def _unit_scale(*samples: np.ndarray) -> float:
     return float(np.ldexp(1.0, np.frexp(top)[1] - 1))
 
 
+def _offset(*samples: np.ndarray) -> float:
+    """A value to subtract from every sample before taking deviations from the mean: 0, or one of the values.
+
+    Deviations ``x - mean`` lose digits when the values sit far from zero next
+    to their spread: with an offset of ``2**53`` or ``1e12`` the rounded mean
+    is off by about as much as the values differ, and *t*, *g*, *r* and
+    eta-squared come out wrong although every value is exact. When the spread
+    of all values is below ``2**-20`` of their magnitude (the deviations would
+    lose more than 20 of the 53 bits), the value nearest zero is returned;
+    every value is then within a factor of two of it, so the subtraction is
+    exact (Sterbenz's lemma) and none of those statistics change. Otherwise
+    the result is 0, so ordinary data give bit-identical results.
+    """
+    present = [s for s in samples if s.size]
+    if not present:
+        return 0.0
+    lo, hi = min(float(np.min(s)) for s in present), max(float(np.max(s)) for s in present)
+    if not (np.isfinite(lo) and np.isfinite(hi)):
+        return 0.0
+    if lo > 0 and hi - lo < lo * 2.0**-20:
+        return lo
+    if hi < 0 and hi - lo < -hi * 2.0**-20:
+        return hi
+    return 0.0
+
+
 def _var(x: np.ndarray) -> float:
     """Sample variance (``ddof=1``), exactly 0 for a constant sample.
 
@@ -214,6 +240,8 @@ def welch_test(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> d
     a, b = _clean(a), _clean(b)
     if a.size < 2 or b.size < 2:
         raise ValueError("each group needs at least two non-missing values")
+    c = _offset(a, b)
+    a, b = a - c, b - c  # exact, and nothing below depends on a shared shift; see _offset
     s = _unit_scale(a, b)
     a, b = a / s, b / s  # exact; see _unit_scale
     va, vb = _var(a) / a.size, _var(b) / b.size
@@ -252,6 +280,8 @@ def hedges_g(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> dic
     n1, n2 = a.size, b.size
     if n1 < 2 or n2 < 2:
         raise ValueError("each group needs at least two non-missing values")
+    c = _offset(a, b)
+    a, b = a - c, b - c  # exact, and g does not depend on a shared shift; see _offset
     s = _unit_scale(a, b)
     a, b = a / s, b / s  # exact, and g does not depend on the scale; see _unit_scale
     df = n1 + n2 - 2
@@ -519,7 +549,10 @@ def correlation_test(x: Sequence[float], y: Sequence[float], method: Literal["pe
     # Not np.ptp: for a column that is all +inf it is inf - inf = nan, and the constant column would get a p-value.
     if n < 3 or (x == x[0]).all() or (y == y[0]).all():
         return {"r": np.nan, "ci_low": np.nan, "ci_high": np.nan, "p": np.nan, "n": n}
-    res = _st.spearmanr(x, y) if method == "spearman" else _st.pearsonr(x, y)
+    if method == "spearman":
+        res = _st.spearmanr(x, y)
+    else:
+        res = _st.pearsonr(x - _offset(x), y - _offset(y))  # exact shifts, which r does not depend on; see _offset
     r, p = float(res[0]), float(res[1])
     if method == "spearman" and n <= _SPEARMAN_EXACT_MAX_N:
         p = _spearman_exact_p(x, y)

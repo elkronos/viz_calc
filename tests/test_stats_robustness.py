@@ -308,3 +308,51 @@ def test_tie_handling_leaves_bootstraps_without_near_ties_bit_identical():
         assert st.bootstrap_ci(a, b, method=method) == plain
         assert st.bootstrap_ci(b, method=method) == st.bootstrap_ci(b, statistic=lambda x: float(np.mean(x)),
                                                                     method=method)
+
+
+# --- values far from zero and constant columns -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("offset", [1e12, 2.0**52, 2.0**53, -(2.0**53)])
+def test_exact_offsets_do_not_change_t_g_or_r(offset):
+    # Deviations from a mean rounded at 2**53 lost the values' digits: Welch t was 2.449 instead of 2.484 and
+    # Pearson r of an exact linear relation 0.985 (with a near-constant input warning from SciPy).
+    import warnings
+
+    a, b = np.array([0.0, 2, 4, 8]), np.array([6.0, 8, 10, 14])
+    x, y = 2 * np.arange(10.0), 2 * np.arange(10.0) ** 2  # even, so exact at 2**53
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        w, g, r = st.welch_test(a + offset, b + offset), st.hedges_g(a + offset, b + offset), st.correlation_test(
+            x + offset, y + offset)
+    assert w == pytest.approx(st.welch_test(a, b), rel=1e-12)
+    assert g == pytest.approx(st.hedges_g(a, b), rel=1e-12)
+    assert r == pytest.approx(st.correlation_test(x, y), rel=1e-12)
+    assert st.correlation_test(x + offset, x)["r"] == pytest.approx(1.0, abs=1e-15)
+
+
+def test_offsets_leave_ordinary_data_bit_identical():
+    rng = np.random.default_rng(4)
+    x, y = rng.normal(5, 1, 30), rng.normal(-2, 3, 30)
+    assert st.correlation_test(x, y)["r"] == float(sps.pearsonr(x, y)[0])
+    a, b = rng.normal(100, 1, 20), rng.normal(101, 2, 25)  # far from zero, but not 2**20 times their spread
+    va, vb = a.var(ddof=1) / a.size, b.var(ddof=1) / b.size
+    assert st.welch_test(a, b)["t"] == (b.mean() - a.mean()) / np.sqrt(va + vb)
+
+
+@pytest.mark.parametrize("c", [0.1, 1 / 3, 0.5])
+def test_profile_boxes_gives_a_constant_column_no_eta_squared(c):
+    # A constant 0.1 column used to get eta-squared 1.0 or 0.0 from rounding noise, different on each pandas pin.
+    m = datasets.measurements().assign(c=c)
+    table = vc.profile_boxes(m, categorical=["group", "grade"], numeric=["c", "length"]).table
+    assert table.loc[table["numeric"] == "c", "eta_squared"].isna().all()
+    assert table.loc[table["numeric"] == "length", "eta_squared"].notna().all()
+
+
+@pytest.mark.parametrize("offset", [1e12, 2.0**52, -(2.0**52)])
+def test_profile_boxes_eta_squared_does_not_change_with_an_exact_offset(offset):
+    rng = np.random.default_rng(0)
+    d = pd.DataFrame({"g": rng.choice(list("abc"), 60), "v": rng.integers(0, 40, 60).astype(float)})
+    eta = vc.profile_boxes(d, categorical=["g"], numeric=["v"]).table["eta_squared"].item()
+    shifted = vc.profile_boxes(d.assign(v=d["v"] + offset), categorical=["g"], numeric=["v"]).table
+    assert shifted["eta_squared"].item() == pytest.approx(eta, rel=1e-12)

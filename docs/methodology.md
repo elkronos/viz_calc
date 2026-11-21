@@ -42,7 +42,13 @@ are identical groups and the mean CI of `[0.1] * 3` is exactly 0.1.
 The mean CI, Welch's test and *g* rescale the data by a power of two before
 squaring deviations; the rescaling is exact, so ordinary results are
 unchanged and magnitudes beyond about $10^{\pm 154}$ no longer overflow or
-underflow (which used to give $g = 0$).
+underflow (which used to give $g = 0$). When all values sit far from zero
+next to their spread (a spread below $2^{-20}$ of their magnitude, as with an
+offset of $10^{12}$ on data spread over tens), the rounded mean would be off
+by about as much as the values differ. Welch's test, *g*, Pearson's *r* and
+eta-squared then first subtract the value nearest zero, which is exact
+there, so an offset that leaves the values exact does not change them.
+Other data are not shifted.
 
 ### Bootstrap confidence intervals
 Bias-corrected and accelerated (BCa) intervals (Efron, 1987) from
@@ -143,7 +149,9 @@ size (Balinski & Young, 1982). Used by `waffle`.
 ### Eta-squared
 $\eta^2 = SS_\text{between}/SS_\text{total}$, the share of a numeric
 variable's variance explained by a grouping. Used to rank panels in
-`profile_boxes`.
+`profile_boxes`. A constant column has no variance to explain, so its
+$\eta^2$ is missing (its floating-point sums of squares would hold only
+rounding noise, as for a column of 0.1).
 
 ### Principal component analysis
 SVD of the centred (and by default standardized) data matrix; eigenvalues

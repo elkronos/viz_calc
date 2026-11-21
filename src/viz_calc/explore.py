@@ -123,7 +123,8 @@ def profile_boxes(
     numeric column's variance explained by the grouping), so the strongest
     associations can be looked at first. Columns with no values are left
     out; a pair given explicitly that has no complete rows gets ``n=0``, a
-    missing eta-squared and an empty panel.
+    missing eta-squared and an empty panel. A constant numeric column has no
+    variance to explain, so its eta-squared is missing too.
     """
     check_dataframe(data)
     check_count("max_levels", max_levels)
@@ -142,12 +143,16 @@ def profile_boxes(
         d = select_columns(data, [c, n]).dropna()
         # By position, since .loc and groupby(...)[n] misread columns labelled False or True.
         v = d.iloc[:, 1].to_numpy(dtype=float)
+        v = v - st._offset(v)  # exact; keeps the digits of values far from zero (see stats._offset)
         v = pd.Series(v / st._unit_scale(v))  # a power of two: the sums of squares neither overflow nor underflow
         grand = v.mean()
         ss_tot = ((v - grand) ** 2).sum()
         g = v.groupby(d.iloc[:, 0].to_numpy(), observed=True)
         ss_between = (g.size() * (g.mean() - grand) ** 2).sum()
-        rows.append({"categorical": c, "numeric": n, "n": len(d), "eta_squared": ss_between / ss_tot if ss_tot else np.nan})
+        # A constant column has no variance to explain. Its float mean can be off by an ulp (0.1, 1/3), so both sums
+        # of squares would hold only rounding noise, and their ratio is meaningless.
+        eta = ss_between / ss_tot if ss_tot and np.ptp(v) > 0 else np.nan
+        rows.append({"categorical": c, "numeric": n, "n": len(d), "eta_squared": eta})
     table = pd.DataFrame(rows).sort_values("eta_squared", ascending=False, ignore_index=True)
     figs = []
     for start, fig, axes in _pages(len(table), per_page, ncols):
