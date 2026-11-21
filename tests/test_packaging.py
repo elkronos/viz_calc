@@ -78,3 +78,11 @@ def test_numpy_floor_skips_1_24_0():
     # fill_between passes it, so timeseries_fill failed with a numeric time column. 1.24.1 fixed it.
     floor = _floors(_pyproject()["project"]["dependencies"])["numpy"]
     assert _version(floor) >= (1, 24, 1)
+
+
+def test_build_backend_floor_writes_the_license_fields():
+    # hatchling before 1.26 rejects the list form of project.license-files, and 1.26 writes the legacy
+    # License field. 1.27 is the first release that writes License-Expression and License-File.
+    data = _pyproject()
+    assert isinstance(data["project"]["license-files"], list)
+    assert _version(_floors(data["build-system"]["requires"])["hatchling"]) >= (1, 27)
