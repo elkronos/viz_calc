@@ -23,6 +23,10 @@ jobs:
           - python: "3.10"
             label: minimum versions
             deps: "numpy==1.24.1 pandas==2.0.0 matplotlib==3.7.0 scipy==1.11.1 networkx==3.2 plotly==5.15.0 python-pptx==0.6.21 python-dateutil==2.8.2"
+          # The pandas 2.2 line, with the NumPy, Matplotlib and SciPy releases of its time.
+          - python: "3.11"
+            label: pandas 2.2
+            deps: "pandas==2.2.3 numpy==2.0.2 matplotlib==3.9.4 scipy==1.14.1"
           # Core dependencies only, so the tests of networkx, plotly and python-pptx features must skip.
           - python: "3.13"
             label: no extras

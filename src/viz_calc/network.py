@@ -562,8 +562,8 @@ def sankey(
               "color": "rgba(150,150,150,0.35)"},
     ))
     fig.update_layout(title_text=title, font_size=12)
-    inflow = flows.groupby(target)[value].sum()
-    outflow = flows.groupby(source)[value].sum()
+    inflow = flows.groupby(target, observed=True)[value].sum()
+    outflow = flows.groupby(source, observed=True)[value].sum()
     table = pd.DataFrame({"node": nodes, "inflow": [inflow.get(n, 0) for n in nodes],
                           "outflow": [outflow.get(n, 0) for n in nodes]})
     return VizResult(fig, None, table, {"flows": flows})

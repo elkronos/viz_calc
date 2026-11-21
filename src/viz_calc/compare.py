@@ -654,8 +654,10 @@ def centered_bar(
     pos = np.arange(len(table))
     up = ax.bar(pos, table["p_above"], color=colors[0], label=f"≥ {shown}")
     down = ax.bar(pos, -table["p_below"], color=colors[1], label=f"< {shown}")
-    ax.errorbar(pos, table["p_above"], yerr=[np.clip(table["p_above"] - table["ci_low"], 0, None),
-                                             np.clip(table["ci_high"] - table["p_above"], 0, None)],
+    # yerr is one 2 x n array: for a list, Matplotlib calls float() on its first element, which with one group
+    # is a one-element Series or array (deprecated in pandas 2.1 to 2.3 and in NumPy 1.25 and later).
+    p_above, ci_low, ci_high = (table[c].to_numpy(dtype=float) for c in ("p_above", "ci_low", "ci_high"))
+    ax.errorbar(pos, p_above, yerr=np.clip([p_above - ci_low, ci_high - p_above], 0, None),
                 fmt="none", ecolor="black", capsize=3, lw=1)
     if labels:
         ax.bar_label(up, labels=[_share_label(v) for v in table["p_above"]], padding=2, fontsize=8, label_type="center", color="white")

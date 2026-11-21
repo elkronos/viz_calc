@@ -254,7 +254,7 @@ def _boolean_labelled():
 
 def test_boolean_labelled_value_columns():
     d = _boolean_labelled()
-    expected = d.groupby("arm")[True].mean()
+    expected = d.groupby("arm", observed=False)[True].mean()
     table = vc.estimation_plot(d, "arm", True, n_resamples=100).table
     assert table["mean"].tolist() == pytest.approx(expected.reindex(table["arm"]).tolist())
     assert vc.benchmark_bar(d, "arm", True).table["n"].sum() == d[True].notna().sum()
