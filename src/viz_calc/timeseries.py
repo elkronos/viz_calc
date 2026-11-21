@@ -139,7 +139,7 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
             # The strings are valid ISO 8601, so each wall-clock time is the text without its offset, parsed in one go
             try:
                 out = attempt(s.str.replace(_OFFSET_AT_END, r"\1", regex=True), format="ISO8601")
-            except AttributeError:  # not text, e.g. datetime objects
+            except (AttributeError, NotImplementedError):  # not text, or Arrow text (pandas 2.3 refuses \1 there)
                 out = None
             if out is None or getattr(out.dtype, "tz", None) is not None or not out.isna().equals(utc.isna()):
                 # Anything that reads differently without its offset is parsed one value at a time (slower)

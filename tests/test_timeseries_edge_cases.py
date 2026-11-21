@@ -190,6 +190,17 @@ def test_mixed_offsets_read_as_their_wall_clock_times(values, monkeypatch):
         assert calls == []  # text is parsed in one go, not one value at a time (7 s for a million)
 
 
+@pytest.mark.parametrize("call", [lambda d: vc.period_bars(d, "d", "v", freq="day"),
+                                  lambda d: vc.calendar_heatmap(d, "d", "v")], ids=["period_bars", "calendar_heatmap"])
+def test_mixed_offsets_in_arrow_text_read_as_their_wall_clock_times(call):
+    # pandas 2.3 raises NotImplementedError for a group reference in a replacement on Arrow text
+    pa = pytest.importorskip("pyarrow")
+    df = pd.DataFrame({"d": ["2024-03-30T23:30:00Z", "2024-03-31T01:30:00+01:00", None, "2024-04-01T02:00+02:00"],
+                       "v": [1.0, 2.0, 3.0, 4.0]})
+    expected = call(df).table
+    pd.testing.assert_frame_equal(call(df.astype({"d": pd.ArrowDtype(pa.string())})).table, expected)
+
+
 # --- animated_bubble ---------------------------------------------------------------------------------------------
 
 
