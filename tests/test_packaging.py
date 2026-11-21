@@ -173,6 +173,12 @@ def _jobs(workflow: str) -> dict[str, str]:
     return dict(re.findall(r"^  ([\w-]+):\n((?:    .*\n|\n)*)", workflow.split("\njobs:\n", 1)[1], re.M))
 
 
+def _needs(job: str) -> list[str]:
+    """The ids of the jobs that a job, given as the lines below its id, waits for."""
+    needs = re.search(r"^    needs: \[?([\w, -]*?)\]?\n", job, re.M)
+    return [name.strip() for name in needs.group(1).split(",")] if needs else []
+
+
 def _step_script(workflow: str, name: str) -> str:
     """The ``run`` script of the workflow step with this name."""
     step = re.search(rf"^( +)- name: {re.escape(name)}\n((?:\1  .*\n)*)", workflow, re.M)
@@ -194,12 +200,21 @@ def test_publish_workflow_uploads_a_release_from_the_pypi_environment_only():
     assert "pypa/gh-action-pypi-publish@" in upload
     assert "actions/checkout" not in upload, "the upload job uploads what the build job made"
     environment = re.search(r"^    environment:\n      name: (\S+)\n", upload, re.M)
-    needs = re.search(r"^    needs: (\S+)\n", upload, re.M)
-    assert environment and needs
-    build = jobs[needs.group(1)]
-    assert "python -m build" in build and "twine check --strict dist/*" in build and TAG_CHECK in build
+    build = [jobs[job] for job in _needs(upload) if "python -m build" in jobs[job]]
+    assert environment and build
+    assert "twine check --strict dist/*" in build[0] and TAG_CHECK in build[0]
     releasing = (ROOT / "RELEASING.md").read_text(encoding="utf-8")
     assert f"`{PUBLISH.name}`" in releasing and f"`{environment.group(1)}`" in releasing
+
+
+def test_publish_workflow_uploads_only_after_the_tests_pass_on_the_built_wheel():
+    # The upload waits for the test suite to pass with the uploaded wheel and its dependencies installed.
+    jobs = _jobs(_publish_workflow())
+    upload = next(lines for lines in jobs.values() if "pypa/gh-action-pypi-publish@" in lines)
+    tests = [jobs[job] for job in _needs(upload) if re.search(r"^ +run: pytest\n", jobs[job], re.M)]
+    assert tests, "the upload job does not wait for a job that runs the tests"
+    assert "actions/download-artifact" in tests[0] and re.search(r"pip install .*dist/\*\.whl", tests[0])
+    assert "pip install -e" not in tests[0]
 
 
 @pytest.mark.parametrize(("tag", "passes"), [("v2.3.4", True), ("v2.3.5", False), ("2.3.4", False)])

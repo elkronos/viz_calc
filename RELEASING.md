@@ -3,7 +3,8 @@
 Publishing a GitHub release uploads the package to PyPI. The workflow
 `.github/workflows/publish.yml` builds the sdist and wheel once, checks that
 their description renders on PyPI, stops if the release tag is not `v`
-followed by the package version, and uploads both files from the `pypi`
+followed by the package version, runs the tests with the built wheel and the
+newest dependencies installed, and uploads both files from the `pypi`
 environment. PyPI accepts the upload through trusted publishing, so the
 repository stores no PyPI token.
 
@@ -50,11 +51,11 @@ repository stores no PyPI token.
 
    Publishing starts the Publish workflow on the Actions tab; approve the
    `pypi` deployment there if the environment has required reviewers. If the
-   tag and `__version__` disagree, the workflow fails before anything is
-   uploaded: delete the release and the tag, correct the wrong one, and
-   publish again. PyPI never accepts a file name twice, even after the file is
-   deleted there, so a version that reached PyPI broken is fixed with a new
-   version.
+   tag and `__version__` disagree, or a test fails, the workflow fails before
+   anything is uploaded: delete the release and the tag, correct the tag or
+   fix `main`, and publish again. PyPI never accepts a file name twice, even
+   after the file is deleted there, so a version that reached PyPI broken is
+   fixed with a new version.
 
 ## After the first upload
 
