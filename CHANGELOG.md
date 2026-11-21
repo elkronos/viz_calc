@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+### Changed
+- Labels passed to a Matplotlib chart, such as `start_label=` in `dumbbell` or
+  `labels=` in `timeseries_fill`, are drawn as written like the rest of the
+  chart's text: a pair of `$` in them no longer starts mathtext. For mathtext in
+  a chart's title or axis label, set it after the call
+  (`res.axes.set_title(r"$\alpha$ = 0.05", parse_math=True)`). A dollar sign
+  escaped as `\$`, in a label or in the data, now keeps its backslash
+  (`\$5-\$10` used to draw `$5-$10`); drop the escape. A legend a chart adds to
+  a caller's `ax=` (`dumbbell`, `likert`, `timeseries_fill`, ...) also shows the
+  labels of the caller's own artists there as written.
+- One column passed for two roles that cannot share it raises a clear error in
+  the charts that still accepted it: `x` and `y` in `estimation_plot`,
+  `benchmark_bar`, `lollipop`, `centered_bar` and `raincloud`; `x` and `hue` or
+  `facet` in `histogram`; `x` and `group` in `ridgeplot`; `category` and `value`
+  in `waffle`; `outer` or `inner` and `value` in `nested_pie`; `group` and
+  `value` in `circular_bar`; `column` and `facet` in `percent_grid`; a band
+  column named twice in `bullet`; a column listed in both `categorical` and
+  `numeric` of `profile_boxes`; and a `pca_plot` `group` that is also one of its
+  `features` (colour by a copy under another name instead). These calls drew one
+  group per distinct value: `benchmark_bar(datasets.trial(), x="score",
+  y="score")` drew 106 bars of 1 to 3 rows each, and `estimation_plot` failed
+  with "groups need at least two observations". A label that is also the value
+  (`waterfall`, `bullet`, `circular_bar`) or the group (`circular_bar`, and
+  `task` in `gantt`), `bullet`'s value as its own target and `histogram`'s hue
+  as its facet stay allowed.
+- A numeric column holding `inf` or `-inf` raises a `ValueError` naming the
+  column, before anything is drawn, in the charts for comparing groups,
+  correlations, distributions and part-to-whole, in `profile_boxes`,
+  `profile_scatters` and `animated_bubble`. Such values failed late with
+  messages that did not name the column ("not enough values to unpack" in
+  `lollipop`, `funnel` and `waterfall`, "Axis limits cannot be NaN or Inf",
+  "Wedge sizes must be finite numbers", and with SciPy 1.11 "array must not
+  contain infs or NaNs" from `correlogram` and `quadrant_plot`), or gave wrong
+  results: `centered_bar(threshold="mean")` compared every group with an
+  infinite mean, `circular_bar` drew 3 bars for a table of 4, `animated_bubble`
+  gave every bubble zero area when one size was infinite, and on pandas 2.0
+  `lollipop` reported a group's mean as NaN. Calls that coped with an infinite
+  value raise too: `correlogram` and `compare_correlations` with
+  `method="spearman"`, and `lollipop(stat="median")`. `lollipop(stat="count")`
+  still counts infinite values, and the `viz_calc.stats` functions are
+  unchanged.
+- `upset(color=...)` and `bullet(bar_color=...)` default to `None`, which draws
+  the old `"#333333"` and `"#222222"` on a light axes face. On a dark face
+  `upset` uses `"#cccccc"`. `bullet` keeps its dark bar and black target on the
+  grey bands; on a dark face a target off the bands is white, a bar without
+  bands is `"#dddddd"` and a bar past the bands has a white outline. Colours
+  passed in are used as given.
+
 ### Fixed
 - `datasets.sales()` and `calendar_heatmap` read `DatetimeIndex.day_of_week`
   instead of `weekday`, which pandas 3.1 deprecates (`dayofweek` is deprecated
@@ -18,10 +66,224 @@
   `pip install "viz_calc[extra]"`. `viz_calc` is not on PyPI, so that command
   would install whatever someone else publishes under the name. The message
   now names the extra's packages and minimum versions.
+- `pca_plot(ellipse="confidence")` sized the region for a group mean with the
+  chi-square radius, which assumes a known covariance: a nominal 95% ellipse
+  covered the true mean about 51% of the time in groups of 3, 75% in groups of 5
+  and 87% in groups of 10. It now uses Hotelling's T² radius, √(2(n − 1)/(n − 2)
+  · F₂,ₙ₋₂(level)), which covers at the stated level from 3 points on; at n = 5
+  the ellipse is about twice as wide. The `"data"` ellipse keeps its chi-square
+  radius and is now described as the normal-theory ellipse at the group's mean
+  and covariance.
+- The BCa intervals of `estimation_plot` and `stats.bootstrap_ci` changed with
+  the units of the data: two groups holding the same values [1, 1, 1, 2, 1] and
+  [1, 1, 1, 1, 2] gave −0.4 to 0.4 in units and −0.4 to 0.6 in tenths, because
+  rounding noise in the mean difference moved bootstrap values that tie with the
+  estimate to either side of it. With the default statistics, a bootstrap value
+  closer to the estimate than 2⁻⁴⁰ times the data's largest magnitude now counts
+  as a tie. Values far from zero next to their spread (a spread below 2⁻²⁰ of
+  their magnitude, such as epoch times) are first shifted exactly by the value
+  nearest zero, so the tolerance follows their spread; this also makes their
+  intervals more accurate (by about 1e-6 of the interval width on continuous
+  data). Other bootstraps without near ties, as on continuous data, are
+  bit-identical to 1.1.0. On data recorded to a fixed precision a seeded
+  interval moves by a fraction of a bootstrap step where a tie flipped: on
+  `datasets.trial()` the control vs low dose interval goes from −2.216 to 8.835
+  to −2.218 to 8.835, and the one-decimal table in the comparing-groups
+  walkthrough is unchanged. A statistic passed to `bootstrap_ci` is used as it
+  is.
+- `stats.bootstrap_ci(x)` with one sample failed with an internal `TypeError`
+  from the two-sample default statistic; it now bootstraps the mean. Three or
+  more samples without `statistic=` raise a `ValueError` that names the count.
+  `method`, `n_resamples` and `seed` are checked before any resampling:
+  `method=None` raised `AttributeError`, `n_resamples=True` returned `nan`
+  limits, and constant samples accepted any option. As in `estimation_plot`,
+  `n_resamples` must be an `int` (a float such as `200.0` now raises and names
+  the `int` to use), and `seed` must be `None`, an `int` of at least 0 or a
+  NumPy `Generator`, `BitGenerator` or `SeedSequence` (a list of ints is no
+  longer passed on to NumPy). `method` still accepts any letter case.
+- `bootstrap_ci` chose SciPy's `rng` or `random_state` keyword by retrying on
+  `TypeError`, so on SciPy 1.15 and later a `TypeError` raised by the caller's
+  statistic reran the whole bootstrap and was chained to itself, and on older
+  SciPy the real error carried an unrelated "unexpected keyword" context. The
+  keyword is now read once from SciPy's signature.
+- `stats.wilson_ci` returned `(nan, nan)` for 5 successes of 3, a negative count
+  or a negative n, `(0, 0)` for an infinite n, and a finite interval for 10.5
+  successes of 10. Impossible counts now raise a `ValueError` that names them. A
+  missing count or n = 0 still gives `nan`, fractional (weighted) counts are
+  still accepted, and counts near 1e200 no longer warn about overflow.
+- `pca` and `pca_plot` standardized a constant feature whose value is not a
+  binary fraction (0.1, 1/3) into a component holding 20% of the variance,
+  because its floating-point SD is about 3e-17 instead of 0. They now raise the
+  same "constant feature(s) cannot be scaled" error as for a constant 0.5, and
+  with `scale=False` such a feature gets exactly zero variance.
+- `pca` and `pca_plot` raised `NotImplementedError` for Arrow-backed numeric
+  features (`dtype_backend="pyarrow"`) on pandas 2.0.
+- `profile_boxes` gave a constant numeric column such as 0.1 an eta-squared of 1
+  or 0 from rounding noise, a different pair on each pandas pin, so it could
+  head the table. Its eta-squared is now missing, as for a constant 0.5.
+- `welch_test`, `hedges_g`, Pearson's `correlation_test`, the eta-squared of
+  `profile_boxes` and `pca` lost the values' digits when the values sit far from
+  zero next to their spread: with an exact offset of 2⁵³, Welch's *t* was 2.449
+  instead of 2.484, *r* of an exact linear relation 0.985 (with a SciPy
+  near-constant warning) and the eta-squared of groups [0, 2] and [4, 8] 1.11
+  instead of 0.71; an offset of 2⁵² on one PCA feature moved the explained
+  variance ratios by 1.7e-4. When the spread is below 2⁻²⁰ of the values'
+  magnitude (per feature for `pca`), the value nearest zero is now subtracted
+  first, which is exact there. Other data are not shifted and give bit-identical
+  results.
+- `histogram` reported `bin_rule` `"fd"` (or `"auto"`) for a column holding a
+  single value, although a zero IQR is documented to fall back to Sturges and
+  say why; it now reads `"sturges (IQR is 0, so FD is undefined)"`. The bins
+  were already the Sturges ones.
+- `histogram(alpha=)`, `ridgeplot(overlap=)` and `to_pptx(dpi=)` accepted a
+  `Decimal`, `Fraction` or 0-d array in their range check and then failed inside
+  Matplotlib or in arithmetic with a `TypeError`. They now use the checked
+  float.
+- On pandas 2.2 and 2.3, `gantt`, `duration_plot` and `timeseries_fill` accepted
+  a text column whose values shared one UTC offset next to a value without one,
+  and silently gave that value the shared offset (or read it as UTC next to `Z`
+  values). The documented "mixes values with and without a UTC offset" error now
+  fires on every pandas version, for `Z` and hour-only offsets (`-04`) too. The
+  check reads each distinct value once, which adds about 1 s per million text
+  values with offsets.
+- Arrow-backed date columns, which `pd.read_parquet` and
+  `pd.read_csv(engine="pyarrow")` return with `dtype_backend="pyarrow"` and
+  `convert_dtypes(dtype_backend="pyarrow")` gives, failed in `period_bars`,
+  `timeseries_fill`, `calendar_heatmap`, `gantt` and `duration_plot`: on pandas
+  3.1 with `NotImplementedError` (`date32`) or `AttributeError` (`period_bars`
+  on Arrow timestamps), and on pandas 2.1 to 2.3 with "could not be parsed as
+  dates" for Arrow timestamps. They now give the same tables as NumPy datetimes,
+  keep their time zone, and the tables hold NumPy datetime columns.
+- `calendar_heatmap` drew a row for every year from the earliest to the latest
+  date, so one placeholder date such as `9999-12-31` next to a year of data
+  built 7,976 empty panels and took over two minutes and 4.5 GB on pandas 3.1;
+  `1900-01-01` gave 125 rows. Only years that hold data get a row now, so a gap
+  year in ordinary data is left out rather than drawn as an all-grey row.
+- `timeseries_fill` with time-zone-aware times took 29 s for a million hourly
+  rows (naive times: 2 s), because Matplotlib converted every Timestamp in
+  Python. It now draws UTC date numbers on an axis labelled in the data's zone,
+  with the same ticks, limits and pixels: 6 s on pandas 3.1, 7 s on pandas 2.0
+  (was 33 s). ISO text with mixed UTC offsets, as any series across a
+  daylight-saving change has, was parsed one value at a time; a million such
+  values now take 3.6 s instead of 10.4 s in `period_bars`, 4.9 s instead of
+  11.3 s in `calendar_heatmap` and 4.2 s instead of 27.2 s in `timeseries_fill`
+  (pandas 3.1; on pandas 2.0, 13 s instead of 26 s, 15 s instead of 28 s and 15
+  s instead of 46 s). Tables are unchanged; for time-zone-aware times the drawn
+  lines now hold Matplotlib date numbers instead of Timestamps.
+- Category values, column names and labels holding a pair of `$` were drawn as
+  Matplotlib mathtext in all 35 Matplotlib charts. A price band such as `$5-$10`
+  lost both dollar signs, and text that is not valid mathtext, such as `$a^$`,
+  raised a `ValueError`: during the call in the charts that fit their layout
+  around the text (`histogram`, `percent_grid`, `donut_grid`, `bullet`,
+  `estimation_plot`, `compare_correlations`, `animated_bubble` and the
+  `profile_*` functions), and otherwise only later, when the figure was saved
+  (`waffle`, `lollipop`, `upset`, `network_map`, ...). Text a chart draws is now
+  drawn as written, also on a caller's `ax=`, in tick labels Matplotlib makes
+  when the figure is saved and in `animated_bubble`'s later frames.
+  `text.parse_math` is off only while a call runs; text already on the caller's
+  Axes, text added or changed afterwards and the tick labels of a log axis keep
+  Matplotlib's mathtext.
+- `sankey` and `network_map(interactive=True)` passed node names to Plotly as
+  they were, and Plotly reads a subset of HTML in labels and hover text: a node
+  named `<a href="https://...">Click</a>` became a live link in a saved HTML
+  file, `A<br>B` was split over two lines and `AT&amp;T` showed as `AT&T`. Node
+  names are now escaped and show as written; the hover text keeps its bold name
+  and line breaks, and `sankey`'s `title=` is passed through unchanged.
+- `centered_bar`, `likert` and `stacked_percentages` results could not be
+  pickled, for a cache or a process pool: Matplotlib places centred bar labels
+  with a lambda, and `centered_bar` and `likert` formatted their ticks with
+  lambdas (so `labels=False` did not help). All three pickle now and draw the
+  same pixels as before. `animated_bubble`'s `info["animation"]` still cannot be
+  pickled, because a Matplotlib `FuncAnimation` never can; its figure and table
+  can.
+- `abbreviate`, which writes the value labels of `lollipop`,
+  `dumbbell(show_values=True)`, `waterfall` and `funnel`, raised "not enough
+  values to unpack" for `inf` and `-inf`; it returns `inf` and `-inf`. Below 1
+  it wrote a subnormal such as 5e-324 with six significant digits
+  (`4.94066e-324`) instead of the documented two (`4.9e-324`).
+- On pandas 2.0 and 2.1 (viz_calc declares `pandas>=2.0`, and CI tests 2.0.3),
+  `estimation_plot`, `benchmark_bar`, `centered_bar`, `percent_grid`,
+  `histogram` with `hue` or `facet`, `ridgeplot`, `raincloud`,
+  `compare_correlations` and, with copy-on-write on, `profile_boxes` failed with
+  "buffer source array is read-only" when a text column was backed by a
+  read-only array, as in a frame built with `copy=False` over one. pandas 2.2
+  and later were not affected.
+- `animated_bubble` failed when the figure was rendered (`savefig`, `to_jshtml`,
+  notebook display or `anim.save`, after the call itself had returned) with
+  "need at least one array to concatenate" when every bubble of a colour group
+  in a frame, or every bubble of a frame without `color`, had no size. A bubble
+  without x, y or size is now left out of its frame, and every colour group
+  keeps its legend entry in every frame.
+- The `value` column of the `waffle` and `nested_pie` tables is int64 or float64
+  for nullable (`Int64`, `Float64`, `boolean`) input. On pandas 2.0 and 2.1 it
+  was object for `waffle`, so `select_dtypes("number")` dropped it, and on every
+  pandas version `nested_pie` kept the nullable dtype.
+- Under a dark Matplotlib style such as `dark_background`, marks drawn in a
+  fixed black or dark grey matched the black axes face (1.0:1 contrast) and
+  disappeared: `estimation_plot`'s means and CIs in both panels, the error bars
+  of `benchmark_bar` and `centered_bar`, `benchmark_bar`'s threshold line, the
+  zero and reference lines of `centered_bar`, `lollipop`, `divergent_bar`,
+  `likert`, `waterfall` and `histogram`, `quadrant_plot`'s centre lines,
+  `funnel`'s labels beside narrow bars, `pca_plot`'s loading labels, `upset`'s
+  bars and member dots (1.66:1), and a bullet graph's measure (1.32:1) and
+  target wherever they sit on the axes face, without bands or past the last
+  band. The pale grey gridlines of `dumbbell`, `gantt` and `duration_plot`,
+  `pca_plot`'s zero lines, `upset`'s non-member dots and `quadrant_plot`'s label
+  boxes became the brightest marks on the chart, and the eighth Okabe–Ito
+  colour, black, drew an invisible eighth group. These colours now follow the
+  lightness of the axes face when the chart function runs: white or light grey
+  marks and a dark grey grid on a dark face, and a white outline on a bullet
+  measure that runs past its bands. Under the default style and other light
+  styles these marks keep their colours, pixel for pixel. `vc.palette(8)` gives
+  white as the eighth colour under a dark style; `sankey` and
+  `network_map(interactive=True)` keep black, since Plotly draws on white.
+- `nested_pie` drew every sub-category of a white parent in the same white, so
+  they merged into one wedge. A white parent's sub-categories now take darker
+  shades. This hit a white colour in `colors=`, and with the change above the
+  eighth parent under a dark style.
+- Labels drawn on a fill now take black or white from that fill, as the
+  methodology says: `donut_grid`'s shares (black on Okabe–Ito blue, 4.05:1;
+  white on orange under a dark style, 2.25:1), `centered_bar`'s shares (white on
+  the first colour and black on the second whatever they were, 1.32:1 and 1.65:1
+  with `colors=("#F0E442", "#08306b")`), the cell labels of `correlogram` and
+  `compare_correlations` (white above |r| = 0.6 of the scale with any colormap,
+  1.33:1 on `cmap="viridis"`'s yellow) and `network_map`'s node labels
+  (networkx's black on blue nodes, 4.05:1). A network label wider than its node
+  follows the axes face instead. Under the default style the gallery changes
+  only in the `donut_grid` shares and the `network_map` labels on blue nodes,
+  which turn white. With the default colormaps, matrix cells just above 0.6 of
+  the scale also switch from white to black, which reads better there (at r =
+  0.61 in a correlogram, 5.33:1 against 3.94:1): up to 0.66 for positive and
+  0.71 for negative correlations in `correlogram`, and up to 0.77 and 0.62 of
+  the scale in `compare_correlations`.
 
 ### Documentation
 - The `to_pptx` docstring and the walkthroughs point to the install section
   instead of `pip install "viz_calc[...]"`.
+- The `welch_test` docstring and the methodology page say that two constant
+  groups get the Student degrees of freedom n_a + n_b − 2, since the
+  Welch–Satterthwaite formula is 0/0 there; `estimation_plot` shows the same
+  value in its `df` column.
+- The methodology page describes the tie rule of the bootstrap, both PCA
+  ellipses (citing Hotelling, 1931), the domain of the Wilson interval, the
+  exact shift for values far from zero and the missing eta-squared of a constant
+  column. The PCA walkthrough describes the two ellipses the same way as the
+  `pca_plot` docstring.
+- The time walkthrough lists the date columns the time charts accept,
+  Arrow-backed ones included, and says that `timeseries_fill`, `gantt` and
+  `duration_plot` reject text that mixes values with and without a UTC offset.
+  It, the `calendar_heatmap` docstring and the getting-started table say that
+  only years with data get a row.
+- Getting started has a "Text in charts" section on how text from the data is
+  drawn, in Matplotlib and in the Plotly figures, and what keeps mathtext.
+- The `VizResult` docstring says which results cannot be pickled:
+  `animated_bubble`'s animation, and the figure of `network_map(directed=True)`
+  with networkx older than 3.3 (the CI minimum is 3.2.1), whose arrows networkx
+  draws with a local function.
+- Getting started lists, under Conventions, which column roles must be different
+  columns and which may share one, and which charts reject infinite values.
+- Getting started explains how charts follow a dark Matplotlib style, and the
+  methodology's design table lists it.
 
 ### Development
 - CI also runs every Monday against the newest dependency releases, and can be
@@ -33,6 +295,18 @@
   commit message, an added line, the PR title, the PR description or the
   branch name carries an attribution trailer or names a writing tool. Its log
   names where each match is and omits the matched text.
+- Tests read the same dates through `read_csv(engine="pyarrow")` and
+  `convert_dtypes(dtype_backend="pyarrow")`, naive and time-zone-aware, and
+  compare the tables of `period_bars`, `timeseries_fill`, `calendar_heatmap`,
+  `gantt` and `duration_plot` with the NumPy result. They are skipped when
+  pyarrow is not installed, as in every CI job on `main`.
+- The three copies of the overflow-safe sum (`composition._sum`,
+  `timeseries._sum_by` and `_core.safe_sum`) are one: `safe_sum` takes a list of
+  keys and `dropna=`, and `_sum_by` calls it.
+- `tests/test_colours.py` draws the affected charts under `dark_background` and
+  checks the WCAG contrast of their marks against the axes face, and of each
+  label against the wedge, bar, cell or node under it, with light and dark
+  custom colours and colormaps.
 
 ## 1.1.0
 
@@ -78,8 +352,12 @@ versions.
   and reject a single string instead of splitting it into one-letter columns.
 - An all-missing column that a function needs values from raises a clear
   error (in most functions "column ... has no non-missing values") instead of
-  an internal error or an empty chart; one column passed for two roles (for
-  example `dumbbell(start="a", end="a")`) raises a clear error.
+  an internal error or an empty chart; one column passed for two roles raises
+  a clear error in `dumbbell`, `divergent_bar`, `quadrant_plot`,
+  `stacked_percentages`, `nested_pie` (outer and inner), `funnel`,
+  `compare_correlations` (group among the columns), `sankey`, `network_map`,
+  `gantt`, `duration_plot` and `animated_bubble` (for example
+  `dumbbell(start="a", end="a")`).
 - A plotting call that raises closes the figures it opened, so no half-drawn
   chart is left for `plt.show()` or Jupyter.
 - Spearman p-values for up to 9 pairs are exact permutation p-values (the t
