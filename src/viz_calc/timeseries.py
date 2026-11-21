@@ -35,6 +35,7 @@ from ._core import (
     get_ax,
     level_label,
     palette,
+    safe_sum,
     select_columns,
     slot_colors,
 )
@@ -124,14 +125,8 @@ def _numpy_numbers(s: pd.Series) -> pd.Series:
 
 
 def _sum_by(values: pd.Series, by: pd.Series) -> pd.Series:
-    """Sum of *values* per group of *by*, in float where an int64 sum could wrap around."""
-    total = values.groupby(by).sum()
-    if pd.api.types.is_integer_dtype(values):
-        # int64 sums wrap around silently; past 2**62 (a margin for float rounding) sum in float instead
-        floats = values.astype(float).groupby(by).sum()
-        if (floats.abs() >= 2.0**62).any():
-            return floats
-    return total
+    """Sum of *values* per group of *by*, in key order, in float where an int64 sum could wrap around."""
+    return safe_sum(values, by, sort=True)
 
 
 @cleanup_on_error

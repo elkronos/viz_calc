@@ -34,6 +34,7 @@ from ._core import (
     level_label,
     level_percent,
     palette,
+    safe_sum,
     select_columns,
     slot_colors,
     text_color,
@@ -65,21 +66,6 @@ def _missing_rows(data: pd.DataFrame, columns: Sequence[str], label: str | None 
     return (data.index if label is None else data[label])[rows].tolist()
 
 
-def _sum(values: pd.Series, by: Any = None, dropna: bool = True) -> Any:
-    """Sum of *values* (per group of *by*), in float where an integer sum could wrap around.
-
-    *by* is a Series or a list of them; with ``dropna=False`` missing keys form groups too.
-    """
-    total = values.sum() if by is None else values.groupby(by, sort=False, observed=True, dropna=dropna).sum()
-    if pd.api.types.is_integer_dtype(values):
-        # int64 sums wrap around silently; past 2**62 (a margin for float rounding) sum in float instead
-        floats = pd.Series(values.to_numpy(dtype=float, na_value=np.nan), index=values.index)
-        floats = floats.sum() if by is None else floats.groupby(by, sort=False, observed=True, dropna=dropna).sum()
-        if (np.abs(floats) >= 2.0**62).any():
-            return floats
-    return total
-
-
 def _aggregate(data: pd.DataFrame, category: str, value: str | None) -> pd.Series:
     if value is None:
         counts = data[category].value_counts(sort=False)
@@ -87,7 +73,7 @@ def _aggregate(data: pd.DataFrame, category: str, value: str | None) -> pd.Serie
     check_numeric(data, value)
     if (data[value] < 0).any():  # per row: summing first would net a negative row against the others
         raise ValueError("waffle values must be non-negative")
-    return _sum(data[value], data[category])
+    return safe_sum(data[value], data[category])
 
 
 @cleanup_on_error
@@ -122,7 +108,7 @@ def waffle(
     check_has_values(data, category, value)
     totals = _aggregate(data, category, value)
     unknown = data[category].isna()  # rows without a category still count towards the total
-    unknown_total = int(unknown.sum()) if value is None else _sum(data[value][unknown])  # not .loc: True is a label
+    unknown_total = int(unknown.sum()) if value is None else safe_sum(data[value][unknown])  # not .loc: True is a label
     if not ((totals > 0).any() or unknown_total > 0):  # not totals.sum(), which can overflow
         raise ValueError("waffle needs a positive total; every value is zero")
     if order is not None:  # must list every category, or the shares would be renormalized over a subset
@@ -438,7 +424,7 @@ def nested_pie(
         check_numeric(data, value)
         if (data[value] < 0).any():
             raise ValueError("nested_pie values must be non-negative")
-        agg = _sum(data[value], [data[outer], data[inner]], dropna=False).rename("value")
+        agg = safe_sum(data[value], [data[outer], data[inner]], dropna=False).rename("value")
     agg = agg.reset_index()
     if not (agg["value"] > 0).any():  # not agg["value"].sum(), which can overflow
         raise ValueError("nested_pie needs a positive total; every value is zero or missing")

@@ -477,20 +477,23 @@ def exact_mean(values: Any) -> float:
     return float(sum(map(Fraction, parts)) / len(v))
 
 
-def safe_sum(values: pd.Series, by: pd.Series | None = None, sort: bool = False, min_count: int = 0) -> Any:
+def safe_sum(values: pd.Series, by: Any = None, sort: bool = False, min_count: int = 0,
+             dropna: bool = True) -> Any:
     """Sum of *values* (per group of *by*) that cannot wrap around, with ``NaN`` rather than ``pd.NA`` for missing.
 
     Integer sums in int64 wrap around silently, so where an integer sum
     reaches 2**62 (a margin for float rounding) it is taken in float instead.
     Otherwise integer sums stay exact. A result in a nullable dtype (``Int64``,
     ``Float64``) comes back as a NumPy one: int64 when nothing is missing,
-    float64 with ``NaN`` otherwise, which Matplotlib can draw. *sort* and
-    *min_count* are passed on to the pandas ``groupby`` and ``sum``.
+    float64 with ``NaN`` otherwise, which Matplotlib can draw. *by* is a
+    Series or a list of them. *sort*, *dropna* (``False`` makes missing keys
+    a group of their own) and *min_count* are passed on to the pandas
+    ``groupby`` and ``sum``.
     """
     def total(v: pd.Series) -> Any:
         if by is None:
             return v.sum(min_count=min_count)
-        return v.groupby(by, sort=sort, observed=True).sum(min_count=min_count)
+        return v.groupby(by, sort=sort, observed=True, dropna=dropna).sum(min_count=min_count)
 
     if pd.api.types.is_integer_dtype(values) and not pd.api.types.is_bool_dtype(values):
         floats = total(pd.Series(values.to_numpy(dtype=float, na_value=np.nan), index=values.index))
