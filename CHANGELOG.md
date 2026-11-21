@@ -61,6 +61,8 @@
   rejected `license-files`, and 1.26 wrote the legacy `License` field instead of
   `License-Expression`. Only builds that use the declared floor, such as
   `--no-isolation` builds, are affected.
+- The package metadata lists Python 3.10 to 3.13, the versions CI tests, and
+  links to the changelog and the issue tracker.
 
 ### Fixed
 - `datasets.sales()` and `calendar_heatmap` read `DatetimeIndex.day_of_week`
@@ -308,6 +310,15 @@
 - *Getting started* gives the new NumPy and SciPy minimums and lists
   python-dateutil and Pillow. The README says that tests of the networkx, plotly
   and python-pptx features skip when that package is missing.
+- `RELEASING.md` lists the steps for a release in order: register `viz_calc` on
+  PyPI with a pending trusted publisher (owner `elkronos`, repository
+  `viz_calc`, workflow `publish.yml`, environment `pypi`), create the `pypi`
+  environment in the repository settings, rename the Unreleased heading to the
+  version and release date and bump `__version__`, then tag and publish the
+  release. A last step, after the first upload, moves the install lines to PyPI
+  and pins the README image URL to the tag. It also gives the commits for
+  tagging 1.0.0 (`b2cc93d`) and 1.1.0 (`8fa3974`), which were never tagged, and
+  their release date, 2026-09-28.
 
 ### Development
 - CI also runs every Monday against the newest dependency releases, and can be
@@ -345,6 +356,22 @@
 - Tests check that every third-party module the source imports is declared, that
   the build-system floor writes the license fields, and that every README image
   uses an absolute URL.
+- Publishing a GitHub release uploads the package to PyPI.
+  `.github/workflows/publish.yml` builds the sdist and wheel once, runs `twine
+  check --strict` on them, fails before uploading when the release tag is not
+  `v` followed by the package version (tag `v1.2.0` for version 1.2.0), runs the
+  test suite on Python 3.13 with the built wheel and the newest dependencies
+  installed, and uploads from a separate job in the `pypi` environment through
+  PyPI trusted publishing, so the repository stores no token. Only the upload
+  job can request the OIDC token; the rest of the workflow can only read the
+  repository.
+- The version is written once, as `__version__` in `src/viz_calc/__init__.py`,
+  and the build reads it from there. `pyproject.toml` also said 1.1.0, and
+  bumping only that file built a wheel whose `viz_calc.__version__` disagreed
+  with its metadata. The wheel and sdist still carry 1.1.0, with the same
+  metadata as before.
+- A CI job builds the sdist and wheel, runs `twine check --strict` and imports
+  the installed wheel from a clean environment on every push and pull request.
 
 ## 1.1.0
 
