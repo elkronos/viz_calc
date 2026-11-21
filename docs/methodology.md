@@ -49,6 +49,8 @@ Bias-corrected and accelerated (BCa) intervals (Efron, 1987) from
 `scipy.stats.bootstrap`, 5,000 resamples, fixed seed. Each group is resampled
 independently. Used for the mean difference in `estimation_plot`, following
 estimation-statistics practice (Cumming, 2014; Ho et al., 2019).
+`stats.bootstrap_ci` bootstraps the mean of one sample or the difference in
+means of two unless given another statistic.
 
 ### Wilson score interval for a proportion
 $\dfrac{\hat p + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat p(1-\hat p)}{n} + \frac{z^2}{4n^2}}}{1 + z^2/n}$.

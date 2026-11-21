@@ -110,3 +110,42 @@ def test_wilson_ci_of_huge_counts_does_not_warn():
         assert st.wilson_ci(1e200, 1e200) == (1.0, 1.0)
         lo, hi = st.wilson_ci(0, 1e200)
         assert lo == 0.0 and 0 < hi < 1e-199
+
+
+# --- bootstrap_ci: default statistic for one sample, checked options ----------------------------------------------
+
+
+def test_bootstrap_ci_of_one_sample_bootstraps_its_mean():
+    x = [1.0, 2.0, 4.0, 7.0]
+    assert st.bootstrap_ci(x, n_resamples=500) == st.bootstrap_ci(x, statistic=np.mean, n_resamples=500)
+    assert st.bootstrap_ci(x, n_resamples=500)[0] == 3.5
+
+
+@pytest.mark.parametrize("count", [0, 3])
+def test_bootstrap_ci_default_statistic_names_the_sample_count(count):
+    with pytest.raises(ValueError, match=f"one sample .* or two .*got {count}; pass statistic="):
+        st.bootstrap_ci(*[[1.0, 2.0, 4.0]] * count)
+
+
+@pytest.mark.parametrize("data", [([1.0, 2.0, 4.0, 7.0], [3.0, 5.0, 6.0, 9.0, 10.0]), ([1.0, 1.0], [1.0, 1.0])],
+                         ids=["varied", "constant"])
+@pytest.mark.parametrize("kwargs, message", [
+    (dict(method="nope"), r"method must be one of \['BCa', 'percentile', 'basic'\], got 'nope'"),
+    (dict(method=None), r"method must be one of .*got None"),
+    (dict(n_resamples=0), "n_resamples must be a whole number of at least 1, got 0"),
+    (dict(n_resamples=True), "n_resamples must be a whole number of at least 1, got True"),
+    (dict(seed=-1), "seed must be a whole number of at least 0, got -1"),
+    (dict(seed=True), "seed must be a whole number of at least 0, got True"),
+    (dict(seed="x"), "seed must be a whole number of at least 0, got 'x'"),
+], ids=["method", "method-none", "n_resamples-0", "n_resamples-bool", "seed-negative", "seed-bool", "seed-text"])
+def test_bootstrap_ci_checks_its_options_before_resampling(data, kwargs, message):
+    # The constant pair skips SciPy entirely, so it used to accept any option.
+    with pytest.raises(ValueError, match=message):
+        st.bootstrap_ci(*data, **kwargs)
+
+
+def test_bootstrap_ci_method_keeps_any_letter_case():
+    a, b = [1.0, 2.0, 4.0, 7.0], [3.0, 5.0, 6.0, 9.0, 10.0]
+    assert st.bootstrap_ci(a, b, method="bca", n_resamples=300) == st.bootstrap_ci(a, b, n_resamples=300)
+    assert st.bootstrap_ci(a, b, method="Percentile", n_resamples=300) == st.bootstrap_ci(
+        a, b, method="percentile", n_resamples=300)

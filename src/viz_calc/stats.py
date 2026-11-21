@@ -22,6 +22,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats as _st
 
+from ._core import check_count
+
 __all__ = [
     "wilson_ci",
     "mean_ci",
@@ -265,7 +267,7 @@ def hedges_g(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> dic
 
 def bootstrap_ci(
     *samples: Sequence[float],
-    statistic: Callable[..., float] = lambda a, b: _mean(b) - _mean(a),
+    statistic: Callable[..., float] | None = None,
     level: float = 0.95,
     n_resamples: int = 5000,
     method: Literal["BCa", "percentile", "basic"] = "BCa",
@@ -274,10 +276,16 @@ def bootstrap_ci(
     """Bootstrap estimate and confidence interval: ``(estimate, lower, upper)``.
 
     Defaults to the bias-corrected and accelerated (BCa) interval (Efron,
-    1987), resampling each sample independently. The default statistic is the
-    difference in means ``mean(b) - mean(a)`` used by estimation plots
-    (Ho et al., 2019). A fixed *seed* keeps figures reproducible. *level* must
-    be strictly between 0 and 1 (``0.95``, not ``95``), else ``ValueError``.
+    1987), resampling each sample independently. The default statistic is
+    the mean of one sample, and for two samples the difference in means
+    ``mean(b) - mean(a)`` used by estimation plots (Ho et al., 2019); other
+    numbers of samples need a *statistic*, which is called with one array per
+    sample. A fixed *seed* keeps figures reproducible.
+
+    *level* must be strictly between 0 and 1 (``0.95``, not ``95``),
+    *n_resamples* a whole number of at least 1, *method* one of ``"BCa"``,
+    ``"percentile"`` and ``"basic"`` (in any letter case), and *seed* ``None``
+    or a whole number of at least 0; anything else raises ``ValueError``.
 
     References
     ----------
@@ -287,6 +295,12 @@ def bootstrap_ci(
     Moving beyond P values: data analysis with estimation graphics. *Nature
     Methods*, 16, 565–566.
     """
+    check_count("n_resamples", n_resamples)
+    methods = ("BCa", "percentile", "basic")
+    if not isinstance(method, str) or method.lower() not in [m.lower() for m in methods]:
+        raise ValueError(f"method must be one of {list(methods)}, got {method!r}")
+    if seed is not None and not isinstance(seed, (np.random.Generator, np.random.BitGenerator, np.random.SeedSequence)):
+        check_count("seed", seed, minimum=0)
     estimate, lo, hi, _ = _bootstrap(samples, statistic, level, n_resamples, method, seed)
     return estimate, lo, hi
 
@@ -299,9 +313,26 @@ _BOOTSTRAP_ONE_PIECE = 2000  # largest sample bootstrapped unbatched; two at 5,0
 _BOOTSTRAP_BATCH_VALUES = 2**22  # values per sample held at once when batching
 
 
+def _default_statistic(n_samples: int) -> Callable[..., float]:
+    """The mean of one sample, or ``mean(b) - mean(a)`` for two."""
+    if n_samples == 1:
+        return _mean
+    if n_samples == 2:
+        return lambda a, b: _mean(b) - _mean(a)
+    raise ValueError("the default statistic needs one sample (its mean) or two (mean(b) - mean(a)), "
+                     f"got {n_samples}; pass statistic= for other designs")
+
+
 def _bootstrap(samples, statistic, level, n_resamples, method, seed):
-    """Like :func:`bootstrap_ci` but also returns the bootstrap distribution."""
+    """Like :func:`bootstrap_ci` but also returns the bootstrap distribution.
+
+    A *statistic* of ``None`` stands for the default of :func:`bootstrap_ci`.
+    """
     level = _check_level(level)
+    if statistic is None:
+        statistic = _default_statistic(len(samples))
+    elif not samples:
+        raise ValueError("bootstrap_ci needs at least one sample")
     data = tuple(_clean(s) for s in samples)
     if any(d.size < 2 for d in data):
         raise ValueError("each sample needs at least two non-missing values")
