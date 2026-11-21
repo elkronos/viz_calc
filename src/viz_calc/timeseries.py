@@ -43,8 +43,9 @@ __all__ = ["period_bars", "timeseries_fill", "calendar_heatmap", "gantt", "durat
 
 _PERIOD = {"day": "D", "week": "W", "month": "M", "quarter": "Q", "year": "Y"}
 
-# A clock time followed by a UTC offset at the end of the text: "Z", "+01:00", "+0100" or "+01"
-_HAS_OFFSET = re.compile(r"\d:\d\d(?::\d\d(?:[.,]\d+)?)?\s*(?:[Zz]|[+-]\d\d(?::?\d\d)?)\s*$")
+# A clock time (group 1) followed by a UTC offset at the end of the text: "Z", "+01:00", "+0100" or "+01"
+_OFFSET_AT_END = r"(\d:\d\d(?::\d\d(?:[.,]\d+)?)?)\s*(?:[Zz]|[+-]\d\d(?::?\d\d)?)\s*$"
+_HAS_OFFSET = re.compile(_OFFSET_AT_END)
 
 
 def _lacks_offset(values: pd.Series) -> bool:
@@ -104,11 +105,11 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
     pandas would then read as year-day-month.
     """
 
-    def attempt(**kwargs):
+    def attempt(values, **kwargs):
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", FutureWarning)  # pandas 2.x warns about mixed offsets
-                out = pd.to_datetime(s, **kwargs)
+                out = pd.to_datetime(values, **kwargs)
         except (ValueError, TypeError, OverflowError):
             return None
         return out if pd.api.types.is_datetime64_any_dtype(out) else None
@@ -124,18 +125,25 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
     if numeric:
         raise ValueError(f"column {name!r} holds numbers, which are ambiguous as dates (years? epoch seconds?); "
                          "convert it first, e.g. pd.to_datetime(values, unit='s') or format='%Y'")
-    out = s if pd.api.types.is_datetime64_any_dtype(s) else attempt(dayfirst=dayfirst)
+    out = s if pd.api.types.is_datetime64_any_dtype(s) else attempt(s, dayfirst=dayfirst)
     if out is None:
-        out = attempt(format="ISO8601")  # date-only and date-time ISO strings together
+        out = attempt(s, format="ISO8601")  # date-only and date-time ISO strings together
     if out is None:
-        utc = attempt(format="ISO8601", utc=True)  # ISO strings with different UTC offsets
+        utc = attempt(s, format="ISO8601", utc=True)  # ISO strings with different UTC offsets
         if utc is None:
             raise ValueError(f"column {name!r} could not be parsed as dates; use one consistent format, "
                              "ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
         if keep_tz:
             out = utc
-        else:  # the strings are valid ISO 8601, so element-wise parsing is unambiguous
-            out = pd.to_datetime(s.map(lambda v: pd.NaT if pd.isna(v) else pd.Timestamp(v).tz_localize(None)))
+        else:
+            # The strings are valid ISO 8601, so each wall-clock time is the text without its offset, parsed in one go
+            try:
+                out = attempt(s.str.replace(_OFFSET_AT_END, r"\1", regex=True), format="ISO8601")
+            except AttributeError:  # not text, e.g. datetime objects
+                out = None
+            if out is None or getattr(out.dtype, "tz", None) is not None or not out.isna().equals(utc.isna()):
+                # Anything that reads differently without its offset is parsed one value at a time (slower)
+                out = pd.to_datetime(s.map(lambda v: pd.NaT if pd.isna(v) else pd.Timestamp(v).tz_localize(None)))
     # An offset-less value is read as UTC (utc=True) or, on pandas 2.2 and 2.3, given the others' offset
     if keep_tz and out is not s and getattr(out.dtype, "tz", None) is not None:
         if _lacks_offset(s[out.notna().to_numpy()]):  # blanks don't count
@@ -318,15 +326,20 @@ def timeseries_fill(
     d[time] = _numpy_numbers(col)
     d = d.dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
     t = d[time]
+    tz = getattr(t.dtype, "tz", None)
+    # Matplotlib converts tz-aware values one Timestamp at a time; their UTC date numbers draw the same, fast
+    x = mdates.date2num(_instant(t)) if tz is not None else t
     ya = d[a].to_numpy(dtype=float, na_value=np.nan)  # nullable dtypes with NA on pandas 2.0
     yb = d[b].to_numpy(dtype=float, na_value=np.nan)
     fig, ax = get_ax(ax, figsize=(10, 4.5))
-    ax.plot(t, ya, color=colors[0], lw=1.8, label=names[0])
-    ax.plot(t, yb, color=colors[1], lw=1.8, label=names[1])
-    ax.fill_between(t, ya, yb, where=ya >= yb, interpolate=True, color=colors[0], alpha=alpha, lw=0)
-    ax.fill_between(t, ya, yb, where=ya < yb, interpolate=True, color=colors[1], alpha=alpha, lw=0)
+    ax.plot(x, ya, color=colors[0], lw=1.8, label=names[0])
+    ax.plot(x, yb, color=colors[1], lw=1.8, label=names[1])
+    ax.fill_between(x, ya, yb, where=ya >= yb, interpolate=True, color=colors[0], alpha=alpha, lw=0)
+    ax.fill_between(x, ya, yb, where=ya < yb, interpolate=True, color=colors[1], alpha=alpha, lw=0)
+    if tz is not None:
+        ax.xaxis_date(tz)  # a date axis in the data's zone, as plotting the values themselves gives
     if pd.api.types.is_datetime64_any_dtype(t):
-        _date_axis(ax, tz=getattr(t.dtype, "tz", None))
+        _date_axis(ax, tz=tz)
     ax.set_xlabel(time)
     ax.legend(frameon=False, loc="upper left")
     ax.spines[["top", "right"]].set_visible(False)

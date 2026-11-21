@@ -1,16 +1,19 @@
 """Time charts: edge cases (nullable values, time order, frame stamps, reversed windows)."""
 
+import datetime
 import gc
 import pickle
 import warnings
 import weakref
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
 
 import viz_calc as vc
+from viz_calc import timeseries
 
 # --- period_bars -------------------------------------------------------------------------------------------------
 
@@ -132,6 +135,47 @@ def test_offsets_written_any_way_are_accepted(call, ends):
         warnings.filterwarnings("ignore", "Could not infer format", UserWarning)
         res = call(d)
     assert res.table["e"].dt.tz is not None
+
+
+# --- time zones without per-value work --------------------------------------------------------------------------
+
+
+def test_tz_aware_timeseries_fill_draws_date_numbers_with_ticks_in_the_data_zone():
+    # Matplotlib converts a tz-aware Series one Timestamp at a time: 25 s for a million rows
+    t = pd.date_range("2021-03-27", periods=72, freq="h", tz="Europe/Berlin")  # across a daylight-saving change
+    df = pd.DataFrame({"t": t, "a": np.sin(np.arange(72) / 5), "b": np.cos(np.arange(72) / 5)})
+    res = vc.timeseries_fill(df, time="t", series=["a", "b"])
+    x = np.asarray(res.axes.lines[0].get_xdata())
+    assert x.dtype.kind == "f"
+    np.testing.assert_allclose(x, mdates.date2num(t.tz_convert("UTC").tz_localize(None)))
+    res.figure.canvas.draw()
+    assert {mdates.num2date(loc, tz=t.tz).hour for loc in res.axes.get_xticks()} <= {0, 12}  # local, not UTC
+    assert str(res.table["t"].dt.tz) == "Europe/Berlin"
+
+
+_PLUS_1, _MINUS_4 = (datetime.timezone(datetime.timedelta(hours=h)) for h in (1, -4))
+
+
+@pytest.mark.parametrize("values", [
+    ["2024-03-30T23:30:00Z", "2024-03-31T01:30:00+01:00", None, "2024-04-01T02:00+02:00"],
+    ["2024-01-01 10:00+0530", "2024-01-01 10:00+0100", ""],
+    ["2024-01-01 10:00+05", "2024-01-01 10:00-04"],
+    ["2024-01-01", "2024-01-02T10:00:00.5+01:00", "2024-01-03T10:00+02:00"],
+    [datetime.datetime(2024, 1, 1, 10, tzinfo=_PLUS_1), datetime.datetime(2024, 1, 1, 10, tzinfo=_MINUS_4)],
+])
+@pytest.mark.filterwarnings("ignore:Could not infer format:UserWarning")  # "+05" on some pandas versions
+def test_mixed_offsets_read_as_their_wall_clock_times(values, monkeypatch):
+    expected = pd.to_datetime(pd.Series([pd.Timestamp(v).tz_localize(None) if v else pd.NaT for v in values]))
+    calls = []
+    real = pd.Timestamp
+    monkeypatch.setattr(pd, "Timestamp", lambda *args, **kwargs: calls.append(args) or real(*args, **kwargs))
+    s = pd.Series(values, dtype=object)
+    got = [timeseries._dates(s, "d"), timeseries._dates(s.astype("category"), "d")]
+    monkeypatch.undo()
+    for out in got:
+        pd.testing.assert_series_equal(out, expected)
+    if all(isinstance(v, str) or v is None for v in values):
+        assert calls == []  # text is parsed in one go, not one value at a time (7 s for a million)
 
 
 # --- animated_bubble ---------------------------------------------------------------------------------------------
