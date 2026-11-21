@@ -43,6 +43,12 @@
   `method="spearman"`, and `lollipop(stat="median")`. `lollipop(stat="count")`
   still counts infinite values, and the `viz_calc.stats` functions are
   unchanged.
+- `upset(color=...)` and `bullet(bar_color=...)` default to `None`, which draws
+  the old `"#333333"` and `"#222222"` on a light axes face. On a dark face
+  `upset` uses `"#cccccc"`. `bullet` keeps its dark bar and black target on the
+  grey bands; on a dark face a target off the bands is white, a bar without
+  bands is `"#dddddd"` and a bar past the bands has a white outline. Colours
+  passed in are used as given.
 
 ### Fixed
 - `datasets.sales()` and `calendar_heatmap` read `DatetimeIndex.day_of_week`
@@ -212,6 +218,44 @@
   for nullable (`Int64`, `Float64`, `boolean`) input. On pandas 2.0 and 2.1 it
   was object for `waffle`, so `select_dtypes("number")` dropped it, and on every
   pandas version `nested_pie` kept the nullable dtype.
+- Under a dark Matplotlib style such as `dark_background`, marks drawn in a
+  fixed black or dark grey matched the black axes face (1.0:1 contrast) and
+  disappeared: `estimation_plot`'s means and CIs in both panels, the error bars
+  of `benchmark_bar` and `centered_bar`, `benchmark_bar`'s threshold line, the
+  zero and reference lines of `centered_bar`, `lollipop`, `divergent_bar`,
+  `likert`, `waterfall` and `histogram`, `quadrant_plot`'s centre lines,
+  `funnel`'s labels beside narrow bars, `pca_plot`'s loading labels, `upset`'s
+  bars and member dots (1.66:1), and a bullet graph's measure (1.32:1) and
+  target wherever they sit on the axes face, without bands or past the last
+  band. The pale grey gridlines of `dumbbell`, `gantt` and `duration_plot`,
+  `pca_plot`'s zero lines, `upset`'s non-member dots and `quadrant_plot`'s label
+  boxes became the brightest marks on the chart, and the eighth Okabe–Ito
+  colour, black, drew an invisible eighth group. These colours now follow the
+  lightness of the axes face when the chart function runs: white or light grey
+  marks and a dark grey grid on a dark face, and a white outline on a bullet
+  measure that runs past its bands. Under the default style and other light
+  styles these marks keep their colours, pixel for pixel. `vc.palette(8)` gives
+  white as the eighth colour under a dark style; `sankey` and
+  `network_map(interactive=True)` keep black, since Plotly draws on white.
+- `nested_pie` drew every sub-category of a white parent in the same white, so
+  they merged into one wedge. A white parent's sub-categories now take darker
+  shades. This hit a white colour in `colors=`, and with the change above the
+  eighth parent under a dark style.
+- Labels drawn on a fill now take black or white from that fill, as the
+  methodology says: `donut_grid`'s shares (black on Okabe–Ito blue, 4.05:1;
+  white on orange under a dark style, 2.25:1), `centered_bar`'s shares (white on
+  the first colour and black on the second whatever they were, 1.32:1 and 1.65:1
+  with `colors=("#F0E442", "#08306b")`), the cell labels of `correlogram` and
+  `compare_correlations` (white above |r| = 0.6 of the scale with any colormap,
+  1.33:1 on `cmap="viridis"`'s yellow) and `network_map`'s node labels
+  (networkx's black on blue nodes, 4.05:1). A network label wider than its node
+  follows the axes face instead. Under the default style the gallery changes
+  only in the `donut_grid` shares and the `network_map` labels on blue nodes,
+  which turn white. With the default colormaps, matrix cells just above 0.6 of
+  the scale also switch from white to black, which reads better there (at r =
+  0.61 in a correlogram, 5.33:1 against 3.94:1): up to 0.66 for positive and
+  0.71 for negative correlations in `correlogram`, and up to 0.77 and 0.62 of
+  the scale in `compare_correlations`.
 
 ### Documentation
 - The `to_pptx` docstring and the walkthroughs point to the install section
@@ -238,6 +282,8 @@
   draws with a local function.
 - Getting started lists, under Conventions, which column roles must be different
   columns and which may share one, and which charts reject infinite values.
+- Getting started explains how charts follow a dark Matplotlib style, and the
+  methodology's design table lists it.
 
 ### Development
 - CI also runs every Monday against the newest dependency releases, and can be
@@ -257,6 +303,10 @@
 - The three copies of the overflow-safe sum (`composition._sum`,
   `timeseries._sum_by` and `_core.safe_sum`) are one: `safe_sum` takes a list of
   keys and `dropna=`, and `_sum_by` calls it.
+- `tests/test_colours.py` draws the affected charts under `dark_background` and
+  checks the WCAG contrast of their marks against the axes face, and of each
+  label against the wedge, bar, cell or node under it, with light and dark
+  custom colours and colormaps.
 
 ## 1.1.0
 
