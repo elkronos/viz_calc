@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly run against the newest dependency releases, so upstream deprecations show up between pushes.
+  # GitHub disables this schedule in a public repository after 60 days without repository activity.
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
 
 jobs:
   test:

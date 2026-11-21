@@ -12,7 +12,15 @@ from matplotlib.colors import to_hex
 
 import viz_calc as vc
 from viz_calc import compare, datasets, distribution, explore, multivariate
-from viz_calc._core import abbreviate, category_order, cleanup_on_error, exact_mean, level_label
+from viz_calc._core import (
+    abbreviate,
+    category_order,
+    cleanup_on_error,
+    exact_mean,
+    install_hint,
+    level_label,
+    require,
+)
 
 
 @pytest.fixture(scope="module")
@@ -416,3 +424,44 @@ def test_bootstrap_of_constant_samples_is_the_estimate():
         from viz_calc import stats
 
         assert stats.bootstrap_ci([0.1] * 3, [0.1] * 10) == (0.0, 0.0, 0.0)
+
+
+def test_missing_optional_dependency_hint_is_not_a_bare_pypi_install():
+    # viz_calc is not on PyPI, so 'pip install "viz_calc[pptx]"' would fetch whatever someone else publishes there.
+    with pytest.raises(ImportError, match="optional dependency 'viz_calc_no_such_module'") as info:
+        require("viz_calc_no_such_module", "pptx")
+    message = str(info.value)
+    assert 'pip install "viz_calc[pptx]"' not in message
+    assert "python-pptx" in message or "git+https://github.com/elkronos/viz_calc" in message
+
+
+def test_install_hint_names_the_extra_packages_from_metadata(monkeypatch):
+    import importlib.metadata
+
+    reqs = ["numpy>=1.24", "networkx>=3.2; extra == 'network'", "networkx>=3.2; extra == 'all'",
+            'plotly>=5.15; extra == "interactive"', "python-pptx>=0.6.21; extra == 'pptx'"]
+    monkeypatch.setattr(importlib.metadata, "requires", lambda name: reqs)
+    assert install_hint("network") == 'pip install "networkx>=3.2"'
+    assert install_hint("interactive") == 'pip install "plotly>=5.15"'
+    assert install_hint("pptx") == 'pip install "python-pptx>=0.6.21"'
+
+
+def test_install_hint_skips_requirements_on_viz_calc_itself(monkeypatch):
+    # Some build tools write the 'all' extra as a requirement on viz-calc itself; naming that would be the
+    # bare PyPI install the hint exists to avoid.
+    import importlib.metadata
+
+    reqs = ["viz-calc[interactive,network,pptx]; extra == 'all'", "networkx>=3.2; extra == 'network'"]
+    monkeypatch.setattr(importlib.metadata, "requires", lambda name: reqs)
+    assert install_hint("all") == 'pip install "viz_calc[all] @ git+https://github.com/elkronos/viz_calc"'
+    assert install_hint("network") == 'pip install "networkx>=3.2"'
+
+
+def test_install_hint_falls_back_to_the_git_url_without_metadata(monkeypatch):
+    import importlib.metadata
+
+    def missing(name):
+        raise importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(importlib.metadata, "requires", missing)
+    assert install_hint("network") == 'pip install "viz_calc[network] @ git+https://github.com/elkronos/viz_calc"'

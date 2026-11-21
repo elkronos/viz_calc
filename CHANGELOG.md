@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- `datasets.sales()` and `calendar_heatmap` read `DatetimeIndex.day_of_week`
+  instead of `weekday`, which pandas 3.1 deprecates (`dayofweek` is deprecated
+  as well). On pandas 3.1 the warning stopped the test suite at collection and
+  showed in the pytest runs of anyone calling `calendar_heatmap` or
+  `datasets.sales()`.
+- `bootstrap_ci` and `estimation_plot` needed memory that grew with the square
+  of the group size: 4 GB at 10,000 rows per group and over 7 GB at 14,000.
+  When any group in a comparison has more than 2,000 rows, the resamples are
+  now drawn in batches, which keeps peak memory near 400 MB. Those seeded
+  intervals differ from 1.1.0 by Monte Carlo noise; when every group has 2,000
+  rows or fewer, nothing changes.
+- The error for a missing optional dependency suggested
+  `pip install "viz_calc[extra]"`. `viz_calc` is not on PyPI, so that command
+  would install whatever someone else publishes under the name. The message
+  now names the extra's packages and minimum versions.
+
+### Documentation
+- The `to_pptx` docstring and the walkthroughs point to the install section
+  instead of `pip install "viz_calc[...]"`.
+
+### Development
+- CI also runs every Monday against the newest dependency releases, and can be
+  started by hand.
+- The plotting contract tests build their datasets on first use, so a warning
+  from one dataset fails the tests that use it instead of stopping collection
+  of the whole file.
+- A separate Attribution workflow fails a pull request or push to `main` when a
+  commit message, an added line, the PR title, the PR description or the
+  branch name carries an attribution trailer or names a writing tool. Its log
+  names where each match is and omits the matched text.
+
 ## 1.1.0
 
 Fixes from an adversarial review of 1.0.0, each covered by a regression test

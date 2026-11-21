@@ -83,14 +83,14 @@ res.table.sort_values("betweenness", ascending=False).head(3)
   brokers between groups score highest. Two edges link the communities;
   Hal and Cai sit at the ends of the stronger one, so shortest paths run
   through them.
-* `interactive=True` returns a Plotly figure with hover details
-  (`pip install "viz_calc[interactive]"`).
+* `interactive=True` returns a Plotly figure with hover details (needs the
+  `interactive` extra, see [Install](../getting-started.md#install)).
 
 ## 4. Flows
 
 `sankey` takes one row per flow (repeated source–target rows are summed; a
 row with no source, target or amount raises an error rather than being
-dropped from the totals) and returns a Plotly figure (`pip install "viz_calc[interactive]"`):
+dropped from the totals) and returns a Plotly figure (needs the `interactive` extra):
 
 ```python
 import pandas as pd

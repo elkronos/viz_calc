@@ -1,5 +1,7 @@
 """Statistical helpers checked against SciPy and published worked examples."""
 
+import tracemalloc
+
 import numpy as np
 import pytest
 from scipy import stats as sps
@@ -62,6 +64,46 @@ def test_bootstrap_is_reproducible_and_sensible():
     est, lo, hi = r1
     assert lo < est < hi
     assert est == pytest.approx(b.mean() - a.mean())
+
+
+@pytest.mark.parametrize("method, n_resamples", [("BCa", 200), ("percentile", 5000)])
+def test_bootstrap_memory_stays_bounded_for_large_samples(method, n_resamples):
+    # Unbatched, SciPy held every resample at once (about 760 MiB traced here for the percentile interval at
+    # 5,000 rows per sample) and BCa added several n x (n - 1) jackknife arrays (about 800 MiB with 200 resamples).
+    rng = np.random.default_rng(1)
+    a, b = rng.normal(0, 1, 5000), rng.normal(0.1, 1, 5000)
+    was_tracing = tracemalloc.is_tracing()
+    if not was_tracing:
+        tracemalloc.start()
+    tracemalloc.reset_peak()
+    before = tracemalloc.get_traced_memory()[0]
+    try:
+        est, lo, hi = st.bootstrap_ci(a, b, n_resamples=n_resamples, method=method)
+        peak = tracemalloc.get_traced_memory()[1] - before
+    finally:
+        if not was_tracing:
+            tracemalloc.stop()
+    assert lo < est < hi
+    assert peak < 300 * 2**20
+
+
+def test_bootstrap_up_to_2000_rows_matches_scipy_unbatched():
+    # Batching changes how the seeded generator is consumed, so it starts only when some sample has more than
+    # 2,000 rows: with every sample at or below that, intervals stay exactly what 1.1.0 reported. 3,000 resamples
+    # is more than one batch at 2,000 rows (2**22 // 2000 = 2,097), so batching here would change the interval.
+    rng = np.random.default_rng(2)
+    a, b = rng.normal(0, 1, 2000), rng.normal(0.1, 1, 1500)
+
+    def diff(x, y):
+        return float(np.mean(y) - np.mean(x))
+
+    _, lo, hi = st.bootstrap_ci(a, b, statistic=diff, n_resamples=3000, seed=5)
+    kwargs = dict(n_resamples=3000, confidence_level=0.95, method="BCa", vectorized=False)
+    try:
+        res = sps.bootstrap((a, b), diff, rng=np.random.default_rng(5), **kwargs)
+    except TypeError:  # SciPy < 1.15 names the argument random_state
+        res = sps.bootstrap((a, b), diff, random_state=np.random.default_rng(5), **kwargs)
+    assert (lo, hi) == tuple(float(v) for v in res.confidence_interval)
 
 
 def test_adjust_pvalues_worked_example():

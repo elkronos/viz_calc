@@ -1,0 +1,54 @@
+name: Attribution
+
+# Fails when a commit message, added line, PR title, PR description or branch name carries an
+# attribution trailer or names a writing tool. Character classes keep this file from matching its
+# own pattern, and the log names only where a match is, never the matched text.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  attribution:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check messages, added lines, title, description and branch name
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_REF: ${{ github.head_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          robot=$(printf '\360\237\244\226')
+          pattern="cl[a]ude|anthr[o]pic|c[o]-authored-by|generated (with|by)|ai[- ]generated|as an a[i]\b|lang[u]age model|\bl[l]ms?\b|ass[i]stant|$robot"
+          found=0
+          flag() { echo "::error::Attribution or tool mention in $1"; found=1; }
+          matches() { grep -iE "$pattern" > /dev/null; }  # reads all input, so no early exit trips pipefail
+          if [ "$EVENT" = pull_request ]; then
+            # The checkout is GitHub's test merge: first parent is the base, second is the PR head.
+            base=$(git rev-parse HEAD^1)
+            head=$(git rev-parse HEAD^2)
+            printf '%s\n' "$PR_TITLE" | matches && flag "the PR title"
+            printf '%s\n' "$PR_BODY" | matches && flag "the PR description"
+            printf '%s\n' "$HEAD_REF" | matches && flag "the branch name"
+          else
+            head=$(git rev-parse HEAD)
+            base=$BEFORE
+            if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then base=$(git rev-parse HEAD^); fi
+          fi
+          for c in $(git rev-list "$base..$head"); do
+            git log -1 --format=%B "$c" | matches && flag "the message of commit ${c:0:12}"
+          done
+          while IFS= read -r -d '' f; do
+            git diff -U0 "$base...$head" -- "$f" | grep '^+' | grep -v '^+++' | matches && flag "lines added to $f"
+          done < <(git diff -z --name-only "$base...$head")
+          exit $found
