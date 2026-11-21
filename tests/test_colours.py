@@ -80,6 +80,14 @@ def test_marks_and_labels_on_the_face_stay_visible_under_a_dark_style(dark_style
     assert checked
 
 
+def test_benchmark_bar_raw_points_stay_visible_under_a_dark_style(dark_style):
+    from matplotlib.collections import PathCollection
+
+    res = vc.benchmark_bar(datasets.trial(), x="arm", y="score", threshold=50)
+    points = [c for c in res.axes.collections if isinstance(c, PathCollection)]
+    assert points and all(_contrast(c.get_facecolors()[0], res.axes.get_facecolor()) >= 3 for c in points)
+
+
 def test_bullet_marks_follow_the_face_without_bands_and_stay_dark_on_them(dark_style):
     data = pd.DataFrame({"kpi": ["Revenue", "Profit"], "value": [270, -5], "target": [250, 10]})
     res = vc.bullet(data, label="kpi", value="value", target="target")
