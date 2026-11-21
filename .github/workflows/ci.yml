@@ -12,13 +12,17 @@ on:
 
 jobs:
   test:
+    # A label keeps a job's name the same when its pins change.
+    name: test (${{ matrix.python }}${{ matrix.label && format(', {0}', matrix.label) || '' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
+          # The lowest versions pyproject.toml allows; tests/test_packaging.py checks that the two agree.
           - python: "3.10"
-            deps: "numpy==1.24.4 pandas==2.0.3 matplotlib==3.7.5 scipy==1.11.4 networkx==3.2.1"
+            label: minimum versions
+            deps: "numpy==1.24.1 pandas==2.0.0 matplotlib==3.7.0 scipy==1.11.1 networkx==3.2 plotly==5.15.0 python-pptx==0.6.21"
           - python: "3.11"
           - python: "3.12"
           - python: "3.13"
