@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "viz_calc"
-version = "1.1.0"
+dynamic = ["version"]  # read from __version__ in src/viz_calc/__init__.py
 description = "Visual calculators: statistically sound, citable charts for pandas data that return the numbers behind the picture."
 readme = "README.md"
 license = "MIT"
@@ -38,6 +38,9 @@ docs = ["viz_calc[all]", "mkdocs>=1.6,<2", "mkdocs-material>=9.5", "mkdocstrings
 [project.urls]
 Documentation = "https://elkronos.github.io/viz_calc/"
 Source = "https://github.com/elkronos/viz_calc"
+
+[tool.hatch.version]
+path = "src/viz_calc/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/viz_calc"]
