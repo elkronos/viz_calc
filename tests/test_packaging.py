@@ -132,7 +132,8 @@ def test_readme_images_load_from_the_package_page():
     text = (ROOT / project["readme"]).read_text(encoding="utf-8")
     sources = re.findall(r'<img[^>]*\ssrc="([^"]+)"', text) + re.findall(r"!\[[^\]]*\]\(([^)\s]+)", text)
     assert sources, "README.md has no images"
-    prefix = "https://raw.githubusercontent.com/elkronos/viz_calc/main/"
+    url = re.compile(r"https://raw\.githubusercontent\.com/elkronos/viz_calc/[^/]+/(.+)")  # main or a release tag
     for src in sources:
-        assert src.startswith(prefix), f"README.md image {src!r} does not start with {prefix}"
-        assert (ROOT / src.removeprefix(prefix)).is_file(), f"README.md image {src!r} is not in the repository"
+        match = url.fullmatch(src)
+        assert match, f"README.md image {src!r} is not a raw.githubusercontent.com URL of this repository"
+        assert (ROOT / match.group(1)).is_file(), f"README.md image {src!r} is not in the repository"
