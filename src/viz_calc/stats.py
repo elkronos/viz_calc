@@ -280,7 +280,11 @@ def bootstrap_ci(
     the mean of one sample, and for two samples the difference in means
     ``mean(b) - mean(a)`` used by estimation plots (Ho et al., 2019); other
     numbers of samples need a *statistic*, which is called with one array per
-    sample. A fixed *seed* keeps figures reproducible.
+    sample. A fixed *seed* keeps figures reproducible. With the default
+    statistic, a bootstrap value that equals the estimate in exact arithmetic
+    but differs from it by rounding error counts as a tie, so the BCa
+    interval does not change with the units of the data (a statistic you
+    pass is used as it is).
 
     *level* must be strictly between 0 and 1 (``0.95``, not ``95``),
     *n_resamples* a whole number of at least 1, *method* one of ``"BCa"``,
@@ -323,13 +327,36 @@ def _default_statistic(n_samples: int) -> Callable[..., float]:
                      f"got {n_samples}; pass statistic= for other designs")
 
 
+def _tie_exact(statistic: Callable[..., float], estimate: float, scale: float) -> Callable[..., float]:
+    """*statistic*, returning exactly *estimate* for any value within rounding error of it.
+
+    A resample whose mean (or difference in means) equals the estimate in
+    exact arithmetic can come out a few ulps above or below it, depending on
+    the order of summation and on the units of the data. BCa's bias
+    correction counts the bootstrap values below the estimate, so such values
+    would count as below or above at random and move the interval when the
+    data are rescaled. Values within ``2**-40`` of *scale* (the magnitude of
+    the data) are made exact ties; that is far above the rounding error of a
+    mean of millions of values. Every other value is returned unchanged.
+    """
+    tolerance = 2.0**-40 * scale
+
+    def snapped(*samples: np.ndarray) -> float:
+        value = statistic(*samples)
+        return estimate if abs(value - estimate) <= tolerance else value
+
+    return snapped
+
+
 def _bootstrap(samples, statistic, level, n_resamples, method, seed):
     """Like :func:`bootstrap_ci` but also returns the bootstrap distribution.
 
-    A *statistic* of ``None`` stands for the default of :func:`bootstrap_ci`.
+    A *statistic* of ``None`` stands for the default of :func:`bootstrap_ci`,
+    with ties to the estimate kept exact (see :func:`_tie_exact`).
     """
     level = _check_level(level)
-    if statistic is None:
+    default = statistic is None
+    if default:
         statistic = _default_statistic(len(samples))
     elif not samples:
         raise ValueError("bootstrap_ci needs at least one sample")
@@ -339,6 +366,8 @@ def _bootstrap(samples, statistic, level, n_resamples, method, seed):
     estimate = float(statistic(*data))
     if all(np.ptp(d) == 0 for d in data):  # every resample equals the data: the interval is the estimate itself
         return estimate, estimate, estimate, np.full(n_resamples, estimate)
+    if default:
+        statistic = _tie_exact(statistic, estimate, _unit_scale(*data))
     kwargs = dict(n_resamples=n_resamples, confidence_level=level, method=method, vectorized=False)
     largest = max(d.size for d in data)
     if largest > _BOOTSTRAP_ONE_PIECE:

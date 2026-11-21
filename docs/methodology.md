@@ -52,6 +52,19 @@ estimation-statistics practice (Cumming, 2014; Ho et al., 2019).
 `stats.bootstrap_ci` bootstraps the mean of one sample or the difference in
 means of two unless given another statistic.
 
+BCa's bias correction counts the bootstrap values below the estimate, so
+values tied with it matter, and on data recorded to a fixed precision
+(scores, counts, one-decimal measurements) many are. In floating point a
+resample whose mean difference equals the estimate can come out a few ulps
+above or below it, depending on the summation order and on the units: two
+groups holding the same values $[1,1,1,2,1]$ and $[1,1,1,1,2]$ gave −0.4
+to 0.4 in units but −0.4 to 0.6 in tenths. With the default statistics a
+bootstrap value that differs from the estimate by less than $2^{-40}$ times
+the largest magnitude in the data counts as a tie. That is far above the
+rounding error of a mean and far below the gap between two distinct
+bootstrap values of recorded data, so the interval does not depend on the
+units. Every other bootstrap value is used exactly as computed.
+
 ### Wilson score interval for a proportion
 $\dfrac{\hat p + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat p(1-\hat p)}{n} + \frac{z^2}{4n^2}}}{1 + z^2/n}$.
 Recommended over the Wald interval, whose coverage collapses for small *n*

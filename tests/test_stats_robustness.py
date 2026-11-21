@@ -263,3 +263,48 @@ def test_correlation_charts_name_the_bad_p_adjust(func):
 def test_correlation_method_error_lists_valid_values():
     with pytest.raises(ValueError, match=r"method must be one of \['pearson', 'spearman'\], got 'kendall'"):
         st.correlation_test([1, 2, 3], [3, 1, 2], "kendall")
+
+
+# --- bootstrap intervals do not depend on the units of the data --------------------------------------------------
+
+_TIED = {
+    "same values": ([1, 1, 1, 2, 1.0], [1, 1, 1, 1, 2.0]),
+    "scores": ([1, 2, 2, 3, 3, 3, 4, 5.0], [2, 3, 3, 4, 4, 5, 5, 5.0]),
+    "three each": ([1, 2, 3.0], [4, 5, 7.0]),
+    "counts": (np.random.default_rng(5).poisson(2, 30).astype(float),
+               np.random.default_rng(6).poisson(2.5, 30).astype(float)),
+}
+
+
+@pytest.mark.parametrize("k", [0.1, 1 / 3, 2.54, 10.0, 1e-3])
+@pytest.mark.parametrize("name", list(_TIED))
+def test_bootstrap_ci_does_not_depend_on_units(name, k):
+    # Rounding noise used to move resamples that tie with the estimate above or below it, which changed BCa's bias
+    # correction: the same values gave -0.4 to 0.4 in units but -0.4 to 0.6 in tenths.
+    a, b = (np.asarray(v) for v in _TIED[name])
+    est, lo, hi = st.bootstrap_ci(a, b, n_resamples=2000)
+    est_k, lo_k, hi_k = st.bootstrap_ci(a * k, b * k, n_resamples=2000)
+    assert (est_k / k, lo_k / k, hi_k / k) == pytest.approx((est, lo, hi), rel=1e-12, abs=1e-12)
+    one, one_k = st.bootstrap_ci(b, n_resamples=2000), st.bootstrap_ci(b * k, n_resamples=2000)
+    assert tuple(v / k for v in one_k) == pytest.approx(one, rel=1e-12, abs=1e-12)
+
+
+@pytest.mark.parametrize("k", [0.1, 1 / 3, 2.54, 10.0])
+def test_estimation_plot_interval_does_not_depend_on_units(k):
+    a, b = _TIED["same values"]
+    d = pd.DataFrame({"g": ["a"] * 5 + ["b"] * 5, "y": [*a, *b]})
+    cols = ["difference", "ci_low", "ci_high"]
+    unit = vc.estimation_plot(d, "g", "y", n_resamples=2000).info["comparisons"][cols].iloc[0].tolist()
+    scaled = vc.estimation_plot(d.assign(y=d["y"] * k), "g", "y", n_resamples=2000).info["comparisons"][cols]
+    assert unit == pytest.approx([0.0, -0.4, 0.4], abs=1e-12)
+    assert (scaled.iloc[0] / k).tolist() == pytest.approx(unit, rel=1e-12, abs=1e-12)
+
+
+def test_tie_handling_leaves_bootstraps_without_near_ties_bit_identical():
+    rng = np.random.default_rng(1)
+    for method in ("BCa", "percentile", "basic"):
+        a, b = rng.normal(0, 1, 40), rng.normal(0.5, 2, 55)
+        plain = st.bootstrap_ci(a, b, statistic=lambda x, y: float(np.mean(y) - np.mean(x)), method=method)
+        assert st.bootstrap_ci(a, b, method=method) == plain
+        assert st.bootstrap_ci(b, method=method) == st.bootstrap_ci(b, statistic=lambda x: float(np.mean(x)),
+                                                                    method=method)
