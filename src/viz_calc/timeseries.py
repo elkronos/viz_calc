@@ -35,6 +35,7 @@ from ._core import (
     column_list,
     foreground,
     get_ax,
+    level_codes,
     level_label,
     palette,
     safe_sum,
@@ -372,7 +373,7 @@ def calendar_heatmap(
     Days without data are drawn in *missing_color* so they are not confused
     with zero. One colour scale is shared across years. Years without any
     dated rows get no row, so a stray placeholder date such as
-    ``9999-12-31`` adds one row, not one for every year in between.
+    ``1900-01-01`` adds one row, not one for every year in between.
 
     Parameters
     ----------
@@ -524,7 +525,7 @@ def gantt(
     groups = (category_order(d[group]) if d[group].notna().any() else []) if group is not None else [None]
     cols = palette(len(groups), colors)
     # An Index matches datetime-like groups by value; a missing group (-1) is drawn grey.
-    codes = pd.Index(groups).get_indexer(d[group]) if group is not None else np.zeros(len(d), dtype=int)
+    codes = level_codes(groups, d[group]) if group is not None else np.zeros(len(d), dtype=int)
     col = [cols[c] if c >= 0 else NEUTRAL for c in codes]
     names = [level_label(v) for v in d[task]]
     fig, ax = get_ax(ax, figsize=(10, 0.45 * len(d) + 1.5))

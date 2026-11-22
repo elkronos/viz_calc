@@ -37,6 +37,7 @@ from ._core import (
     get_ax,
     group_label,
     group_mask,
+    level_codes,
     level_label,
     level_mask,
     level_percent,
@@ -455,7 +456,7 @@ def nested_pie(
     parents = list(pd.unique(agg[outer].dropna()))
     base_cols = palette(len(parents), colors)
     # Match rows to parents by value (as codes), which also works for nullable dtypes; -1 marks a missing parent.
-    codes = pd.Index(parents).get_indexer(agg[outer])
+    codes = level_codes(parents, agg[outer])
     if (codes < 0).any():  # drawn grey, after the others
         parents, base_cols = parents + [np.nan], base_cols + [NEUTRAL]
         codes = np.where(codes < 0, len(parents) - 1, codes)
@@ -542,7 +543,7 @@ def circular_bar(
     groups = (_levels(d[group]) if d[group].notna().any() else []) if group is not None else [None]
     cols = palette(len(groups), colors)
     # Match rows to groups by value (as codes), which also works for nullable dtypes; -1 marks a missing group.
-    codes = pd.Index(groups).get_indexer(d[group]) if group is not None else np.zeros(len(d), dtype=int)
+    codes = level_codes(groups, d[group]) if group is not None else np.zeros(len(d), dtype=int)
     if (codes < 0).any():  # rows without a group are drawn grey, not dropped
         groups, cols = groups + [None], cols + [NEUTRAL]
         codes = np.where(codes < 0, len(groups) - 1, codes)

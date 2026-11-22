@@ -596,6 +596,18 @@ def group_key(values: pd.Series) -> pd.Series:
     return values
 
 
+def level_codes(levels: Sequence[Any], values: pd.Series) -> np.ndarray:
+    """The position of each of *values* in *levels*, -1 where a value is missing or not one of them.
+
+    pandas before 3.0 finds no value of an Arrow-backed timestamp column in
+    an Index of Timestamps, and pandas 2.2 none of an Arrow-backed duration
+    column, so an Arrow-backed column is matched as objects.
+    """
+    if isinstance(values.dtype, pd.ArrowDtype):
+        values = values.astype(object)
+    return pd.Index(levels).get_indexer(values)
+
+
 def _level_key(value: Any) -> Any:
     # On NumPy 1.x a numpy.datetime64 (or timedelta64) hashes differently from the equal pandas Timestamp
     # (Timedelta), so set lookups would miss; compare levels in their pandas form.

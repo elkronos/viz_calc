@@ -115,7 +115,13 @@ def _ellipse(ax: Axes, pts: np.ndarray, level: float, kind: str, color: str) -> 
     width, height = 2 * radius * np.sqrt(np.clip(vals, 0, None))
     angle = np.degrees(np.arctan2(vecs[1, 0], vecs[0, 0]))
     centre = pts.mean(axis=0)
-    ax.add_patch(Ellipse(centre, width, height, angle=angle, facecolor=color, alpha=0.12, edgecolor=color, lw=1.5))
+    patch = Ellipse(centre, width, height, angle=angle, facecolor=color, alpha=0.12, edgecolor=color, lw=1.5)
+    # A small group's region for the mean can be far wider than the points (11.5 times the chi-square radius at
+    # n = 3), so it is clipped at the axes instead of setting their limits.
+    if kind == "confidence":
+        ax.add_artist(patch)
+    else:
+        ax.add_patch(patch)
     return {"cx": centre[0], "cy": centre[1], "width": width, "height": height, "angle": angle}
 
 
@@ -156,7 +162,9 @@ def pca_plot(
         ``"confidence"``: a *level* confidence region for the group **mean**
         from Hotelling's T², radius ``sqrt(2(n - 1)/(n - 2) F_2,n-2(level))``
         on the covariance of the mean, exact for normal data in groups of 3
-        or more. ``None``: no ellipse.
+        or more. It does not set the axis limits, so a small group's ellipse
+        can be cut off at the edges of the plot (at n = 3 and level 0.95 its
+        radius is 11.5 times the chi-square radius). ``None``: no ellipse.
     level
         Coverage of the ellipses, strictly between 0 and 1 (``0.95``, not
         ``95``); checked even when *ellipse* is ``None``.
