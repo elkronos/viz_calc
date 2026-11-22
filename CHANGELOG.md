@@ -76,11 +76,10 @@
   a value of `y`.
 - `estimation_plot`, `benchmark_bar`, `centered_bar`, `raincloud` and
   `compare_correlations` still leave out rows whose group is missing, so they
-  never enter a Welch test or a p-value adjustment as a group of their own, and
-  now say so in their docstrings and count them in
-  `info["dropped_missing_group"]` (0 when there are none). When that leaves
-  fewer than two groups, the `estimation_plot` and `compare_correlations` error
-  says how many rows were left out.
+  never enter a comparison as a group of their own, and now say so in their
+  docstrings and count them in `info["dropped_missing_group"]` (0 when there are
+  none). When that leaves fewer than two groups, the `estimation_plot` and
+  `compare_correlations` error says how many rows were left out.
 - `period_bars`, `timeseries_fill`, `calendar_heatmap`, `radar`, `pca` and
   `pca_plot` also raise a `ValueError` naming the column when a numeric column
   holds `inf` or `-inf`, before anything is drawn, as the other charts do;
@@ -323,14 +322,15 @@
   unchanged.
 - `lollipop`, `divergent_bar`, `stacked_percentages` (`group`), `percent_grid`
   (`facet`), `histogram` (`hue` and `facet`) and `ridgeplot` dropped rows with a
-  missing group without a trace: 5 of 120 rows vanished from a `lollipop` of
-  `datasets.trial()`, and 4 of 300 from `stacked_percentages` of
-  `datasets.survey()`, whose bars added up to 296. They now draw those rows as a
-  last group named "(missing)", in grey where colour marks the group, as
-  `waffle`, `nested_pie`, `circular_bar`, `gantt` and `pca_plot` already do,
-  whatever the `order` arguments list. Its rows in the table hold the missing
-  value in the group column. Charts of data without a missing group are
-  unchanged.
+  missing group without a trace: with 5 of the 120 `datasets.trial()` rows given
+  no arm, a `lollipop` left those 5 out, and with 4 of the 300
+  `datasets.survey()` rows given no team, the bars of
+  `stacked_percentages(group="team", category="remote")` added up to 296. They
+  now draw those rows as a last group named "(missing)", in grey where colour
+  marks the group, as `waffle`, `nested_pie`, `circular_bar`, `gantt` and
+  `pca_plot` already do, whatever the `order` arguments list. Its rows in the
+  table hold the missing value in the group column. Charts of data without a
+  missing group are unchanged.
 - On pandas 2.0 to 2.3, `nested_pie` left out the rows with a missing `outer` or
   `inner` when that column was a dictionary-encoded Arrow column, which
   `pd.read_parquet(dtype_backend="pyarrow")` returns for a Categorical. With the
@@ -350,12 +350,12 @@
   below `1 - level`; they follow `ci_high`, so the columns after it move two
   places. `ci="welch"` or `ci="percentile"` draws and reports the Welch or the
   bootstrap percentile interval in `ci_low`/`ci_high` instead of BCa, and
-  `info["ci_method"]` records which one is shown. `ci="bca"` stays the default
-  and its intervals are unchanged. Groups with fewer than 15 values are listed
-  with their sizes in `info["small_groups"]`, and with a bootstrap interval the
-  lower panel's title gets a second line, "Bootstrap CIs tend to be too narrow
-  for n < 15" followed by their names (or their number, above three); no warning
-  is raised.
+  `info["ci_method"]` records which one is shown. `ci="bca"` stays the default,
+  and adding the Welch columns does not move its intervals. Groups with fewer
+  than 15 values are listed with their sizes in `info["small_groups"]`, and with
+  a bootstrap interval the lower panel's title gets a second line, "Bootstrap
+  CIs tend to be too narrow for n < 15" followed by their names (or their
+  number, above three); no warning is raised.
 - `radar(normalize="groups")` put a constant metric such as 0.1 or 1/3 at the
   ends of the axis when the groups had different sizes, because the float mean
   of a constant group can be off by an ulp: with groups of 43, 50 and 50 rows, a
@@ -422,10 +422,6 @@
   longer calls the bootstrap CI assumption-free, and its note on a CI and a
   p-value that disagree also covers the two coming from different methods, not
   only the multiplicity adjustment.
-- Getting started's Conventions list `period_bars`, `timeseries_fill`,
-  `calendar_heatmap`, `pca_plot` and `radar` among the charts that reject
-  infinite values, and `radar`'s `group` among the roles that cannot share a
-  column with the numbers.
 
 ### Development
 - CI also runs every Monday against the newest dependency releases, and can be
