@@ -226,7 +226,7 @@
   read `inf` and `-inf`. Below 1 they wrote a subnormal such as 5e-324 with six
   significant digits (`4.94066e-324`) instead of the documented two
   (`4.9e-324`).
-- On pandas 2.0 and 2.1 (viz_calc declares `pandas>=2.0`, and CI tests 2.0.3),
+- On pandas 2.0 and 2.1 (viz_calc declares `pandas>=2.0`, and CI tests 2.0.0),
   `estimation_plot`, `benchmark_bar`, `centered_bar`, `percent_grid`,
   `histogram` with `hue` or `facet`, `ridgeplot`, `raincloud`,
   `compare_correlations` and, with copy-on-write on, `profile_boxes` failed with
@@ -309,7 +309,7 @@
   drawn, in Matplotlib and in the Plotly figures, and what keeps mathtext.
 - The `VizResult` docstring says which results cannot be pickled:
   `animated_bubble`'s animation, and the figure of `network_map(directed=True)`
-  with networkx older than 3.3 (the CI minimum is 3.2.1), whose arrows networkx
+  with networkx older than 3.3 (the CI minimum is 3.2), whose arrows networkx
   draws with a local function.
 - Getting started lists, under Conventions, which column roles must be different
   columns and which may share one, and which charts reject infinite values.
@@ -379,10 +379,10 @@
 - The version is written once, as `__version__` in `src/viz_calc/__init__.py`,
   and the build reads it from there. `pyproject.toml` also said 1.1.0, and
   bumping only that file built a wheel whose `viz_calc.__version__` disagreed
-  with its metadata. The wheel and sdist still carry 1.1.0, with the same
-  metadata as before.
+  with its metadata. The wheel and sdist still carry version 1.1.0.
 - A CI job builds the sdist and wheel, runs `twine check --strict` and imports
-  the installed wheel from a clean environment on every push and pull request.
+  the installed wheel from a clean environment on every pull request and push
+  to `main`.
 
 ## 1.1.0
 
