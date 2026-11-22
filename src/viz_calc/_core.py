@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import math
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -15,8 +16,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
-from matplotlib.colors import is_color_like, to_hex, to_rgb
-from matplotlib.ticker import ScalarFormatter
+from matplotlib.axis import Axis
+from matplotlib.category import StrCategoryFormatter
+from matplotlib.colors import is_color_like, to_hex, to_rgb, to_rgba
+from matplotlib.figure import FigureBase
+from matplotlib.text import Text
+from matplotlib.ticker import FixedFormatter, FuncFormatter, ScalarFormatter
+from matplotlib.transforms import Bbox
 
 # Okabe & Ito (2008) "Color Universal Design" palette. The eight colours stay
 # distinguishable under the common forms of colour-vision deficiency.
@@ -56,6 +62,11 @@ class VizResult:
         A tidy ``DataFrame`` holding the values that were drawn.
     info
         Extra scalar results (test statistics, parameters used, notes).
+
+    A result can be pickled, figure included (for a cache or a process
+    pool), with two exceptions: ``animated_bubble``'s ``info["animation"]``,
+    a Matplotlib ``FuncAnimation``, which never pickles, and the figure of
+    ``network_map(directed=True)`` with networkx older than 3.3.
     """
 
     figure: Any
@@ -144,6 +155,25 @@ def check_numeric(data: pd.DataFrame, *columns: str) -> None:
     bad = [c for c in columns if not pd.api.types.is_numeric_dtype(data[c])]
     if bad:
         raise TypeError(f"column(s) must be numeric: {bad}")
+
+
+def check_finite(data: pd.DataFrame, *columns: str) -> None:
+    """Raise if a numeric column in *columns* holds ``inf`` or ``-inf``; missing values are allowed.
+
+    An infinite value would otherwise reach a sum, a mean or an axis limit
+    and give a wrong number or fail later with a message that does not name
+    the column.
+    """
+    def infinite(s: pd.Series) -> bool:
+        if pd.api.types.is_complex_dtype(s):
+            return bool(np.isinf(s.to_numpy()).any())
+        if not pd.api.types.is_float_dtype(s):  # integers and booleans cannot be infinite
+            return False
+        return bool(np.isinf(s.to_numpy(dtype=float, na_value=np.nan)).any())
+
+    bad = [c for c in dict.fromkeys(columns) if infinite(data[c])]
+    if bad:
+        raise ValueError(f"column(s) hold infinite values (inf or -inf): {bad}; drop or replace those rows first")
 
 
 def check_choice(name: str, value: Any, choices: Sequence[Any]) -> None:
@@ -249,10 +279,97 @@ def select_columns(data: pd.DataFrame, columns: Iterable[Any]) -> pd.DataFrame:
     return data[columns]
 
 
-def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
-    """Decorator: close the Matplotlib figures a plotting call opened if the call raises.
+#: Tick formatters that show text from the data, such as the labels given to ``set_xticks``.
+_LABEL_FORMATTERS = (FixedFormatter, FuncFormatter, StrCategoryFormatter)
 
-    Otherwise a failed call leaves a half-drawn figure registered with
+#: Matplotlib reads text with a pair of unescaped ``$`` as mathtext; text made under this setting is drawn as is.
+_NO_MATH = {"text.parse_math": False}
+
+
+def _artists(artist: Any) -> Iterator[Any]:
+    """*artist* and the artists under it; of an axis, only the axis label (not its ticks or offset text)."""
+    yield artist
+    for child in [artist.label] if isinstance(artist, Axis) else artist.get_children():
+        yield from _artists(child)
+
+
+class _Text:
+    """The text on the caller's Axes before a plotting call, so that the text the call writes can be told apart."""
+
+    def __init__(self, axes: Iterable[Axes]) -> None:
+        self.figures = list(dict.fromkeys(ax.figure for ax in axes))
+        found = [a for figure in self.figures for a in _artists(figure)]
+        self.texts = {t: t.get_text() for t in found if isinstance(t, Text)}
+        self.formatters = {a: (a.get_major_formatter(), a.get_minor_formatter()) for a in found if isinstance(a, Axis)}
+        self.parse = {a: (a.majorTicks[0].label1.get_parse_math(), a.minorTicks[0].label1.get_parse_math())
+                      for a in self.formatters}
+
+    def settle(self, figures: Iterable[Any]) -> None:
+        """Draw the text the call wrote in *figures* as written, and leave the rest to Matplotlib's own rules.
+
+        Text the call made or changed is drawn as written if it holds a
+        ``$``, and so are the tick labels of an axis the call gave such
+        labels to. The tick labels of an axis whose formatter the call left
+        alone keep the setting they had before the call, so those an earlier
+        call wrote on the same figure stay as written. All other text
+        follows ``text.parse_math``, so a title the caller sets later can
+        still use mathtext, and so can the numbers of a log axis or the
+        ticks Matplotlib adds when it draws.
+        """
+        default = plt.rcParams["text.parse_math"]
+        for figure in dict.fromkeys([*figures, *self.figures]):
+            for artist in _artists(figure):
+                if isinstance(artist, Text) and self.texts.get(artist) != artist.get_text():
+                    artist.set_parse_math(default and "$" not in artist.get_text())
+                elif isinstance(artist, Axis):
+                    before = self.formatters.get(artist, (None, None))
+                    kept = self.parse.get(artist, (None, None))
+                    for ticks, formatter, old, parse_before, locs in (
+                        (artist.majorTicks, artist.get_major_formatter(), before[0], kept[0], artist.get_majorticklocs),
+                        (artist.minorTicks, artist.get_minor_formatter(), before[1], kept[1], artist.get_minorticklocs),
+                    ):
+                        if formatter is old:
+                            parse = parse_before
+                        else:
+                            written = isinstance(formatter, _LABEL_FORMATTERS)
+                            parse = default and not (written and any("$" in str(t) for t in formatter.format_ticks(locs())))
+                        for tick in ticks:
+                            tick.label1.set_parse_math(parse)
+                            tick.label2.set_parse_math(parse)
+                    artist.offsetText.set_parse_math(default)
+
+
+@contextlib.contextmanager
+def text_as_written(*axes: Axes) -> Iterator[None]:
+    """Draw the text made in the block, and the text it writes on *axes*, as written: a ``$`` never starts mathtext.
+
+    The plotting functions get this from :func:`cleanup_on_error`; it also
+    decorates callbacks that draw after the call has returned, such as
+    animation frames.
+    """
+    text = _Text(axes)
+    with plt.rc_context(_NO_MATH):
+        yield
+    text.settle([])
+
+
+def _figures(result: Any) -> list[Any]:
+    """The Matplotlib figures in a plotting function's *result* (none for a Plotly figure)."""
+    figure = result.figure if isinstance(result, VizResult) else None
+    return [f for f in (figure if isinstance(figure, list) else [figure]) if isinstance(f, FigureBase)]
+
+
+def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
+    """Decorator for the plotting functions: their text is drawn as written, and a failed call closes its figures.
+
+    Category values, column names and labels are drawn as written: a pair
+    of ``$`` in them never starts Matplotlib mathtext, so ``$5-$10`` keeps
+    its dollar signs and ``$a^$`` cannot fail when the figure is drawn,
+    during the call or when it is saved later. This holds for text the call
+    writes on a caller's *ax* too; other text there is left alone.
+    ``text.parse_math`` is off only while the call runs.
+
+    A failed call would otherwise leave a half-drawn figure registered with
     pyplot, which Jupyter or ``plt.show()`` would then display. Figures that
     existed before the call (such as the one holding a caller's *ax*) are
     left open.
@@ -260,12 +377,16 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         before = set(plt.get_fignums())
+        text = _Text(a for a in (*args, *kwargs.values()) if isinstance(a, Axes))
         try:
-            return func(*args, **kwargs)
+            with plt.rc_context(_NO_MATH):
+                result = func(*args, **kwargs)
         except BaseException:
             for num in set(plt.get_fignums()) - before:
                 plt.close(num)
             raise
+        text.settle(_figures(result))
+        return result
 
     return wrapper
 
@@ -282,14 +403,16 @@ def palette(n: int, colors: Sequence[str] | str | None = None) -> list[str]:
     """Return *n* colours.
 
     ``None`` uses Okabe–Ito for up to eight categories and the perceptually
-    uniform ``viridis`` colormap beyond that. A string names any Matplotlib
-    colormap; a sequence of colours is cycled.
+    uniform ``viridis`` colormap beyond that. The eighth Okabe–Ito colour is
+    black, so under a style with a dark ``rcParams["axes.facecolor"]`` (such
+    as ``dark_background``) it is white instead. A string names any
+    Matplotlib colormap; a sequence of colours is cycled.
     """
     if n <= 0:
         return []
     if colors is None:
         if n <= len(OKABE_ITO):
-            return list(OKABE_ITO[:n])
+            return [foreground(None, c) if c == OKABE_ITO[7] else c for c in OKABE_ITO[:n]]
         colors = "viridis"
     if isinstance(colors, str):
         cmap = plt.get_cmap(colors)
@@ -321,6 +444,28 @@ def slot_colors(colors: Any, slots: Sequence[str], name: str = "colors") -> list
     return colors
 
 
+class _VisibleBar:
+    """The visible part of a bar, in display units: the box ``Axes.bar_label(label_type="center")`` centres on.
+
+    Matplotlib computes it with a lambda, which pickle cannot store; an
+    instance does the same and pickles with its figure.
+    """
+
+    def __init__(self, bar: Any) -> None:
+        self.bar = bar
+
+    def __call__(self, renderer: Any) -> Bbox:
+        return Bbox.intersection(self.bar.get_window_extent(renderer), self.bar.get_clip_box()) or Bbox.null()
+
+
+def center_labels(ax: Axes, bars: Any, labels: Sequence[str], **kwargs: Any) -> list[Any]:
+    """``ax.bar_label(bars, labels, label_type="center", **kwargs)``, with labels that can be pickled."""
+    texts = ax.bar_label(bars, labels=labels, label_type="center", **kwargs)
+    for text, bar in zip(texts, bars):
+        text.xycoords = _VisibleBar(bar)
+    return texts
+
+
 def text_color(background: str) -> str:
     """Black or white, whichever reads better on *background* (WCAG relative luminance)."""
     def lin(c: float) -> float:
@@ -330,6 +475,31 @@ def text_color(background: str) -> str:
     lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
     # Pick the colour with the higher WCAG contrast ratio.
     return "black" if (lum + 0.05) / 0.05 >= 1.05 / (lum + 0.05) else "white"
+
+
+def foreground(ax: Axes | None = None, color: str = "black") -> str:
+    """*color* on a light face, its mirror image (one minus each channel) on a dark one.
+
+    *color* is a grey chosen for a white face: ``"black"`` for reference lines,
+    error bars and labels drawn on the axes, a light grey for gridlines. The
+    face is read when the chart function runs, from *ax* (``rcParams["axes.facecolor"]``
+    without one), so the default style and other light styles keep *color* and
+    a dark style such as ``dark_background`` gets white marks and a dark grid.
+    A transparent face falls back to the figure's, and a transparent figure to
+    ``rcParams["text.color"]`` (light text means a dark background).
+    """
+    if ax is None:
+        faces = [plt.rcParams["axes.facecolor"], plt.rcParams["figure.facecolor"]]
+    else:
+        faces = [ax.get_facecolor(), ax.figure.get_facecolor(), ax.figure.figure.get_facecolor()]
+    for face in faces:
+        rgba = to_rgba(face)
+        if rgba[3] > 0:
+            dark = text_color(to_hex(rgba[:3])) == "white"
+            break
+    else:
+        dark = text_color(plt.rcParams["text.color"]) == "black"
+    return to_hex([1 - c for c in to_rgb(color)]) if dark else color
 
 
 def category_order(values: pd.Series, order: Sequence[Any] | None = None, complete: bool = False,
@@ -374,6 +544,35 @@ def category_order(values: pd.Series, order: Sequence[Any] | None = None, comple
         return sorted(present)
     except TypeError:
         return present
+
+
+def level_mask(values: pd.Series, level: Any) -> pd.Series:
+    """``values == level``: which rows of *values* hold *level*, also for a column backed by a read-only array.
+
+    pandas before 2.2 cannot compare an object column whose array is
+    read-only (a frame built with ``copy=False`` over a read-only NumPy
+    array, for example) with a scalar ("buffer source array is read-only"),
+    so such a column is compared through a copy. ``isin`` is not used
+    because it misses ``numpy.datetime64`` values held in an object column.
+    """
+    try:
+        return values == level
+    except ValueError as exc:
+        if values.dtype != object or "read-only" not in str(exc):
+            raise
+        return values.copy() == level
+
+
+def level_codes(levels: Sequence[Any], values: pd.Series) -> np.ndarray:
+    """The position of each of *values* in *levels*, -1 where a value is missing or not one of them.
+
+    pandas before 3.0 finds no value of an Arrow-backed timestamp column in
+    an Index of Timestamps, and pandas 2.2 none of an Arrow-backed duration
+    column, so an Arrow-backed column is matched as objects.
+    """
+    if isinstance(values.dtype, pd.ArrowDtype):
+        values = values.astype(object)
+    return pd.Index(levels).get_indexer(values)
 
 
 def _level_key(value: Any) -> Any:
@@ -425,6 +624,7 @@ def abbreviate(num: float, digits: int = 1) -> str:
       small rates and proportions never collapse to ``0``.
     * Beyond the T range (a rounded 1,000T and above): scientific notation
       with *digits* decimals (``2.5e18``).
+    * Infinite values: ``inf`` and ``-inf``.
 
     The unit is chosen after rounding, so 999,999 reads ``1M`` (not
     ``1000K``) and 9,999.96 reads ``10K``.
@@ -435,8 +635,10 @@ def abbreviate(num: float, digits: int = 1) -> str:
     num = abs(float(num))
     if num == 0:
         return "0"
-    if num < 1:
-        return f"{sign}{float(f'{num:.{digits + 1}g}'):g}"
+    if math.isinf(num):
+        return f"{sign}inf"
+    if num < 1:  # formatted once: reading the rounded text back as a float re-expands a subnormal to six digits
+        return f"{sign}{num:.{digits + 1}g}"
     if float(f"{num:.{digits}f}") < 1e4:
         return f"{sign}{_strip(f'{num:,.{digits}f}')}"
     # The first of K, M, B, T in which the rounded value stays below 1000.
@@ -477,20 +679,23 @@ def exact_mean(values: Any) -> float:
     return float(sum(map(Fraction, parts)) / len(v))
 
 
-def safe_sum(values: pd.Series, by: pd.Series | None = None, sort: bool = False, min_count: int = 0) -> Any:
+def safe_sum(values: pd.Series, by: Any = None, sort: bool = False, min_count: int = 0,
+             dropna: bool = True) -> Any:
     """Sum of *values* (per group of *by*) that cannot wrap around, with ``NaN`` rather than ``pd.NA`` for missing.
 
     Integer sums in int64 wrap around silently, so where an integer sum
     reaches 2**62 (a margin for float rounding) it is taken in float instead.
     Otherwise integer sums stay exact. A result in a nullable dtype (``Int64``,
     ``Float64``) comes back as a NumPy one: int64 when nothing is missing,
-    float64 with ``NaN`` otherwise, which Matplotlib can draw. *sort* and
-    *min_count* are passed on to the pandas ``groupby`` and ``sum``.
+    float64 with ``NaN`` otherwise, which Matplotlib can draw. *by* is a
+    Series or a list of them. *sort*, *dropna* (``False`` makes missing keys
+    a group of their own) and *min_count* are passed on to the pandas
+    ``groupby`` and ``sum``.
     """
     def total(v: pd.Series) -> Any:
         if by is None:
             return v.sum(min_count=min_count)
-        return v.groupby(by, sort=sort, observed=True).sum(min_count=min_count)
+        return v.groupby(by, sort=sort, observed=True, dropna=dropna).sum(min_count=min_count)
 
     if pd.api.types.is_integer_dtype(values) and not pd.api.types.is_bool_dtype(values):
         floats = total(pd.Series(values.to_numpy(dtype=float, na_value=np.nan), index=values.index))

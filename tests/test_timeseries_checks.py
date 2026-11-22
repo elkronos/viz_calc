@@ -1,6 +1,7 @@
 """Time charts: input validation, colour roles, date labels and figure cleanup."""
 
 import inspect
+import io
 import re
 import warnings
 from pathlib import Path
@@ -278,6 +279,71 @@ def test_gantt_categorical_group_with_unused_categories_does_not_warn():
     bars = [to_hex(p.get_facecolor()) for p in res.axes.patches]
     expected = ["(missing)" if pd.isna(t) else t for t in proj["team"]]
     assert bars == [legend[t] for t in expected]
+
+
+# --- Arrow-backed dates ---------------------------------------------------------------------------------------------
+
+
+_ARROW_CSV = "task,date,start,end,v,w\n" + "\n".join(
+    f"t{i},2024-03-{i + 25:02d},2024-03-{i + 25:02d},2024-04-{i + 1:02d},{i},{4 - i}" for i in range(5))
+
+_ARROW_CALLS = {
+    "period_bars": lambda d: vc.period_bars(d, date="date", value="v", freq="week"),
+    "timeseries_fill": lambda d: vc.timeseries_fill(d, time="date", series=["v", "w"]),
+    "calendar_heatmap": lambda d: vc.calendar_heatmap(d, date="date", value="v"),
+    "gantt": lambda d: vc.gantt(d, task="task", start="start", end="end", today="2024-03-27"),
+    "duration_plot": lambda d: vc.duration_plot(d, label="task", start="start", end="end", inner_start="start",
+                                                inner_end="end"),
+}
+
+
+@pytest.mark.parametrize("call", list(_ARROW_CALLS.values()), ids=list(_ARROW_CALLS))
+@pytest.mark.parametrize("source", ["read_csv", "convert_dtypes", "convert_dtypes with a zone"])
+def test_arrow_backed_dates_give_the_same_table(call, source):
+    # read_csv(engine="pyarrow") gives date32[pyarrow] columns, convert_dtypes timestamp[pyarrow] ones
+    pytest.importorskip("pyarrow")
+    plain = pd.read_csv(io.StringIO(_ARROW_CSV), parse_dates=["date", "start", "end"])
+    if source.endswith("zone"):  # 2024-03-31 is a daylight-saving change in Berlin
+        plain = plain.assign(**{c: plain[c].dt.tz_localize("Europe/Berlin") for c in ("date", "start", "end")})
+    if source == "read_csv":
+        arrow = pd.read_csv(io.StringIO(_ARROW_CSV), engine="pyarrow", dtype_backend="pyarrow")
+    else:
+        arrow = plain.convert_dtypes(dtype_backend="pyarrow")
+    assert isinstance(arrow["date"].dtype, pd.ArrowDtype)
+    expected = call(plain).table
+    table = call(arrow).table
+    pd.testing.assert_frame_equal(table, expected, check_dtype=False)
+    dates = [c for c in expected if pd.api.types.is_datetime64_any_dtype(expected[c])]
+    assert dates and not [c for c in dates if isinstance(table[c].dtype, pd.ArrowDtype)]
+
+
+def test_arrow_date_beyond_the_pandas_range_is_reported_by_column():
+    # pandas 2 holds dates up to 2262 only, so a 9999-12-31 placeholder fails there as it does for text
+    pytest.importorskip("pyarrow")
+    csv = "date,v\n2024-03-01,1\n2024-03-02,2\n9999-12-31,3\n"
+    plain = pd.read_csv(io.StringIO(csv))
+    arrow = pd.read_csv(io.StringIO(csv), engine="pyarrow", dtype_backend="pyarrow")
+    if pd.to_datetime(plain["date"], errors="coerce").notna().all():  # pandas 3
+        expected = vc.calendar_heatmap(plain, date="date", value="v").table
+        pd.testing.assert_frame_equal(vc.calendar_heatmap(arrow, date="date", value="v").table, expected,
+                                      check_dtype=False)
+    else:
+        with pytest.raises(ValueError, match="column 'date' could not be parsed as dates"):
+            vc.calendar_heatmap(arrow, date="date", value="v")
+
+
+def test_arrow_timestamp_groups_are_matched_by_value():
+    # pandas 2 found no Arrow timestamp in an Index of Timestamps: gantt drew every bar grey as "(missing)", and
+    # circular_bar and nested_pie raised
+    pytest.importorskip("pyarrow")
+    g = pd.Series(pd.to_datetime(["2024-01-01", None, "2024-02-01", "2024-01-01"])).astype("timestamp[ns][pyarrow]")
+    df = pd.DataFrame({"task": list("abcd"), "g": g, "c": ["u", "w", "u", "w"], "v": [1.0, 2, 3, 4],
+                       "start": pd.to_datetime(["2024-01-01", "2024-01-05", "2024-02-01", "2024-02-10"]),
+                       "end": pd.to_datetime(["2024-01-10", "2024-02-01", "2024-03-01", "2024-03-01"])})
+    res = vc.gantt(df, task="task", start="start", end="end", group="g")
+    assert [to_hex(p.get_facecolor()) for p in res.axes.patches] == ["#0072b2", "#7f7f7f", "#e69f00", "#0072b2"]
+    assert len(vc.circular_bar(df, label="task", value="v", group="g").table) == 4
+    assert vc.nested_pie(df, outer="g", inner="c").table["value"].sum() == 4
 
 
 # --- the walkthrough ------------------------------------------------------------------------------------------------

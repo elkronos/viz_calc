@@ -1,5 +1,7 @@
 """Constant groups, p-value ranges, pd.NA in plain lists and FD bin limits in viz_calc.stats."""
 
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -79,3 +81,89 @@ def test_fd_keeps_a_real_iqr_at_large_magnitudes():
     assert vc.histogram(pd.DataFrame({"x": x}), "x").info["bin_rule"] == "fd (whole-number widths for integer data)"
     edges, rule = st._bin_edges(x + 0.5, "auto")  # same data off the integer grid
     assert not rule.startswith("sturges")
+
+
+# --- wilson_ci on impossible counts -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("k,n", [(5, 3), (-1, 10), (10.5, 10), (-0.5, 10), (3, -5), (5, np.inf), (np.inf, np.inf),
+                                 (np.nan, np.inf), (1, 0)])
+def test_wilson_ci_rejects_impossible_counts(k, n):
+    with pytest.raises(ValueError, match=r"successes <= n, got successes="):
+        st.wilson_ci(k, n)
+
+
+def test_wilson_ci_names_the_impossible_entries_of_an_array():
+    with pytest.raises(ValueError, match=r"got successes=4, n=3$"):
+        st.wilson_ci(np.array([1, 4, np.nan]), np.array([3, 3, 3]))
+
+
+@pytest.mark.parametrize("k,n,shown", [(1_000_001, 1_000_000, "successes=1000001, n=1000000"),
+                                       (0.1 + 0.2, 0.3, "successes=0.30000000000000004, n=0.3"),
+                                       (5, np.inf, "successes=5, n=inf"), (-2.5, 1e300, "successes=-2.5, n=1e+300")])
+def test_wilson_ci_error_tells_the_counts_apart(k, n, shown):
+    # Six significant digits printed 1000001 of 1000000 as "successes=1e+06, n=1e+06".
+    with pytest.raises(ValueError, match=f"got {re.escape(shown)}$"):
+        st.wilson_ci(k, n)
+
+
+def test_wilson_ci_keeps_nan_for_missing_or_zero_counts_and_accepts_weighted_counts():
+    assert all(np.isnan(v) for v in st.wilson_ci(np.nan, 10) + st.wilson_ci(0, 0) + st.wilson_ci(3, np.nan))
+    lo, hi = st.wilson_ci(2.5, 10)
+    assert 0 < lo < 0.25 < hi < 1
+
+
+def test_wilson_ci_of_huge_counts_does_not_warn():
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert st.wilson_ci(1e200, 1e200) == (1.0, 1.0)
+        lo, hi = st.wilson_ci(0, 1e200)
+        assert lo == 0.0 and 0 < hi < 1e-199
+
+
+# --- bootstrap_ci: default statistic for one sample, checked options ----------------------------------------------
+
+
+def test_bootstrap_ci_of_one_sample_bootstraps_its_mean():
+    x = [1.0, 2.0, 4.0, 7.0]
+    assert st.bootstrap_ci(x, n_resamples=500) == st.bootstrap_ci(x, statistic=np.mean, n_resamples=500)
+    assert st.bootstrap_ci(x, n_resamples=500)[0] == 3.5
+
+
+@pytest.mark.parametrize("count", [0, 3])
+def test_bootstrap_ci_default_statistic_names_the_sample_count(count):
+    with pytest.raises(ValueError, match=f"one sample .* or two .*got {count}; pass statistic="):
+        st.bootstrap_ci(*[[1.0, 2.0, 4.0]] * count)
+
+
+@pytest.mark.parametrize("data", [([1.0, 2.0, 4.0, 7.0], [3.0, 5.0, 6.0, 9.0, 10.0]), ([1.0, 1.0], [1.0, 1.0])],
+                         ids=["varied", "constant"])
+@pytest.mark.parametrize("kwargs, message", [
+    (dict(method="nope"), r"method must be one of \['BCa', 'percentile', 'basic'\], got 'nope'"),
+    (dict(method=None), r"method must be one of .*got None"),
+    (dict(n_resamples=0), "n_resamples must be a whole number of at least 1, got 0"),
+    (dict(n_resamples=True), "n_resamples must be a whole number of at least 1, got True"),
+    (dict(seed=-1), "seed must be a whole number of at least 0, got -1"),
+    (dict(seed=True), "seed must be a whole number of at least 0, got True"),
+    (dict(seed="x"), "seed must be a whole number of at least 0, got 'x'"),
+], ids=["method", "method-none", "n_resamples-0", "n_resamples-bool", "seed-negative", "seed-bool", "seed-text"])
+def test_bootstrap_ci_checks_its_options_before_resampling(data, kwargs, message):
+    # The constant pair skips SciPy entirely, so it used to accept any option.
+    with pytest.raises(ValueError, match=message):
+        st.bootstrap_ci(*data, **kwargs)
+
+
+def test_bootstrap_ci_seed_can_be_a_numpy_generator():
+    a, b = [1.0, 2.0, 4.0, 7.0], [3.0, 5.0, 6.0, 9.0, 10.0]
+    want = st.bootstrap_ci(a, b, n_resamples=300, seed=3)
+    for seed in (np.random.default_rng(3), np.random.PCG64(3), np.random.SeedSequence(3)):
+        assert st.bootstrap_ci(a, b, n_resamples=300, seed=seed) == want
+
+
+def test_bootstrap_ci_method_keeps_any_letter_case():
+    a, b = [1.0, 2.0, 4.0, 7.0], [3.0, 5.0, 6.0, 9.0, 10.0]
+    assert st.bootstrap_ci(a, b, method="bca", n_resamples=300) == st.bootstrap_ci(a, b, n_resamples=300)
+    assert st.bootstrap_ci(a, b, method="Percentile", n_resamples=300) == st.bootstrap_ci(
+        a, b, method="percentile", n_resamples=300)

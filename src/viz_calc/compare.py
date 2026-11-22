@@ -21,18 +21,22 @@ from ._core import (
     VizResult,
     abbreviate,
     category_order,
+    center_labels,
     check_choice,
     check_count,
     check_dataframe,
     check_distinct,
+    check_finite,
     check_has_values,
     check_not_reserved,
     check_numeric,
     cleanup_on_error,
     column_list,
     exact_mean,
+    foreground,
     get_ax,
     level_label,
+    level_mask,
     level_percent,
     palette,
     safe_sum,
@@ -167,7 +171,9 @@ def estimation_plot(
     new data presentation paradigm. *PLoS Biology*, 13(4), e1002128.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_numeric(data, y)
+    check_finite(data, y)
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     check_not_reserved(["n", "mean", "sd", "ci_low", "ci_high"], x=x)
     st._check_level(level)
@@ -181,7 +187,7 @@ def estimation_plot(
         raise ValueError(f"reference {reference!r} is not one of the groups {groups}")
     # The matching group itself: on NumPy 1.x a numpy.datetime64 and the equal Timestamp hash differently.
     reference = groups[groups.index(reference)]
-    samples = {g: data[y][data[x] == g].dropna().to_numpy(float) for g in groups}
+    samples = {g: data[y][level_mask(data[x], g)].dropna().to_numpy(float) for g in groups}
     small = [g for g, s in samples.items() if s.size < 2]
     if small:
         raise ValueError(f"groups need at least two observations: {small}")
@@ -195,7 +201,8 @@ def estimation_plot(
         s = samples[g]
         ax_raw.scatter(i - 0.08 + _jitter(s.size, 0.12, rng), s, s=14, color=cols[i], alpha=0.6, linewidths=0)
         m, lo, hi = st.mean_ci(s, level)
-        ax_raw.errorbar(i + 0.22, m, yerr=[[m - lo], [hi - m]], fmt="o", color="black", ms=5, capsize=0, lw=1.5)
+        ax_raw.errorbar(i + 0.22, m, yerr=[[m - lo], [hi - m]], fmt="o", color=foreground(ax_raw), ms=5, capsize=0,
+                        lw=1.5)
         rows.append({x: g, "n": s.size, "mean": m, "sd": st._sd(s), "ci_low": lo, "ci_high": hi})
     ax_raw.set_ylabel(y)
     ax_raw.set_title(f"{y} by {x}: raw data with mean and {level_percent(level)} CI", loc="left")
@@ -205,18 +212,18 @@ def estimation_plot(
     ax_diff.axhline(0, color=NEUTRAL, lw=1, ls="--")
     for i, g in enumerate(groups):
         if g == reference:
-            ax_diff.plot(i, 0, marker="_", color="black", ms=14)
+            ax_diff.plot(i, 0, marker="_", color=foreground(ax_diff), ms=14)
             continue
         # Resample the data divided by a power of two (exact), so BCa's sums of powers neither overflow nor underflow.
         s = st._unit_scale(ref, samples[g])
-        est, lo, hi, dist = st._bootstrap((ref / s, samples[g] / s), lambda a, b: st._mean(b) - st._mean(a),
-                                          level, n_resamples, "BCa", seed)
+        # The default statistic, mean(b) - mean(a), with ties to the estimate kept exact whatever the units.
+        est, lo, hi, dist = st._bootstrap((ref / s, samples[g] / s), None, level, n_resamples, "BCa", seed)
         est, lo, hi, dist = est * s, lo * s, hi * s, dist * s
         dens = _half_violin(dist)
         if dens is not None:
             grid, width = dens
             ax_diff.fill_betweenx(grid, i, i + width * 0.35, color=cols[i], alpha=0.35, lw=0)
-        ax_diff.errorbar(i, est, yerr=[[est - lo], [hi - est]], fmt="o", color="black", ms=6, lw=2)
+        ax_diff.errorbar(i, est, yerr=[[est - lo], [hi - est]], fmt="o", color=foreground(ax_diff), ms=6, lw=2)
         w = st.welch_test(ref, samples[g], level)
         h = st.hedges_g(ref, samples[g], level)
         comps.append({"group": g, "reference": reference, "difference": est, "ci_low": lo, "ci_high": hi,
@@ -299,7 +306,9 @@ def benchmark_bar(
     how to read pictures of data. *American Psychologist*, 60(2), 170–180.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_numeric(data, y)
+    check_finite(data, y)
     check_choice("error", error, ["ci", "se", "sd"])
     check_choice("classify", classify, ["ci", "mean"])
     check_not_reserved(["n", "mean", "sd", "se", "ci_low", "ci_high", "status"], x=x)
@@ -310,7 +319,7 @@ def benchmark_bar(
     groups = category_order(data[x], order)
     rows = []
     for g in groups:
-        s = data[y][data[x] == g].dropna().to_numpy(float)
+        s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
         m, lo, hi = st.mean_ci(s, level)
         sd = st._sd(s)
         if s.size == 0:
@@ -340,13 +349,13 @@ def benchmark_bar(
     fig, ax = get_ax(ax)
     pos = np.arange(len(table))
     ax.bar(pos, table["mean"], color=[color_for[s] for s in table["status"]], width=0.65, zorder=2)
-    ax.errorbar(pos, table["mean"], yerr=err, fmt="none", ecolor="black", capsize=4, lw=1.2, zorder=3)
+    ax.errorbar(pos, table["mean"], yerr=err, fmt="none", ecolor=foreground(ax), capsize=4, lw=1.2, zorder=3)
     if show_points:
         rng = np.random.default_rng(0)
         for p, g in zip(pos, table[x]):
-            s = data[y][data[x] == g].dropna().to_numpy(float)
-            ax.scatter(p + _jitter(s.size, 0.18, rng), s, s=8, color="black", alpha=0.35, lw=0, zorder=4)
-    ax.axhline(thr, color="black", ls="--", lw=1, zorder=5)
+            s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
+            ax.scatter(p + _jitter(s.size, 0.18, rng), s, s=8, color=foreground(ax), alpha=0.35, lw=0, zorder=4)
+    ax.axhline(thr, color=foreground(ax), ls="--", lw=1, zorder=5)
     ax.set_xticks(pos, [level_label(g) for g in table[x]])
     ax.set_xlabel(x)
     ax.set_ylabel(f"Mean {y}")
@@ -390,6 +399,7 @@ def lollipop(
     79(387), 531–554.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_choice("stat", stat, ["mean", "median", "sum", "count"])
     check_choice("sort", sort, ["descending", "ascending", None])
     check_not_reserved(["value"], x=x)
@@ -398,6 +408,7 @@ def lollipop(
         if y is None:
             raise ValueError(f"stat={stat!r} needs a y column")
         check_numeric(data, y)
+        check_finite(data, y)
         if stat == "sum":  # in float where an int64 sum could wrap around
             agg = safe_sum(data[y], data[x], sort=True)
         else:
@@ -437,7 +448,7 @@ def lollipop(
         ax.set_yticks(pos, ticks)
         ax.set_xlabel(label)
         ax.xaxis.set_major_formatter(fmt)
-        ax.axvline(0, color="black", lw=0.8)
+        ax.axvline(0, color=foreground(ax), lw=0.8)
         if threshold is not None:
             ax.axvline(threshold, color=NEUTRAL, ls="--", lw=1)
         ax.margins(x=0.12)
@@ -445,7 +456,7 @@ def lollipop(
         ax.set_xticks(pos, ticks, rotation=45, ha="right")
         ax.set_ylabel(label)
         ax.yaxis.set_major_formatter(fmt)
-        ax.axhline(0, color="black", lw=0.8)
+        ax.axhline(0, color=foreground(ax), lw=0.8)
         if threshold is not None:
             ax.axhline(threshold, color=NEUTRAL, ls="--", lw=1)
         ax.margins(y=0.12)
@@ -486,6 +497,7 @@ def dumbbell(
     check_distinct(start=start, end=end)
     check_not_reserved(["change", "pct_change"], label=label, start=start, end=end)
     check_numeric(data, start, end)
+    check_finite(data, start, end)
     check_has_values(data, start, end)
     colors = slot_colors(colors, ("start", "end"))
     table = data[list(dict.fromkeys([label, start, end]))].copy()
@@ -528,7 +540,7 @@ def dumbbell(
     ax.xaxis.set_major_formatter(AbbrevFormatter())
     ax.legend(frameon=False, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.grid(axis="x", color="#eeeeee")
+    ax.grid(axis="x", color=foreground(ax, "#eeeeee"))
     ax.set_axisbelow(True)
     return VizResult(fig, ax, table)
 
@@ -563,6 +575,7 @@ def divergent_bar(
     check_dataframe(data, [category, left, right])
     check_distinct(category=category, left=left, right=right)
     check_numeric(data, left, right)
+    check_finite(data, left, right)
     check_has_values(data, category, left, right)
     colors = slot_colors(colors, ("left", "right"))
     values = select_columns(data, [category, left, right])
@@ -579,7 +592,7 @@ def divergent_bar(
     pos = np.arange(len(table))
     ax.barh(pos, -table[left], color=colors[0], label=left_label or left)
     ax.barh(pos, table[right], color=colors[1], label=right_label or right)
-    ax.axvline(0, color="black", lw=0.8)
+    ax.axvline(0, color=foreground(ax), lw=0.8)
     ax.set_yticks(pos, [level_label(v) for v in table[category]])
     ax.xaxis.set_major_formatter(AbbrevFormatter(absolute=True))
     lim = max(table[left].max(), table[right].max()) * 1.1
@@ -588,6 +601,16 @@ def divergent_bar(
     ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=2)
     ax.spines[["top", "right"]].set_visible(False)
     return VizResult(fig, ax, table)
+
+
+def _abs_share(value: float, _pos: Any = None) -> str:
+    """Tick label for a share drawn on both sides of zero: ``-0.25`` reads ``25%``."""
+    return f"{abs(value):.0%}"
+
+
+def _abs_percent(value: float, _pos: Any = None) -> str:
+    """Tick label for a percentage drawn on both sides of zero: ``-25`` reads ``25%``."""
+    return f"{abs(value):.0f}%"
 
 
 def _share_label(p: float) -> str:
@@ -631,10 +654,13 @@ def centered_bar(
         Confidence level of the Wilson intervals, strictly between 0 and 1
         (``0.95``, not ``95``).
     colors
-        A tuple of two colours: ``(at_or_above, below)``.
+        A tuple of two colours: ``(at_or_above, below)``. The share labels on
+        each bar are black or white, whichever reads better on its colour.
     """
     check_dataframe(data, [x, y])
+    check_distinct(x=x, y=y)
     check_numeric(data, y)
+    check_finite(data, y)
     check_not_reserved(["n", "n_above", "p_above", "ci_low", "ci_high", "p_below"], x=x)
     st._check_level(level)
     colors = slot_colors(colors, ("at_or_above", "below"))
@@ -642,7 +668,7 @@ def centered_bar(
     groups = category_order(data[x], order)
     rows = []
     for g in groups:
-        s = data[y][data[x] == g].dropna().to_numpy(float)
+        s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
         n, k = int(s.size), int((s >= thr - tol).sum())
         lo, hi = st.wilson_ci(k, n, level)
         rows.append({x: g, "n": n, "n_above": k, "p_above": k / n if n else np.nan,
@@ -656,13 +682,15 @@ def centered_bar(
     down = ax.bar(pos, -table["p_below"], color=colors[1], label=f"< {shown}")
     ax.errorbar(pos, table["p_above"], yerr=[np.clip(table["p_above"] - table["ci_low"], 0, None),
                                              np.clip(table["ci_high"] - table["p_above"], 0, None)],
-                fmt="none", ecolor="black", capsize=3, lw=1)
+                fmt="none", ecolor=foreground(ax), capsize=3, lw=1)
     if labels:
-        ax.bar_label(up, labels=[_share_label(v) for v in table["p_above"]], padding=2, fontsize=8, label_type="center", color="white")
-        ax.bar_label(down, labels=[_share_label(v) for v in table["p_below"]], padding=2, fontsize=8, label_type="center", color="black")
-    ax.axhline(0, color="black", lw=0.8)
+        center_labels(ax, up, [_share_label(v) for v in table["p_above"]], padding=2, fontsize=8,
+                      color=text_color(colors[0]))
+        center_labels(ax, down, [_share_label(v) for v in table["p_below"]], padding=2, fontsize=8,
+                      color=text_color(colors[1]))
+    ax.axhline(0, color=foreground(ax), lw=0.8)
     ax.set_ylim(-1.05, 1.05)
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{abs(v):.0%}"))
+    ax.yaxis.set_major_formatter(FuncFormatter(_abs_share))
     ax.set_xticks(pos, [level_label(g) for g in table[x]])
     ax.set_xlabel(x)
     ax.set_ylabel(f"Share of {y}")
@@ -755,12 +783,11 @@ def likert(
         width = table[lvl].to_numpy(float)
         bars = ax.barh(ypos, width, left=left, color=col, label=level_label(lvl), edgecolor="white", lw=0.5)
         if labels:
-            ax.bar_label(bars, labels=[f"{w:.0f}" if w >= 6 else "" for w in width], label_type="center", fontsize=8,
-                         color=text_color(col))
+            center_labels(ax, bars, [f"{w:.0f}" if w >= 6 else "" for w in width], fontsize=8, color=text_color(col))
         left += width
-    ax.axvline(0, color="black", lw=0.8)
+    ax.axvline(0, color=foreground(ax), lw=0.8)
     ax.set_yticks(ypos, [f"{level_label(i)} (n={n})" for i, n in zip(table["item"], table["n"])])
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{abs(v):.0f}%"))
+    ax.xaxis.set_major_formatter(FuncFormatter(_abs_percent))
     ax.set_xlim(-max(float((-start).max()), 1) * 1.05, max(float(left.max()), 1) * 1.05)
     ax.set_xlabel("Share of responses")
     ax.legend(frameon=False, ncol=k, loc="upper center", bbox_to_anchor=(0.5, -0.12))

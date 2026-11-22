@@ -8,6 +8,14 @@ sales = datasets.sales()        # two years of daily 'online' and 'store' sales
 proj = datasets.projects()      # six tasks with planned and actual dates
 ```
 
+Date columns can hold datetimes, with or without a time zone, including the
+Arrow-backed dates that `pd.read_parquet` and `pd.read_csv(engine="pyarrow")`
+return with `dtype_backend="pyarrow"`, or text in one consistent format,
+ideally ISO 8601 (`2024-03-15`, `2024-03-15 09:30+01:00`). `timeseries_fill`,
+`gantt` and `duration_plot` keep time zones, so text that mixes values with
+and without a UTC offset raises a `ValueError` instead of guessing the
+missing offsets.
+
 ## 1. Calendar periods with a trend
 
 ```python
@@ -53,10 +61,12 @@ res = vc.calendar_heatmap(sales, date="date", value="online")
 
 ![Calendar heatmap](../images/calendar_heatmap.png)
 
-One row per year, weeks as columns, Monday at the top. All years share one
-colour scale, and days without data are grey so they are not mistaken for
-zero. Weekend dips and the summer peak stand out. It is drawn with
-Matplotlib alone, removing the old `calmap` dependency.
+One row per year, weeks as columns, Monday at the top. Only years with
+data get a row, so a stray placeholder date such as `1900-01-01` adds one
+row rather than more than a hundred empty ones. All years share one colour
+scale, and days without data are grey so they are not mistaken for zero.
+Weekend dips and the summer peak stand out. It is drawn with Matplotlib
+alone, removing the old `calmap` dependency.
 
 ## 4. Project timelines
 

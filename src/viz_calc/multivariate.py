@@ -11,6 +11,7 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.patches import Ellipse
 from scipy.stats import chi2
+from scipy.stats import f as f_dist
 
 from . import stats as st
 from ._core import (
@@ -24,6 +25,7 @@ from ._core import (
     check_numeric,
     cleanup_on_error,
     column_list,
+    foreground,
     get_ax,
     level_label,
     level_percent,
@@ -40,7 +42,9 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     Rows with a missing feature are dropped. With ``scale=True`` features are
     standardized first (a correlation-matrix PCA), which is the right default
     when features are on different units; otherwise large-variance features
-    dominate (Jolliffe & Cadima, 2016). Component signs are fixed so that the
+    dominate (Jolliffe & Cadima, 2016). A feature whose values are all
+    identical cannot be standardized and raises ``ValueError``; unscaled, it
+    adds a component with zero variance. Component signs are fixed so that the
     largest-magnitude loading of each component is positive, making results
     reproducible.
 
@@ -59,13 +63,23 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     X = select_columns(data, features).dropna()
     if len(X) < 3:
         raise ValueError("need at least three complete rows")
-    Z = X - X.mean()
+    # Plain NumPy floats: pandas 2.0 cannot centre Arrow-backed columns (an ArrowExtensionArray has no reshape).
+    X = pd.DataFrame(X.to_numpy(dtype=float, na_value=np.nan), index=X.index, columns=X.columns)
+    # Centring removes any shift of a feature, so features far from zero next to their spread are first shifted by an
+    # exact amount that keeps their digits (see stats._offset); other features are left as they are.
+    X = X - [st._offset(X.iloc[:, j].to_numpy()) for j in range(X.shape[1])]
+    # The float mean of a constant column such as 0.1 is off by an ulp, so centring leaves rounding noise (an SD
+    # near 3e-17) that scaling would blow up into a whole component; constant columns are found by their values.
+    constant = (X.max() == X.min()).to_numpy()
+    Z = (X - X.mean()).to_numpy(copy=True)
+    Z[:, constant] = 0.0
     if scale:
-        sd = X.std(ddof=1).replace(0, np.nan)
-        if sd.isna().any():
-            raise ValueError(f"constant feature(s) cannot be scaled: {list(sd[sd.isna()].index)}")
+        sd = X.std(ddof=1).to_numpy()
+        flat = constant | ~(sd > 0)  # an SD of 0 or nan (infinite values) cannot be divided by either
+        if flat.any():
+            raise ValueError(f"constant feature(s) cannot be scaled: {[f for f, c in zip(features, flat) if c]}")
         Z = Z / sd
-    U, S, Vt = np.linalg.svd(Z.to_numpy(float), full_matrices=False)
+    U, S, Vt = np.linalg.svd(Z, full_matrices=False)
     signs = np.sign(Vt[np.arange(len(Vt)), np.abs(Vt).argmax(axis=1)])
     Vt *= signs[:, None]
     U *= signs[None, :]
@@ -80,19 +94,30 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
 
 
 def _ellipse(ax: Axes, pts: np.ndarray, level: float, kind: str, color: str) -> dict[str, float] | None:
-    if len(pts) < 3:
+    n = len(pts)
+    if n < 3:
         return None
     cov = np.cov(pts, rowvar=False)
     if kind == "confidence":
-        cov = cov / len(pts)  # covariance of the mean
+        cov = cov / n  # covariance of the mean
+        # Hotelling's T²: exact for normal data whatever n, where chi2_2 assumes a known covariance and covered
+        # the true mean only about 75% of the time at n = 5 for a nominal 95%.
+        radius = np.sqrt(2 * (n - 1) / (n - 2) * f_dist.ppf(level, 2, n - 2))
+    else:
+        radius = np.sqrt(chi2.ppf(level, df=2))
     vals, vecs = np.linalg.eigh(cov)
     order = vals.argsort()[::-1]
     vals, vecs = vals[order], vecs[:, order]
-    radius = np.sqrt(chi2.ppf(level, df=2))
     width, height = 2 * radius * np.sqrt(np.clip(vals, 0, None))
     angle = np.degrees(np.arctan2(vecs[1, 0], vecs[0, 0]))
     centre = pts.mean(axis=0)
-    ax.add_patch(Ellipse(centre, width, height, angle=angle, facecolor=color, alpha=0.12, edgecolor=color, lw=1.5))
+    patch = Ellipse(centre, width, height, angle=angle, facecolor=color, alpha=0.12, edgecolor=color, lw=1.5)
+    # A small group's region for the mean can be far wider than the points (11.5 times the chi-square radius at
+    # n = 3), so it is clipped at the axes instead of setting their limits.
+    if kind == "confidence":
+        ax.add_artist(patch)
+    else:
+        ax.add_patch(patch)
     return {"cx": centre[0], "cy": centre[1], "width": width, "height": height, "angle": angle}
 
 
@@ -114,7 +139,8 @@ def pca_plot(
 
     Axis labels give the share of variance each component explains. Rows
     whose *group* is missing are still scored and drawn, in grey as
-    ``(missing)`` and without an ellipse.
+    ``(missing)`` and without an ellipse. *group* cannot be one of the
+    *features*; to colour by a feature, pass a copy of it under another name.
 
     The table has one row per scored row: ``row`` (its index label in
     *data*, a tuple for a ``MultiIndex``; named ``index`` when *group* is
@@ -125,10 +151,16 @@ def pca_plot(
     components
         1-based component numbers to plot, e.g. ``(1, 2)`` or ``(2, 3)``.
     ellipse
-        ``"data"``: a normal-theory region expected to contain *level* of each
-        group's points (radius ``sqrt(chi2_2(level))`` in the eigenbasis of the
-        group covariance). ``"confidence"``: a *level* confidence region for the
-        group **mean**. ``None``: no ellipse.
+        ``"data"``: the normal-theory ellipse at each group's mean and
+        covariance, radius ``sqrt(chi2_2(level))`` in the eigenbasis of the
+        group covariance. For a large group it holds about *level* of the
+        population; a small group's own points nearly all fall inside it.
+        ``"confidence"``: a *level* confidence region for the group **mean**
+        from Hotelling's T², radius ``sqrt(2(n - 1)/(n - 2) F_2,n-2(level))``
+        on the covariance of the mean, exact for normal data in groups of 3
+        or more. It does not set the axis limits, so a small group's ellipse
+        can be cut off at the edges of the plot (at n = 3 and level 0.95 its
+        radius is 11.5 times the chi-square radius). ``None``: no ellipse.
     level
         Coverage of the ellipses, strictly between 0 and 1 (``0.95``, not
         ``95``); checked even when *ellipse* is ``None``.
@@ -139,6 +171,9 @@ def pca_plot(
     """
     features = column_list("features", features, distinct=True)
     check_dataframe(data, [*features, group])
+    if group is not None and group in features:
+        raise ValueError(f"group column {group!r} cannot also be one of features; to colour by a feature, "
+                         "pass a copy of it under another name")
     check_choice("ellipse", ellipse, ["data", "confidence", None])
     coverage = st._check_level(level)
     if isinstance(loadings, np.bool_):
@@ -184,12 +219,12 @@ def pca_plot(
         mult = 0.8 * span / np.abs(top.to_numpy()).max()
         for f, (lx, ly) in zip(top.index, top.to_numpy() * mult):
             ax.annotate("", (lx, ly), (0, 0), arrowprops={"arrowstyle": "->", "color": NEUTRAL, "lw": 1.2})
-            ax.text(lx * 1.08, ly * 1.08, f, color="black", fontsize=8, ha="center", va="center")
+            ax.text(lx * 1.08, ly * 1.08, f, color=foreground(ax), fontsize=8, ha="center", va="center")
     evr = res["explained_variance_ratio"]
     ax.set_xlabel(f"{pc_x} ({evr[pc_x]:.1%} of variance)")
     ax.set_ylabel(f"{pc_y} ({evr[pc_y]:.1%} of variance)")
-    ax.axhline(0, color="#dddddd", lw=0.8, zorder=0)
-    ax.axvline(0, color="#dddddd", lw=0.8, zorder=0)
+    ax.axhline(0, color=foreground(ax, "#dddddd"), lw=0.8, zorder=0)
+    ax.axvline(0, color=foreground(ax, "#dddddd"), lw=0.8, zorder=0)
     ax.set_aspect("equal", adjustable="datalim")
     if group is not None:
         ax.legend(title=str(group), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))

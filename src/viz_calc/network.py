@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import heapq
+import html
 import math
 from fractions import Fraction
 from itertools import count
@@ -23,11 +24,23 @@ from ._core import (
     check_has_values,
     check_numeric,
     cleanup_on_error,
+    foreground,
     palette,
     require,
+    text_color,
 )
 
 __all__ = ["network_map", "sankey"]
+
+
+def _plotly_text(value: object) -> str:
+    """*value* as text that Plotly shows as written.
+
+    Plotly reads labels and hover text as a subset of HTML, so a node named
+    ``<a href=...>`` would become a link; ``&``, ``<`` and ``>`` are escaped
+    and Plotly turns them back into the characters.
+    """
+    return html.escape(str(value), quote=False)
 
 
 _PRIME = 2**127 - 1  # a Mersenne prime: path lengths are compared exactly through their residues modulo it
@@ -318,7 +331,10 @@ def network_map(
     graphs, communities are found on the undirected graph with reciprocal
     weights summed.
 
-    Set ``interactive=True`` for a Plotly figure with hover details.
+    Node labels are black or white, whichever reads better on the node's
+    colour; a label wider than its node is drawn in the axes foreground.
+    Set ``interactive=True`` for a Plotly figure with hover details. Node
+    names are shown there as written, not read as Plotly's HTML markup.
 
     References
     ----------
@@ -454,7 +470,9 @@ def network_map(
     metric = table[size_by].to_numpy(float)
     sizes = 150 + 850 * (metric - metric.min()) / (np.ptp(metric) or 1)
     ncomm = int(table["community"].max()) + 1
-    cols = palette(ncomm)
+    # Plotly draws on its own white template, so the Matplotlib style must not turn the eighth colour white.
+    with plt.rc_context({"axes.facecolor": "white"} if interactive else {}):
+        cols = palette(ncomm)
     node_colors = [cols[c] for c in table["community"]]
     widths = np.ones(G.number_of_edges())
     if weighted:
@@ -482,10 +500,11 @@ def network_map(
                 fig.add_trace(go.Scatter(x=[pos[u][0], pos[v][0]], y=[pos[u][1], pos[v][1]], mode="lines",
                                          line={"width": float(wdt), "color": "#aaaaaa"}, hoverinfo="skip",
                                          showlegend=False))
-        hover = [f"<b>{r.node}</b><br>degree {r.degree}<br>strength {r.strength:.3g}<br>"
+        hover = [f"<b>{_plotly_text(r.node)}</b><br>degree {r.degree}<br>strength {r.strength:.3g}<br>"
                  f"betweenness {r.betweenness:.3f}<br>community {r.community}" for r in table.itertuples()]
         fig.add_trace(go.Scatter(x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes],
-                                 mode="markers+text" if labels else "markers", text=[str(n) for n in nodes] if labels else None,
+                                 mode="markers+text" if labels else "markers",
+                                 text=[_plotly_text(n) for n in nodes] if labels else None,
                                  textposition="top center", hovertext=hover, hoverinfo="text", showlegend=False,
                                  marker={"size": np.sqrt(sizes) * 1.3, "color": node_colors, "line": {"width": 1, "color": "white"}}))
         fig.update_layout(template="simple_white", xaxis={"visible": False}, yaxis={"visible": False},
@@ -511,7 +530,12 @@ def network_map(
         nx.draw_networkx_edges(G, pos, ax=ax, width=widths, edge_color="#aaaaaa", arrows=False)
     nx.draw_networkx_nodes(G, pos, ax=ax, node_size=sizes, node_color=node_colors, edgecolors="white")
     if labels:
-        nx.draw_networkx_labels(G, pos, ax=ax, font_size=8)
+        texts = nx.draw_networkx_labels(G, pos, ax=ax, font_size=8)
+        # A label that fits inside its node is read against the node's colour; a wider one mostly against the face.
+        diameter = dict(zip(nodes, np.sqrt(sizes) * fig.dpi / 72))  # node_size is an area in points²
+        fill = dict(zip(nodes, node_colors))
+        for node, t in texts.items():
+            t.set_color(text_color(fill[node]) if t.get_window_extent().width <= diameter[node] else foreground(ax))
     if communities and ncomm > 1:
         ax.legend(handles=[Patch(color=c, label=f"community {i}") for i, c in enumerate(cols)], frameon=False,
                   loc="upper left", bbox_to_anchor=(1.01, 1))
@@ -534,6 +558,11 @@ def sankey(
     value, or a negative, infinite or complex flow, raises an error (dropping
     the row would silently change the totals). The table reports each node's
     total inflow and outflow.
+
+    Node names are shown as written: ``<``, ``>`` and ``&`` are escaped so
+    that Plotly does not read them as HTML markup. *title* is passed to
+    Plotly unchanged and may use Plotly's HTML subset (``<b>``, ``<br>``,
+    ``<a href=...>``).
     """
     go = require("plotly.graph_objects", "interactive")
     check_dataframe(data, [source, target, value])
@@ -555,9 +584,10 @@ def sankey(
     flows = data.groupby([source, target], sort=False, observed=True)[value].sum().reset_index()
     nodes = list(pd.unique(pd.concat([flows[source], flows[target]])))
     index = {n: i for i, n in enumerate(nodes)}
-    cols = palette(len(nodes))
+    with plt.rc_context({"axes.facecolor": "white"}):  # Plotly's background, whatever the Matplotlib style
+        cols = palette(len(nodes))
     fig = go.Figure(go.Sankey(
-        node={"label": [str(n) for n in nodes], "pad": 15, "thickness": 18, "color": cols},
+        node={"label": [_plotly_text(n) for n in nodes], "pad": 15, "thickness": 18, "color": cols},
         link={"source": flows[source].map(index), "target": flows[target].map(index), "value": flows[value],
               "color": "rgba(150,150,150,0.35)"},
     ))

@@ -26,12 +26,14 @@ What the function does, and why:
 * **Labels the axes with the variance explained.** PC1 carries 76% here,
   PC2 20%; together the plot shows 96% of the standardized variance.
 * **Ellipses with a stated meaning.** `ellipse="data"` (default) draws the
-  normal-theory region expected to hold 95% of each group's points: radius
-  √χ²₂(0.95) along the eigenvectors of the group's covariance.
-  `ellipse="confidence"` draws a 95% confidence region for the group
-  **mean**, which is much smaller. The original script took the square root
-  of the eigenvalues twice and used an unexplained 68% level, so its "circles"
-  had no interpretable size.
+  normal-theory ellipse at each group's mean and covariance: radius
+  √χ²₂(0.95) along the eigenvectors of the group's covariance. With 50 points
+  per group it holds about 95% of each group's population; a small group's
+  own points nearly all fall inside it. `ellipse="confidence"` draws a 95%
+  confidence region for the group **mean** (Hotelling's T²), which is much
+  smaller. The original script took the square root of the eigenvalues twice
+  and used an unexplained 68% level, so its "circles" had no interpretable
+  size.
 * **Biplot arrows** (`loadings=True` or a number *n* for the top *n*) show
   how each feature projects onto the plotted components. Here width loads on
   PC2 (0.94) while length, depth and mass load on PC1.

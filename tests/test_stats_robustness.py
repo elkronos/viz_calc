@@ -2,6 +2,7 @@
 
 import itertools
 import math
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -166,6 +167,16 @@ def test_constant_groups_are_constant_whatever_their_binary_representation(a, b)
     assert lo == hi == m
 
 
+def test_welch_df_of_two_constant_groups_is_the_documented_student_df():
+    # The Welch-Satterthwaite df is 0/0 when both groups are constant; n_a + n_b - 2 is reported instead.
+    assert st.welch_test([1, 1, np.nan], [2, 2, 2])["df"] == 3.0
+    df = pd.DataFrame({"g": ["a"] * 2 + ["b"] * 3, "y": [1.0] * 2 + [2.0] * 3})
+    assert vc.estimation_plot(df, "g", "y", n_resamples=200).info["comparisons"]["df"].item() == 3.0
+    assert "``n_a + n_b - 2``" in " ".join(st.welch_test.__doc__.split())
+    methodology = " ".join((Path(__file__).resolve().parents[1] / "docs" / "methodology.md").read_text("utf-8").split())
+    assert "0/0 there, so the reported degrees of freedom are Student's $n_A + n_B - 2$" in methodology
+
+
 @pytest.mark.parametrize("scale", [1e160, 1e-160, 1e300])
 def test_effect_sizes_and_tests_do_not_depend_on_scale(scale):
     a, b = np.array([1.0, 2, 3, 4]), np.array([2.0, 3, 5, 7])
@@ -251,3 +262,113 @@ def test_correlation_charts_name_the_bad_p_adjust(func):
 def test_correlation_method_error_lists_valid_values():
     with pytest.raises(ValueError, match=r"method must be one of \['pearson', 'spearman'\], got 'kendall'"):
         st.correlation_test([1, 2, 3], [3, 1, 2], "kendall")
+
+
+# --- bootstrap intervals do not depend on the units of the data --------------------------------------------------
+
+_TIED = {
+    "same values": ([1, 1, 1, 2, 1.0], [1, 1, 1, 1, 2.0]),
+    "scores": ([1, 2, 2, 3, 3, 3, 4, 5.0], [2, 3, 3, 4, 4, 5, 5, 5.0]),
+    "three each": ([1, 2, 3.0], [4, 5, 7.0]),
+    "counts": (np.random.default_rng(5).poisson(2, 30).astype(float),
+               np.random.default_rng(6).poisson(2.5, 30).astype(float)),
+}
+
+
+@pytest.mark.parametrize("k", [0.1, 1 / 3, 2.54, 10.0, 1e-3])
+@pytest.mark.parametrize("name", list(_TIED))
+def test_bootstrap_ci_does_not_depend_on_units(name, k):
+    # Rounding noise used to move resamples that tie with the estimate above or below it, which changed BCa's bias
+    # correction: the same values gave -0.4 to 0.4 in units but -0.4 to 0.6 in tenths.
+    a, b = (np.asarray(v) for v in _TIED[name])
+    est, lo, hi = st.bootstrap_ci(a, b, n_resamples=2000)
+    est_k, lo_k, hi_k = st.bootstrap_ci(a * k, b * k, n_resamples=2000)
+    assert (est_k / k, lo_k / k, hi_k / k) == pytest.approx((est, lo, hi), rel=1e-12, abs=1e-12)
+    one, one_k = st.bootstrap_ci(b, n_resamples=2000), st.bootstrap_ci(b * k, n_resamples=2000)
+    assert tuple(v / k for v in one_k) == pytest.approx(one, rel=1e-12, abs=1e-12)
+
+
+@pytest.mark.parametrize("k", [0.1, 1 / 3, 2.54, 10.0])
+def test_estimation_plot_interval_does_not_depend_on_units(k):
+    a, b = _TIED["same values"]
+    d = pd.DataFrame({"g": ["a"] * 5 + ["b"] * 5, "y": [*a, *b]})
+    cols = ["difference", "ci_low", "ci_high"]
+    unit = vc.estimation_plot(d, "g", "y", n_resamples=2000).info["comparisons"][cols].iloc[0].tolist()
+    scaled = vc.estimation_plot(d.assign(y=d["y"] * k), "g", "y", n_resamples=2000).info["comparisons"][cols]
+    assert unit == pytest.approx([0.0, -0.4, 0.4], abs=1e-12)
+    assert (scaled.iloc[0] / k).tolist() == pytest.approx(unit, rel=1e-12, abs=1e-12)
+
+
+def test_tie_handling_leaves_bootstraps_without_near_ties_bit_identical():
+    rng = np.random.default_rng(1)
+    for method in ("BCa", "percentile", "basic"):
+        a, b = rng.normal(0, 1, 40), rng.normal(0.5, 2, 55)
+        plain = st.bootstrap_ci(a, b, statistic=lambda x, y: float(np.mean(y) - np.mean(x)), method=method)
+        assert st.bootstrap_ci(a, b, method=method) == plain
+        assert st.bootstrap_ci(b, method=method) == st.bootstrap_ci(b, statistic=lambda x: float(np.mean(x)),
+                                                                    method=method)
+
+
+@pytest.mark.parametrize("offset", [1e9, 1e12, 1.7e12, -(2.0**50)])
+def test_bootstrap_interval_does_not_change_with_an_exact_offset(offset):
+    # The tie tolerance followed the magnitude of the data, so at an offset of 1e12 (epoch milliseconds) bootstrap
+    # values a whole step from the estimate counted as ties: both limits came out nan.
+    a, b = (np.asarray(v) for v in _TIED["counts"])  # whole numbers, exact at these offsets
+    want = st.bootstrap_ci(a, b, n_resamples=2000)
+    assert st.bootstrap_ci(a + offset, b + offset, n_resamples=2000) == pytest.approx(want, rel=1e-12, abs=1e-12)
+    one = st.bootstrap_ci(b + offset, n_resamples=2000)
+    assert tuple(v - offset for v in one) == pytest.approx(st.bootstrap_ci(b, n_resamples=2000),
+                                                           abs=2 * np.spacing(abs(offset)))
+    d = pd.DataFrame({"g": ["a"] * a.size + ["b"] * b.size, "y": np.r_[a, b]})
+    cols = ["difference", "ci_low", "ci_high"]
+    unit = vc.estimation_plot(d, "g", "y", n_resamples=2000).info["comparisons"][cols].iloc[0].tolist()
+    shifted = vc.estimation_plot(d.assign(y=d["y"] + offset), "g", "y", n_resamples=2000).info["comparisons"][cols]
+    assert shifted.iloc[0].tolist() == pytest.approx(unit, rel=1e-12, abs=1e-12)
+
+
+# --- values far from zero and constant columns -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("offset", [1e12, 2.0**52, 2.0**53, -(2.0**53)])
+def test_exact_offsets_do_not_change_t_g_or_r(offset):
+    # Deviations from a mean rounded at 2**53 lost the values' digits: Welch t was 2.449 instead of 2.484 and
+    # Pearson r of an exact linear relation 0.985 (with a near-constant input warning from SciPy).
+    import warnings
+
+    a, b = np.array([0.0, 2, 4, 8]), np.array([6.0, 8, 10, 14])
+    x, y = 2 * np.arange(10.0), 2 * np.arange(10.0) ** 2  # even, so exact at 2**53
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        w, g, r = st.welch_test(a + offset, b + offset), st.hedges_g(a + offset, b + offset), st.correlation_test(
+            x + offset, y + offset)
+    assert w == pytest.approx(st.welch_test(a, b), rel=1e-12)
+    assert g == pytest.approx(st.hedges_g(a, b), rel=1e-12)
+    assert r == pytest.approx(st.correlation_test(x, y), rel=1e-12)
+    assert st.correlation_test(x + offset, x)["r"] == pytest.approx(1.0, abs=1e-15)
+
+
+def test_offsets_leave_ordinary_data_bit_identical():
+    rng = np.random.default_rng(4)
+    x, y = rng.normal(5, 1, 30), rng.normal(-2, 3, 30)
+    assert st.correlation_test(x, y)["r"] == float(sps.pearsonr(x, y)[0])
+    a, b = rng.normal(100, 1, 20), rng.normal(101, 2, 25)  # far from zero, but not 2**20 times their spread
+    va, vb = a.var(ddof=1) / a.size, b.var(ddof=1) / b.size
+    assert st.welch_test(a, b)["t"] == (b.mean() - a.mean()) / np.sqrt(va + vb)
+
+
+@pytest.mark.parametrize("c", [0.1, 1 / 3, 0.5])
+def test_profile_boxes_gives_a_constant_column_no_eta_squared(c):
+    # A constant 0.1 column used to get eta-squared 1.0 or 0.0 from rounding noise, different on each pandas pin.
+    m = datasets.measurements().assign(c=c)
+    table = vc.profile_boxes(m, categorical=["group", "grade"], numeric=["c", "length"]).table
+    assert table.loc[table["numeric"] == "c", "eta_squared"].isna().all()
+    assert table.loc[table["numeric"] == "length", "eta_squared"].notna().all()
+
+
+@pytest.mark.parametrize("offset", [1e12, 2.0**52, -(2.0**52)])
+def test_profile_boxes_eta_squared_does_not_change_with_an_exact_offset(offset):
+    rng = np.random.default_rng(0)
+    d = pd.DataFrame({"g": rng.choice(list("abc"), 60), "v": rng.integers(0, 40, 60).astype(float)})
+    eta = vc.profile_boxes(d, categorical=["g"], numeric=["v"]).table["eta_squared"].item()
+    shifted = vc.profile_boxes(d.assign(v=d["v"] + offset), categorical=["g"], numeric=["v"]).table
+    assert shifted["eta_squared"].item() == pytest.approx(eta, rel=1e-12)

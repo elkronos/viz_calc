@@ -100,10 +100,32 @@ These functions have no `ax=` and always create their own figure:
 | `compare_correlations` | one heatmap per pair of groups |
 | `percent_grid`, `donut_grid` | one panel per facet or row |
 | `upset` | intersection bars, membership matrix and set sizes on linked axes |
-| `calendar_heatmap` | one panel per year |
+| `calendar_heatmap` | one panel per year with data |
 | `profile_bars`, `profile_boxes`, `profile_scatters` | pages of small multiples; `res.figure` is a list |
 | `animated_bubble` | the animation redraws its own figure |
 | `sankey` | returns a Plotly figure, as does `network_map(interactive=True)` |
+
+## Text in charts
+
+Category values, column names and the labels you pass are drawn as written.
+Matplotlib reads text with a pair of `$` as mathtext, so a price band such as
+`$5-$10` would lose its dollar signs and `$a^$` would raise an error when the
+figure is drawn or saved. Wherever text a chart draws holds a `$`, mathtext is
+off for that text (its `parse_math` property), so a `$` escaped as `\$` keeps
+its backslash; `text.parse_math` itself is off only while the call runs.
+Everything else keeps Matplotlib's rules: text already on an Axes you pass as
+`ax=`, text you add or change afterwards
+(`res.axes.set_xlabel(r"Dose ($\mu$g)")` draws a μ), and numbers such as the
+tick labels of a log axis. A legend the chart adds to your Axes is the chart's
+text, so it shows the labels of your own artists there as written too. A
+title, label or tick label that held a `$` from the data stays literal when
+you change it later; pass `parse_math=True`
+(`res.axes.set_title(r"$\alpha$ = 0.05", parse_math=True)`) for mathtext there.
+
+In the Plotly figures (`sankey` and `network_map(interactive=True)`) node
+names are escaped, so `<`, `>` and `&` in them show as typed: a node named
+`<a href=...>` is not read as Plotly's HTML markup and cannot become a link.
+`sankey`'s `title=` is passed through unchanged and may use that markup.
 
 ## Using the statistics without a chart
 
@@ -140,6 +162,22 @@ additions. How you change a chart's colours depends on what it colours:
 
 In `animated_bubble`, `color=` names the **column** whose categories set the
 bubble colours; the colours themselves go in `colors=`.
+
+viz_calc leaves the Matplotlib style to you. Marks drawn straight on the axes
+background (means and confidence intervals, error bars, reference and zero
+lines, labels beside bars, `pca_plot`'s loading labels, `upset`'s bars and
+dots) are black or dark grey on a light background, and gridlines are a pale
+grey. Under a style with a dark axes background, such as `dark_background`,
+they turn white or light grey and the gridlines dark grey, and the eighth
+Okabe–Ito colour, black, is drawn white. Colours you pass are used as
+given. The background is read when the chart function runs, so a
+background set on the axes afterwards does not recolour these marks, and a
+style context covers the charts made inside it:
+
+```python
+with plt.style.context("dark_background"):
+    res = vc.estimation_plot(trial, x="arm", y="score")
+```
 
 ## Conventions
 
@@ -201,6 +239,25 @@ same thing everywhere. The exceptions are listed here.
   order applies to one particular argument it is named after it:
   `hue_order`/`facet_order` in `histogram`, `facet_order` in `percent_grid`,
   and `group_order`/`category_order` in `stacked_percentages`.
+* **One column in two roles.** A column given as both the groups and the
+  numbers raises an error before anything is drawn: `x` and `y` in the group
+  comparisons, `x` and `hue` or `facet` in `histogram`, `x` and `group` in
+  `ridgeplot`, `category` and `value` in `waffle`, `outer` or `inner` and
+  `value` in `nested_pie`, `group` and `value` in `circular_bar`, a column in
+  both the `categorical` and the `numeric` list of `profile_boxes`, and a
+  `group` that is also one of the `features` of `pca_plot`. So does one column
+  for both ends of a change (`start` and `end`, `left` and `right`), and for
+  both the outcome and the panels of `percent_grid` (`column` and `facet`).
+  Roles that read naturally together may share a column: a `label` may also be
+  the `value` (`waterfall`, `bullet`, `circular_bar`) or the `group`
+  (`circular_bar`), `bullet`'s `value` may also be its `target`, and
+  `histogram`'s `hue` may also be its `facet`.
+* **Infinite values.** A numeric column that holds inf or -inf raises an
+  error naming the column, before anything is drawn, in the charts for
+  comparing groups, correlations, distributions and part-to-whole (see the
+  [API reference](api.md)), in `profile_boxes` and `profile_scatters`, and
+  in `animated_bubble`. `sankey` and `network_map` reject infinite flows
+  and edge weights. Missing values are handled as each function describes.
 * **Grid width** of multi-panel figures is `col_wrap` in `histogram`,
   `percent_grid` and `donut_grid`, and `ncols` in the `profile_*` functions.
 * **Column labels** need not be strings: a column labelled 0 (from a

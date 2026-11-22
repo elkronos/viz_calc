@@ -1,16 +1,19 @@
 """Time charts: edge cases (nullable values, time order, frame stamps, reversed windows)."""
 
+import datetime
 import gc
 import pickle
 import warnings
 import weakref
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
 
 import viz_calc as vc
+from viz_calc import timeseries
 
 # --- period_bars -------------------------------------------------------------------------------------------------
 
@@ -57,6 +60,18 @@ def test_calendar_heatmap_rejects_unknown_stat_before_drawing():
     assert plt.get_fignums() == []
 
 
+@pytest.mark.parametrize("extra", ["2022-06-01", "1900-01-01", "9999-12-31"])
+def test_calendar_heatmap_draws_only_the_years_with_data(extra):
+    # A placeholder date once drew every year in between: 7,976 empty panels and 4.5 GB for 9999-12-31
+    if pd.to_datetime(pd.Series([extra]), errors="coerce").isna().all():
+        pytest.skip(f"this pandas cannot hold {extra}")
+    days = pd.date_range("2024-01-01", periods=300, freq="D").strftime("%Y-%m-%d").tolist()
+    res = vc.calendar_heatmap(pd.DataFrame({"d": [extra] + days, "v": 1.0}), date="d", value="v")
+    assert [ax.get_ylabel() for ax in res.axes] == sorted([extra[:4], "2024"])
+    assert res.figure.get_figheight() == pytest.approx(2 * 2.1 + 0.4)
+    assert res.table["date"].dt.year.value_counts().to_dict() == {2024: 300, int(extra[:4]): 1}
+
+
 @pytest.mark.parametrize("today", ["nope", "", "Now", object()])
 def test_gantt_rejects_a_bad_today_before_drawing(today):
     df = pd.DataFrame({"t": ["x"], "s": ["2024-01-01"], "e": ["2024-02-01"]})
@@ -101,6 +116,89 @@ def test_categorical_mixing_offset_and_offsetless_dates_gives_the_clear_error(ca
                       "e": ["2024-02-01T00:00+01:00", "2024-02-01T00:00+01:00"]})
     with pytest.raises(ValueError, match="mixes values with and without a UTC offset"):
         call(d.astype({"s": "category"}))
+
+
+_KEEP_TZ_CALLS = [
+    lambda d: vc.gantt(d, "t", "s", "e"),
+    lambda d: vc.duration_plot(d, "t", "s", "e", "s", "e"),
+    lambda d: vc.timeseries_fill(d.assign(a=[1.0, 2.0], b=[2.0, 1.0]), time="e", series=["a", "b"]),
+]
+
+
+@pytest.mark.parametrize("call", _KEEP_TZ_CALLS)
+@pytest.mark.parametrize("offset", ["-04:00", "Z", "-04"])
+def test_one_offset_and_an_offsetless_value_give_the_clear_error(call, offset):
+    # pandas 2.2 and 2.3 parse this column without complaint and give "17:00" the other value's offset
+    d = pd.DataFrame({"t": ["a", "b"], "s": [f"2024-06-03 09:00{offset}", f"2024-06-04 09:00{offset}"],
+                      "e": [f"2024-06-03 17:00{offset}", "2024-06-04 17:00"]})
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "Could not infer format", UserWarning)  # "-04" on some versions
+        with pytest.raises(ValueError, match="'e' mixes values with and without a UTC offset"):
+            call(d)
+
+
+@pytest.mark.parametrize("call", _KEEP_TZ_CALLS)
+@pytest.mark.parametrize("ends", [["2024-06-03 17:00-04", "2024-06-04 17:00-04"],
+                                  ["2024-06-03 17:00 UTC", "2024-06-04 17:00 UTC"],
+                                  ["2024-06-03T17:00:00.5+05:30", "2024-06-04T17:00:00.5+0530"]])
+def test_offsets_written_any_way_are_accepted(call, ends):
+    d = pd.DataFrame({"t": ["a", "b"], "s": ["2024-06-03T09:00Z", "2024-06-04T09:00Z"], "e": ends})
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "Could not infer format", UserWarning)
+        res = call(d)
+    assert res.table["e"].dt.tz is not None
+
+
+# --- time zones without per-value work --------------------------------------------------------------------------
+
+
+def test_tz_aware_timeseries_fill_draws_date_numbers_with_ticks_in_the_data_zone():
+    # Matplotlib converts a tz-aware Series one Timestamp at a time: 25 s for a million rows
+    t = pd.date_range("2021-03-27", periods=72, freq="h", tz="Europe/Berlin")  # across a daylight-saving change
+    df = pd.DataFrame({"t": t, "a": np.sin(np.arange(72) / 5), "b": np.cos(np.arange(72) / 5)})
+    res = vc.timeseries_fill(df, time="t", series=["a", "b"])
+    x = np.asarray(res.axes.lines[0].get_xdata())
+    assert x.dtype.kind == "f"
+    np.testing.assert_allclose(x, mdates.date2num(t.tz_convert("UTC").tz_localize(None)))
+    res.figure.canvas.draw()
+    assert {mdates.num2date(loc, tz=t.tz).hour for loc in res.axes.get_xticks()} <= {0, 12}  # local, not UTC
+    assert str(res.table["t"].dt.tz) == "Europe/Berlin"
+
+
+_PLUS_1, _MINUS_4 = (datetime.timezone(datetime.timedelta(hours=h)) for h in (1, -4))
+
+
+@pytest.mark.parametrize("values", [
+    ["2024-03-30T23:30:00Z", "2024-03-31T01:30:00+01:00", None, "2024-04-01T02:00+02:00"],
+    ["2024-01-01 10:00+0530", "2024-01-01 10:00+0100", ""],
+    ["2024-01-01 10:00+05", "2024-01-01 10:00-04"],
+    ["2024-01-01", "2024-01-02T10:00:00.5+01:00", "2024-01-03T10:00+02:00"],
+    [datetime.datetime(2024, 1, 1, 10, tzinfo=_PLUS_1), datetime.datetime(2024, 1, 1, 10, tzinfo=_MINUS_4)],
+])
+@pytest.mark.filterwarnings("ignore:Could not infer format:UserWarning")  # "+05" on some pandas versions
+def test_mixed_offsets_read_as_their_wall_clock_times(values, monkeypatch):
+    expected = pd.to_datetime(pd.Series([pd.Timestamp(v).tz_localize(None) if v else pd.NaT for v in values]))
+    calls = []
+    real = pd.Timestamp
+    monkeypatch.setattr(pd, "Timestamp", lambda *args, **kwargs: calls.append(args) or real(*args, **kwargs))
+    s = pd.Series(values, dtype=object)
+    got = [timeseries._dates(s, "d"), timeseries._dates(s.astype("category"), "d")]
+    monkeypatch.undo()
+    for out in got:
+        pd.testing.assert_series_equal(out, expected)
+    if all(isinstance(v, str) or v is None for v in values):
+        assert calls == []  # text is parsed in one go, not one value at a time (7 s for a million)
+
+
+@pytest.mark.parametrize("call", [lambda d: vc.period_bars(d, "d", "v", freq="day"),
+                                  lambda d: vc.calendar_heatmap(d, "d", "v")], ids=["period_bars", "calendar_heatmap"])
+def test_mixed_offsets_in_arrow_text_read_as_their_wall_clock_times(call):
+    # pandas 2.3 raises NotImplementedError for a group reference in a replacement on Arrow text
+    pa = pytest.importorskip("pyarrow")
+    df = pd.DataFrame({"d": ["2024-03-30T23:30:00Z", "2024-03-31T01:30:00+01:00", None, "2024-04-01T02:00+02:00"],
+                       "v": [1.0, 2.0, 3.0, 4.0]})
+    expected = call(df).table
+    pd.testing.assert_frame_equal(call(df.astype({"d": pd.ArrowDtype(pa.string())})).table, expected)
 
 
 # --- animated_bubble ---------------------------------------------------------------------------------------------
