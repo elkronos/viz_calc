@@ -332,6 +332,20 @@ def test_arrow_date_beyond_the_pandas_range_is_reported_by_column():
             vc.calendar_heatmap(arrow, date="date", value="v")
 
 
+def test_arrow_timestamp_groups_are_matched_by_value():
+    # pandas 2 found no Arrow timestamp in an Index of Timestamps: gantt drew every bar grey as "(missing)", and
+    # circular_bar and nested_pie raised
+    pytest.importorskip("pyarrow")
+    g = pd.Series(pd.to_datetime(["2024-01-01", None, "2024-02-01", "2024-01-01"])).astype("timestamp[ns][pyarrow]")
+    df = pd.DataFrame({"task": list("abcd"), "g": g, "c": ["u", "w", "u", "w"], "v": [1.0, 2, 3, 4],
+                       "start": pd.to_datetime(["2024-01-01", "2024-01-05", "2024-02-01", "2024-02-10"]),
+                       "end": pd.to_datetime(["2024-01-10", "2024-02-01", "2024-03-01", "2024-03-01"])})
+    res = vc.gantt(df, task="task", start="start", end="end", group="g")
+    assert [to_hex(p.get_facecolor()) for p in res.axes.patches] == ["#0072b2", "#7f7f7f", "#e69f00", "#0072b2"]
+    assert len(vc.circular_bar(df, label="task", value="v", group="g").table) == 4
+    assert vc.nested_pie(df, outer="g", inner="c").table["value"].sum() == 4
+
+
 # --- the walkthrough ------------------------------------------------------------------------------------------------
 
 

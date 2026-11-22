@@ -34,6 +34,7 @@ from ._core import (
     cleanup_on_error,
     column_list,
     get_ax,
+    level_codes,
     level_label,
     palette,
     safe_sum,
@@ -519,7 +520,7 @@ def gantt(
     groups = (category_order(d[group]) if d[group].notna().any() else []) if group is not None else [None]
     cols = palette(len(groups), colors)
     # An Index matches datetime-like groups by value; a missing group (-1) is drawn grey.
-    codes = pd.Index(groups).get_indexer(d[group]) if group is not None else np.zeros(len(d), dtype=int)
+    codes = level_codes(groups, d[group]) if group is not None else np.zeros(len(d), dtype=int)
     col = [cols[c] if c >= 0 else NEUTRAL for c in codes]
     names = [level_label(v) for v in d[task]]
     fig, ax = get_ax(ax, figsize=(10, 0.45 * len(d) + 1.5))

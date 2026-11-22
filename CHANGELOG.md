@@ -148,6 +148,13 @@
   on Arrow timestamps), and on pandas 2.1 to 2.3 with "could not be parsed as
   dates" for Arrow timestamps. They now give the same tables as NumPy datetimes,
   keep their time zone, and the tables hold NumPy datetime columns.
+- On pandas 2.0 to 2.3, `gantt` and `circular_bar` matched no value of an
+  Arrow-backed timestamp `group` column, with or without a time zone, and
+  `nested_pie` none of such an `outer` column; on pandas 2.2 the same happened
+  to Arrow-backed durations. `gantt` drew every bar grey as "(missing)" while
+  its legend listed the groups, and `circular_bar` and `nested_pie` raised a
+  `ValueError` that did not name the column. They now match such a column by
+  its values.
 - `calendar_heatmap` drew a row for every year from the earliest to the latest
   date, so one placeholder date such as `9999-12-31` next to a year of data
   built 7,976 empty panels and took over two minutes and 4.5 GB on pandas 3.1;
