@@ -62,11 +62,11 @@ res = vc.calendar_heatmap(sales, date="date", value="online")
 ![Calendar heatmap](../images/calendar_heatmap.png)
 
 One row per year, weeks as columns, Monday at the top. Only years with
-data get a row, so a stray placeholder date such as `9999-12-31` adds one
-row rather than thousands of empty ones. All years share one colour scale,
-and days without data are grey so they are not mistaken for zero. Weekend
-dips and the summer peak stand out. It is drawn with Matplotlib alone,
-removing the old `calmap` dependency.
+data get a row, so a stray placeholder date such as `1900-01-01` adds one
+row rather than more than a hundred empty ones. All years share one colour
+scale, and days without data are grey so they are not mistaken for zero.
+Weekend dips and the summer peak stand out. It is drawn with Matplotlib
+alone, removing the old `calmap` dependency.
 
 ## 4. Project timelines
 

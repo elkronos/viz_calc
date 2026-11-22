@@ -41,8 +41,8 @@
   `lollipop` reported a group's mean as NaN. Calls that coped with an infinite
   value raise too: `correlogram` and `compare_correlations` with
   `method="spearman"`, and `lollipop(stat="median")`. `lollipop(stat="count")`
-  still counts infinite values, and the `viz_calc.stats` functions are
-  unchanged.
+  still counts infinite values, and the `viz_calc.stats` functions other than
+  `wilson_ci` (see Fixed) handle them as before.
 - `upset(color=...)` and `bullet(bar_color=...)` default to `None`, which draws
   the old `"#333333"` and `"#222222"` on a light axes face. On a dark face
   `upset` uses `"#cccccc"`. `bullet` keeps its dark bar and black target on the
@@ -75,7 +75,7 @@
   When any group in a comparison has more than 2,000 rows, the resamples are
   now drawn in batches, which keeps peak memory near 400 MB. Those seeded
   intervals differ from 1.1.0 by Monte Carlo noise; when every group has 2,000
-  rows or fewer, nothing changes.
+  rows or fewer, the resamples are drawn as in 1.1.0.
 - The error for a missing optional dependency suggested
   `pip install "viz_calc[extra]"`. `viz_calc` is not on PyPI, so that command
   would install whatever someone else publishes under the name. The message
@@ -84,8 +84,11 @@
   chi-square radius, which assumes a known covariance: a nominal 95% ellipse
   covered the true mean about 51% of the time in groups of 3, 75% in groups of 5
   and 87% in groups of 10. It now uses Hotelling's T² radius, √(2(n − 1)/(n − 2)
-  · F₂,ₙ₋₂(level)), which covers at the stated level from 3 points on; at n = 5
-  the ellipse is about twice as wide. The `"data"` ellipse keeps its chi-square
+  · F₂,ₙ₋₂(level)), which covers at the stated level from 3 points on; the
+  ellipse is about twice as wide at n = 5 and 11.5 times as wide at n = 3. A
+  confidence ellipse no longer sets the axis limits, so a small group's ellipse
+  is cut off at the edges of the plot rather than zooming the axes out until
+  the points sit in its middle. The `"data"` ellipse keeps its chi-square
   radius and is now described as the normal-theory ellipse at the group's mean
   and covariance.
 - The BCa intervals of `estimation_plot` and `stats.bootstrap_ci` changed with
@@ -110,8 +113,8 @@
   more samples without `statistic=` raise a `ValueError` that names the count.
   `method`, `n_resamples` and `seed` are checked before any resampling:
   `method=None` raised `AttributeError`, `n_resamples=True` returned `nan`
-  limits, and constant samples accepted any option. As in `estimation_plot`,
-  `n_resamples` must be an `int` (a float such as `200.0` now raises and names
+  limits, and constant samples accepted any option. `n_resamples` must be an
+  `int`, as in `estimation_plot` (a float such as `200.0` now raises and names
   the `int` to use), and `seed` must be `None`, an `int` of at least 0 or a
   NumPy `Generator`, `BitGenerator` or `SeedSequence` (a list of ints is no
   longer passed on to NumPy). `method` still accepts any letter case.
@@ -168,6 +171,13 @@
   on Arrow timestamps), and on pandas 2.1 to 2.3 with "could not be parsed as
   dates" for Arrow timestamps. They now give the same tables as NumPy datetimes,
   keep their time zone, and the tables hold NumPy datetime columns.
+- On pandas 2.0 to 2.3, `gantt` and `circular_bar` matched no value of an
+  Arrow-backed timestamp `group` column, with or without a time zone, and
+  `nested_pie` none of such an `outer` column; on pandas 2.2 the same happened
+  to Arrow-backed durations. `gantt` drew every bar grey as "(missing)" while
+  its legend listed the groups, and `circular_bar` and `nested_pie` raised a
+  `ValueError` that did not name the column. They now match such a column by
+  its values.
 - `calendar_heatmap` drew a row for every year from the earliest to the latest
   date, so one placeholder date such as `9999-12-31` next to a year of data
   built 7,976 empty panels and took over two minutes and 4.5 GB on pandas 3.1;
@@ -210,11 +220,12 @@
   same pixels as before. `animated_bubble`'s `info["animation"]` still cannot be
   pickled, because a Matplotlib `FuncAnimation` never can; its figure and table
   can.
-- `abbreviate`, which writes the value labels of `lollipop`,
-  `dumbbell(show_values=True)`, `waterfall` and `funnel`, raised "not enough
-  values to unpack" for `inf` and `-inf`; it returns `inf` and `-inf`. Below 1
-  it wrote a subnormal such as 5e-324 with six significant digits
-  (`4.94066e-324`) instead of the documented two (`4.9e-324`).
+- The value labels of `lollipop`, `dumbbell(show_values=True)`, `waterfall`
+  and `funnel` raised "not enough values to unpack" for an infinite value, such
+  as a `lollipop(stat="sum")` or a `waterfall` total that overflows; they now
+  read `inf` and `-inf`. Below 1 they wrote a subnormal such as 5e-324 with six
+  significant digits (`4.94066e-324`) instead of the documented two
+  (`4.9e-324`).
 - On pandas 2.0 and 2.1 (viz_calc declares `pandas>=2.0`, and CI tests 2.0.3),
   `estimation_plot`, `benchmark_bar`, `centered_bar`, `percent_grid`,
   `histogram` with `hue` or `facet`, `ridgeplot`, `raincloud`,

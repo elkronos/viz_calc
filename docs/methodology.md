@@ -169,7 +169,9 @@ group mean: the covariance of the mean (divided by *n*) with radius
 $\sqrt{2(n-1)/(n-2)\,F_{2,\,n-2}(\text{level})}$, exact for normal data in
 groups of three or more. The $\chi^2_2$ radius assumes a known covariance
 and covers the true mean far less often in small groups (about 75% instead
-of 95% at $n = 5$).
+of 95% at $n = 5$). The confidence ellipse does not set the axis limits; at
+$n = 3$ it is 11.5 times as wide as the $\chi^2_2$ one, so a small group's
+ellipse is cut off at the edges of the plot.
 
 ### Networks
 Repeated edges are merged by summing their weights. Louvain community
