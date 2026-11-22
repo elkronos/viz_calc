@@ -113,6 +113,17 @@ def test_profile_bars_shows_missing_only_when_something_is_missing(values, expec
     assert dict(zip(table["level"], table["count"])) == expected
 
 
+def test_profile_bars_counts_a_dictionary_arrow_column_as_its_categorical():
+    # read_parquet(dtype_backend="pyarrow") returns a Categorical as a dictionary-encoded Arrow column.
+    pa = pytest.importorskip("pyarrow")
+    cat = pd.Categorical(["low", "high", None, "low", "mid"], categories=["low", "mid", "high", "max"], ordered=True)
+    arrow = pd.Series(pd.arrays.ArrowExtensionArray(pa.array(cat)), index=range(10, 15))
+    table = vc.profile_bars(pd.DataFrame({"arm": arrow})).table
+    assert table["level"].tolist() == ["low", "mid", "high", "max", "(missing)"]
+    assert table["count"].tolist() == [2, 1, 1, 0, 1]
+    pd.testing.assert_frame_equal(table, vc.profile_bars(pd.DataFrame({"arm": cat}, index=range(10, 15))).table)
+
+
 # --- radar needs a polar Axes -------------------------------------------------------------------------------------
 
 

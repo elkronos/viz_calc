@@ -338,6 +338,9 @@
   was drawn and the percentages were taken of the other 296 rows. It now groups
   such a column by its values, as `lollipop` and `divergent_bar` do, and its
   table holds the decoded values.
+- `profile_bars` raised `ArrowNotImplementedError` for a Categorical read with
+  `read_parquet(dtype_backend="pyarrow")`. Such a column is now counted by its
+  values, and its bars follow the declared order of the categories.
 - `estimation_plot`'s BCa interval for a mean difference is too narrow in small
   groups: in simulations a nominal 95% interval covered the true difference
   61–67% of the time at 2 per group, about 80% at 3 and 91–92% at 10, and with 3
