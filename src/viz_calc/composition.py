@@ -35,6 +35,7 @@ from ._core import (
     column_list,
     foreground,
     get_ax,
+    group_key,
     group_label,
     group_mask,
     level_codes,
@@ -441,7 +442,8 @@ def nested_pie(
                          "names of the output columns")
     check_has_values(data, outer, inner)  # an all-missing value column is a zero total, reported below
     # dropna=False: rows with a missing category keep their share of the total
-    grouped = data.groupby([outer, inner], sort=False, observed=True, dropna=False)
+    keys = [group_key(data[outer]), group_key(data[inner])]
+    grouped = data.groupby(keys, sort=False, observed=True, dropna=False)
     if value is None:
         agg = grouped.size().rename("value")
     else:
@@ -449,7 +451,7 @@ def nested_pie(
         check_finite(data, value)
         if (data[value] < 0).any():
             raise ValueError("nested_pie values must be non-negative")
-        agg = safe_sum(data[value], [data[outer], data[inner]], dropna=False).rename("value")
+        agg = safe_sum(data[value], keys, dropna=False).rename("value")
     agg = agg.reset_index()
     if not (agg["value"] > 0).any():  # not agg["value"].sum(), which can overflow
         raise ValueError("nested_pie needs a positive total; every value is zero or missing")

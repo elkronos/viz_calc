@@ -190,6 +190,19 @@ def test_a_dictionary_arrow_category_keeps_its_missing_rows_apart(stat):
     assert _ticks(bars.axes.get_yticklabels()) == ["b", "a", "z", "(missing)"]
 
 
+@pytest.mark.parametrize("value", [None, "v"])
+@pytest.mark.parametrize("role", ["outer", "inner"])
+def test_nested_pie_keeps_the_missing_rows_of_a_dictionary_arrow_column(role, value):
+    pa = pytest.importorskip("pyarrow")
+    k = pd.Series(["b", None, "a", "b", None, "a"], dtype=pd.ArrowDtype(pa.dictionary(pa.int32(), pa.string())))
+    df = pd.DataFrame({"k": k, "c": ["u", "u", "w", "w", "u", "u"], "v": 1.0})
+    outer, inner = ("k", "c") if role == "outer" else ("c", "k")
+    res = vc.nested_pie(df, outer=outer, inner=inner, value=value)
+    assert res.table["value"].sum() == 6
+    assert res.table["k"].isna().sum() == 1
+    assert res.table["percent_of_total"].sum() == pytest.approx(100)
+
+
 def test_stacked_percentages_draws_a_missing_group_as_the_last_bar():
     s = datasets.survey()
     s["team"] = s["team"].astype(object)

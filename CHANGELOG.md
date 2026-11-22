@@ -329,6 +329,13 @@
   whatever the `order` arguments list. Its rows in the table hold the missing
   value in the group column. Charts of data without a missing group are
   unchanged.
+- On pandas 2.0 to 2.3, `nested_pie` left out the rows with a missing `outer` or
+  `inner` when that column was a dictionary-encoded Arrow column, which
+  `pd.read_parquet(dtype_backend="pyarrow")` returns for a Categorical. With the
+  team of 4 of the 300 `datasets.survey()` rows blanked, no "(missing)" wedge
+  was drawn and the percentages were taken of the other 296 rows. It now groups
+  such a column by its values, as `lollipop` and `divergent_bar` do, and its
+  table holds the decoded values.
 - `estimation_plot`'s BCa interval for a mean difference is too narrow in small
   groups: in simulations a nominal 95% interval covered the true difference
   61–67% of the time at 2 per group, about 80% at 3 and 91–92% at 10, and with 3
