@@ -41,8 +41,8 @@
   `lollipop` reported a group's mean as NaN. Calls that coped with an infinite
   value raise too: `correlogram` and `compare_correlations` with
   `method="spearman"`, and `lollipop(stat="median")`. `lollipop(stat="count")`
-  still counts infinite values, and the `viz_calc.stats` functions are
-  unchanged.
+  still counts infinite values, and the `viz_calc.stats` functions other than
+  `wilson_ci` (see Fixed) handle them as before.
 
 ### Fixed
 - `datasets.sales()` and `calendar_heatmap` read `DatetimeIndex.day_of_week`
@@ -55,7 +55,7 @@
   When any group in a comparison has more than 2,000 rows, the resamples are
   now drawn in batches, which keeps peak memory near 400 MB. Those seeded
   intervals differ from 1.1.0 by Monte Carlo noise; when every group has 2,000
-  rows or fewer, nothing changes.
+  rows or fewer, the resamples are drawn as in 1.1.0.
 - The error for a missing optional dependency suggested
   `pip install "viz_calc[extra]"`. `viz_calc` is not on PyPI, so that command
   would install whatever someone else publishes under the name. The message
@@ -93,8 +93,8 @@
   more samples without `statistic=` raise a `ValueError` that names the count.
   `method`, `n_resamples` and `seed` are checked before any resampling:
   `method=None` raised `AttributeError`, `n_resamples=True` returned `nan`
-  limits, and constant samples accepted any option. As in `estimation_plot`,
-  `n_resamples` must be an `int` (a float such as `200.0` now raises and names
+  limits, and constant samples accepted any option. `n_resamples` must be an
+  `int`, as in `estimation_plot` (a float such as `200.0` now raises and names
   the `int` to use), and `seed` must be `None`, an `int` of at least 0 or a
   NumPy `Generator`, `BitGenerator` or `SeedSequence` (a list of ints is no
   longer passed on to NumPy). `method` still accepts any letter case.
@@ -200,11 +200,12 @@
   same pixels as before. `animated_bubble`'s `info["animation"]` still cannot be
   pickled, because a Matplotlib `FuncAnimation` never can; its figure and table
   can.
-- `abbreviate`, which writes the value labels of `lollipop`,
-  `dumbbell(show_values=True)`, `waterfall` and `funnel`, raised "not enough
-  values to unpack" for `inf` and `-inf`; it returns `inf` and `-inf`. Below 1
-  it wrote a subnormal such as 5e-324 with six significant digits
-  (`4.94066e-324`) instead of the documented two (`4.9e-324`).
+- The value labels of `lollipop`, `dumbbell(show_values=True)`, `waterfall`
+  and `funnel` raised "not enough values to unpack" for an infinite value, such
+  as a `lollipop(stat="sum")` or a `waterfall` total that overflows; they now
+  read `inf` and `-inf`. Below 1 they wrote a subnormal such as 5e-324 with six
+  significant digits (`4.94066e-324`) instead of the documented two
+  (`4.9e-324`).
 - On pandas 2.0 and 2.1 (viz_calc declares `pandas>=2.0`, and CI tests 2.0.3),
   `estimation_plot`, `benchmark_bar`, `centered_bar`, `percent_grid`,
   `histogram` with `hue` or `facet`, `ridgeplot`, `raincloud`,
