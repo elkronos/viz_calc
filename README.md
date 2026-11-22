@@ -21,7 +21,7 @@ res.info["comparisons"]     # mean difference + bootstrap CI, Hedges' g, Holm-ad
 res.save("effect.png")
 ```
 
-<p align="center"><img src="docs/images/estimation_plot.png" width="560" alt="Estimation plot"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/elkronos/viz_calc/main/docs/images/estimation_plot.png" width="560" alt="Estimation plot"></p>
 
 ## Install
 
@@ -30,7 +30,9 @@ pip install "viz_calc @ git+https://github.com/elkronos/viz_calc"
 pip install "viz_calc[all] @ git+https://github.com/elkronos/viz_calc"   # + networkx, plotly, python-pptx
 ```
 
-The core needs only NumPy, pandas, Matplotlib and SciPy (Python ≥ 3.10).
+The core needs NumPy, pandas, Matplotlib and SciPy (Python ≥ 3.10). The
+package also lists python-dateutil and Pillow, which pandas and Matplotlib
+already install.
 
 ## What it offers beyond Matplotlib, seaborn and Plotly
 
@@ -76,6 +78,9 @@ pytest                    # unit tests, including checks against SciPy and worke
 ruff check src tests
 python examples/gallery.py && mkdocs serve    # rebuild images and preview the docs (needs ".[docs]")
 ```
+
+Tests of the networkx, plotly and python-pptx features skip when that package
+is not installed.
 
 The documentation site is published to the `gh-pages` branch by
 `.github/workflows/docs.yml` on every push to `main`. GitHub Pages serves it

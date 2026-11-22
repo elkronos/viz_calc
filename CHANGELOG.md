@@ -49,6 +49,20 @@
   grey bands; on a dark face a target off the bands is white, a bar without
   bands is `"#dddddd"` and a bar past the bands has a white outline. Colours
   passed in are used as given.
+- The minimum NumPy is 1.24.1. On NumPy 1.24.0, `timeseries_fill` with a numeric
+  time column failed with `TypeError: ufunc 'isfinite' not supported` inside
+  Matplotlib's `fill_between`.
+- The minimum SciPy is 1.11.1. PyPI has yanked 1.11.0, so installers skip it
+  unless it is pinned exactly.
+- python-dateutil (2.8.2 or later) and Pillow are listed as dependencies:
+  `viz_calc` imports both directly. pandas and Matplotlib already install them,
+  so no install changes.
+- Building the package needs hatchling 1.27 or later. Versions 1.18 to 1.25
+  rejected `license-files`, and 1.26 wrote the legacy `License` field instead of
+  `License-Expression`. Only builds that use the declared floor, such as
+  `--no-isolation` builds, are affected.
+- The package metadata lists Python 3.10 to 3.13, the versions CI tests, and
+  links to the changelog and the issue tracker.
 
 ### Fixed
 - `datasets.sales()` and `calendar_heatmap` read `DatetimeIndex.day_of_week`
@@ -212,7 +226,7 @@
   read `inf` and `-inf`. Below 1 they wrote a subnormal such as 5e-324 with six
   significant digits (`4.94066e-324`) instead of the documented two
   (`4.9e-324`).
-- On pandas 2.0 and 2.1 (viz_calc declares `pandas>=2.0`, and CI tests 2.0.3),
+- On pandas 2.0 and 2.1 (viz_calc declares `pandas>=2.0`, and CI tests 2.0.0),
   `estimation_plot`, `benchmark_bar`, `centered_bar`, `percent_grid`,
   `histogram` with `hue` or `facet`, `ridgeplot`, `raincloud`,
   `compare_correlations` and, with copy-on-write on, `profile_boxes` failed with
@@ -267,6 +281,12 @@
   0.61 in a correlogram, 5.33:1 against 3.94:1): up to 0.66 for positive and
   0.71 for negative correlations in `correlogram`, and up to 0.77 and 0.62 of
   the scale in `compare_correlations`.
+- `centered_bar` with one group raised a `FutureWarning` ("Calling float on a
+  single element Series is deprecated") on pandas 2.0 to 2.3 with Matplotlib 3.8
+  or later, and `sankey` with Categorical source or target columns raised two
+  ("The default of observed=False is deprecated") on pandas 2.1 to 2.3. Neither
+  warns on pandas 2.0.0 to 3.1.1 now; the error bars and the `sankey` table are
+  unchanged.
 
 ### Documentation
 - The `to_pptx` docstring and the walkthroughs point to the install section
@@ -289,12 +309,27 @@
   drawn, in Matplotlib and in the Plotly figures, and what keeps mathtext.
 - The `VizResult` docstring says which results cannot be pickled:
   `animated_bubble`'s animation, and the figure of `network_map(directed=True)`
-  with networkx older than 3.3 (the CI minimum is 3.2.1), whose arrows networkx
+  with networkx older than 3.3 (the CI minimum is 3.2), whose arrows networkx
   draws with a local function.
 - Getting started lists, under Conventions, which column roles must be different
   columns and which may share one, and which charts reject infinite values.
 - Getting started explains how charts follow a dark Matplotlib style, and the
   methodology's design table lists it.
+- The README image loads from an absolute raw.githubusercontent.com URL, so it
+  also shows where the README is the package description; the relative
+  `docs/images` path would be broken there.
+- *Getting started* gives the new NumPy and SciPy minimums and lists
+  python-dateutil and Pillow. The README says that tests of the networkx, plotly
+  and python-pptx features skip when that package is missing.
+- `RELEASING.md` lists the steps for a release in order: register `viz_calc` on
+  PyPI with a pending trusted publisher (owner `elkronos`, repository
+  `viz_calc`, workflow `publish.yml`, environment `pypi`), create the `pypi`
+  environment in the repository settings, rename the Unreleased heading to the
+  version and release date and bump `__version__`, then tag and publish the
+  release. A last step, after the first upload, moves the install lines to PyPI
+  and pins the README image URL to the tag. It also gives the commits for
+  tagging 1.0.0 (`b2cc93d`) and 1.1.0 (`8fa3974`), which were never tagged, and
+  their release date, 2026-09-28.
 
 ### Development
 - CI also runs every Monday against the newest dependency releases, and can be
@@ -318,6 +353,36 @@
   checks the WCAG contrast of their marks against the axes face, and of each
   label against the wedge, bar, cell or node under it, with light and dark
   custom colours and colormaps.
+- The CI minimum-versions job installs exactly the lowest versions
+  `pyproject.toml` allows (NumPy 1.24.1, pandas 2.0.0, Matplotlib 3.7.0, SciPy
+  1.11.1, networkx 3.2, plotly 5.15.0, python-pptx 0.6.21, python-dateutil
+  2.8.2) instead of newer patch releases, and a test checks that the job and
+  `pyproject.toml` agree. Its check name is now `test (3.10, minimum versions)`
+  and stays the same when the pins change.
+- A CI job runs the pandas 2.2 line (pandas 2.2.3, NumPy 2.0.2, Matplotlib
+  3.9.4, SciPy 1.14.1), where the suite had failed 9 tests.
+- A CI job installs the package without extras, checks that networkx, plotly and
+  python-pptx are absent and runs the suite. With only the core dependencies, 52
+  tests used to fail instead of skipping.
+- Tests check that every third-party module the source imports is declared, that
+  the build-system floor writes the license fields, and that every README image
+  uses an absolute URL.
+- Publishing a GitHub release uploads the package to PyPI.
+  `.github/workflows/publish.yml` builds the sdist and wheel once, runs `twine
+  check --strict` on them, fails before uploading when the release tag is not
+  `v` followed by the package version (tag `v1.2.0` for version 1.2.0), runs the
+  test suite on Python 3.13 with the built wheel and the newest dependencies
+  installed, and uploads from a separate job in the `pypi` environment through
+  PyPI trusted publishing, so the repository stores no token. Only the upload
+  job can request the OIDC token; the rest of the workflow can only read the
+  repository.
+- The version is written once, as `__version__` in `src/viz_calc/__init__.py`,
+  and the build reads it from there. `pyproject.toml` also said 1.1.0, and
+  bumping only that file built a wheel whose `viz_calc.__version__` disagreed
+  with its metadata. The wheel and sdist still carry version 1.1.0.
+- A CI job builds the sdist and wheel, runs `twine check --strict` and imports
+  the installed wheel from a clean environment on every pull request and push
+  to `main`.
 
 ## 1.1.0
 

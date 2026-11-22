@@ -177,6 +177,7 @@ def test_pca_plot_with_duplicate_index_labels():
 
 
 def test_network_merges_repeated_edges():
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"source": ["A", "A", "B", "C"], "target": ["B", "B", "A", "A"], "w": [5, 3, 4, 1]})
     res = vc.network_map(e, "source", "target", weight="w")
     assert res.table.set_index("node")["strength"].to_dict() == {"A": 13, "B": 12, "C": 1}
@@ -375,6 +376,7 @@ def test_quadrant_plot_rejects_one_sided_median():
 
 
 def test_network_categorical_columns_and_labels():
+    pytest.importorskip("networkx")
     base = pd.DataFrame({"s": ["A", "B", "C"], "t": ["B", "C", "D"], "w": [1.0, 2.0, 3.0]})
     cat = base.assign(s=base.s.astype("category"), t=base.t.astype("category"))
     for directed in (False, True):
@@ -388,6 +390,7 @@ def test_network_categorical_columns_and_labels():
 
 
 def test_network_keeps_node_order_and_sums_reciprocal_weights_for_communities():
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"s": ["Zoe", "Amy", "Mia"], "t": ["Amy", "Mia", "Bob"]})
     assert vc.network_map(e, "s", "t").table["node"].tolist() == ["Zoe", "Amy", "Mia", "Bob"]
     d = pd.DataFrame({"s": ["A", "B", "C", "D", "B", "D"], "t": ["B", "A", "D", "C", "C", "A"], "w": [50, 1, 50, 1, 10, 10]})
@@ -474,6 +477,7 @@ def test_save_to_file_like_objects():
 
 
 def test_network_weight_column_labelled_zero_and_infinite_weights():
+    pytest.importorskip("networkx")
     e = pd.DataFrame([(5.0, "A", "B"), (1.0, "B", "C"), (1.0, "A", "C")])
     res = vc.network_map(e, 1, 2, weight=0)
     assert res.info["graph"]["A"]["B"][0] == 5.0
@@ -485,6 +489,7 @@ def test_network_weight_column_labelled_zero_and_infinite_weights():
 
 
 def test_weighted_betweenness_splits_equal_paths_exactly():
+    pytest.importorskip("networkx")
     # 1/2 + 1/12 == 1/3 + 1/4: both brokers carry half of the S-E shortest paths
     e = pd.DataFrame({"s": ["S", "B", "S", "C"], "t": ["B", "E", "C", "E"], "w": [2, 12, 3, 4]})
     bc = vc.network_map(e, "s", "t", weight="w").table.set_index("node")["betweenness"]
@@ -492,6 +497,7 @@ def test_weighted_betweenness_splits_equal_paths_exactly():
 
 
 def test_directed_network_draws_arrows():
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"s": ["A", "B"], "t": ["B", "C"]})
     res = vc.network_map(e, "s", "t", directed=True)
     assert any(p.__class__.__name__ == "FancyArrowPatch" for p in res.axes.patches)
@@ -639,6 +645,7 @@ def test_duration_plot_with_an_empty_inner_column():
 
 
 def test_betweenness_ties_with_decimal_weights():
+    pytest.importorskip("networkx")
     for w in ([0.3, 0.6, 0.2], [0.15, 0.3, 0.1]):
         e = pd.DataFrame({"s": ["A", "B", "A"], "t": ["B", "C", "C"], "w": w})
         bc = vc.network_map(e, "s", "t", weight="w").table.set_index("node")["betweenness"]
@@ -662,6 +669,7 @@ def test_plotly_save_format_and_file_like(tmp_path):
 
 
 def test_directed_reciprocal_edges_are_both_visible():
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"s": ["A", "B"], "t": ["B", "A"], "w": [4.0, 1.0]})
     res = vc.network_map(e, "s", "t", weight="w", directed=True)
     arrows = [p for p in res.axes.patches if p.__class__.__name__ == "FancyArrowPatch"]
@@ -703,6 +711,7 @@ def test_dumbbell_nullable_int64_stays_exact():
     pd.DataFrame({"s": ["A", "A", "A", "B", "A"], "t": ["B", "B", "B", "C", "C"], "w": [0.1, 0.1, 0.1, 0.6, 0.2]}),
 ])
 def test_betweenness_ties_survive_float32_and_summed_rows(frame):
+    pytest.importorskip("networkx")
     bc = vc.network_map(frame, "s", "t", weight="w").table.set_index("node")["betweenness"]
     assert bc["B"] == pytest.approx(0.5)
 
@@ -774,6 +783,7 @@ def test_plotly_save_to_text_mode_tempfile(tmp_path):
 
 
 def test_rational_weights_summed_from_rows_keep_ties():
+    pytest.importorskip("networkx")
     # three rows of 1/3 make a weight of exactly 1, tying A-B (distance 1) with A-C-B (1/2 + 1/2)
     e = pd.DataFrame({"s": ["A", "A", "A", "A", "C"], "t": ["B", "B", "B", "C", "B"],
                       "w": [1 / 3, 1 / 3, 1 / 3, 2.0, 2.0]})
@@ -782,6 +792,7 @@ def test_rational_weights_summed_from_rows_keep_ties():
 
 
 def test_nullable_float32_weights_keep_ties():
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"s": ["A", "B", "A"], "t": ["B", "C", "C"], "w": pd.array([0.3, 0.6, 0.2], dtype="Float32")})
     bc = vc.network_map(e, "s", "t", weight="w").table.set_index("node")["betweenness"]
     assert bc["B"] == pytest.approx(0.5)
@@ -799,6 +810,7 @@ def test_date_column_with_a_stray_number_raises():
 
 
 def test_long_decimal_weights_keep_ties_and_values():
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"s": ["A", "A", "C"], "t": ["B", "C", "B"], "w": [0.4794598, 0.9589196, 0.9589196]})
     res = vc.network_map(e, "s", "t", weight="w")
     t = res.table.set_index("node")
@@ -809,6 +821,7 @@ def test_long_decimal_weights_keep_ties_and_values():
 
 
 def test_sparse_weight_column():
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"s": ["A", "B", "A"], "t": ["B", "C", "C"],
                       "w": pd.arrays.SparseArray([0.3, 0.6, 0.2], dtype="Sparse[float64]")})
     bc = vc.network_map(e, "s", "t", weight="w").table.set_index("node")["betweenness"]
@@ -820,12 +833,14 @@ def test_sparse_weight_column():
 
 @pytest.mark.parametrize("directed,expected", [(False, 0.5), (True, 0.25)])
 def test_computed_rational_weights_tie(directed, expected):
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"s": ["A", "A", "B"], "t": ["D", "B", "D"], "w": [73 / 9, 146 / 9, 146 / 9]})
     bc = vc.network_map(e, "s", "t", weight="w", directed=directed).table.set_index("node")["betweenness"]
     assert bc["B"] == pytest.approx(expected)
 
 
 def test_betweenness_is_invariant_to_rescaling_weights():
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"s": list("BADCBACC"), "t": list("EEEECDFD"), "n": [3, 4, 6, 30, 12, 12, 8, 6]})
     e["per_day"] = e["n"] / 94
     a = vc.network_map(e, "s", "t", weight="n").table.set_index("node")["betweenness"]
@@ -834,13 +849,14 @@ def test_betweenness_is_invariant_to_rescaling_weights():
 
 
 def test_repeated_rows_sum_is_correctly_rounded():
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"s": ["A"] * 9, "t": ["B"] * 9, "w": [73 / 9] * 9})
     assert vc.network_map(e, "s", "t", weight="w").info["graph"]["A"]["B"]["w"] == 73.0
 
 
 @pytest.mark.parametrize("directed", [False, True])
 def test_weighted_betweenness_matches_networkx_without_ties(directed):
-    import networkx as nx
+    nx = pytest.importorskip("networkx")
 
     rng = np.random.default_rng(7)
     for _ in range(20):
@@ -863,6 +879,7 @@ def test_weighted_betweenness_matches_networkx_without_ties(directed):
 
 @pytest.mark.parametrize("dtype", ["float32", "int64", "float64"])
 def test_betweenness_independent_of_row_order_with_a_very_strong_edge(dtype):
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"s": ["A", "B", "A"], "t": ["B", "C", "C"], "w": [1, 100_000, 1]}).astype({"w": dtype})
     a = vc.network_map(e, "s", "t", weight="w", communities=False).table.set_index("node")["betweenness"].sort_index()
     b = vc.network_map(e.iloc[[2, 0, 1]], "s", "t", weight="w", communities=False).table.set_index("node")[
@@ -872,6 +889,7 @@ def test_betweenness_independent_of_row_order_with_a_very_strong_edge(dtype):
 
 
 def test_low_precision_columns_do_not_merge_real_differences():
+    pytest.importorskip("networkx")
     e = pd.DataFrame({"s": ["A", "B", "A", "C"], "t": ["B", "D", "C", "D"], "w": [10, 10, 10, 9]})
     ref = vc.network_map(e, "s", "t", weight="w", communities=False).table.set_index("node")["betweenness"]
     for dt in ("float16", "float32"):
@@ -881,6 +899,7 @@ def test_low_precision_columns_do_not_merge_real_differences():
 
 
 def test_weighted_betweenness_matches_exact_rational_ground_truth():
+    pytest.importorskip("networkx")
     # integer count weights: 1/w distances are exact rationals, so Fraction arithmetic gives the true ties
     from fractions import Fraction
 
@@ -918,6 +937,7 @@ def _exact_betweenness(frame, directed=False):
 
 @pytest.mark.parametrize("extra", [("D", "E", 1e6), ("X", "Y", 1e6), ("E", "E", 1e6)])
 def test_float32_tie_unaffected_by_a_strong_edge_elsewhere(extra):
+    pytest.importorskip("networkx")
     rows = [("A", "B", 0.09), ("B", "D", 0.18), ("A", "C", 0.12), ("C", "D", 0.12), extra]
     if extra[0] == "E":
         rows.append(("D", "E", 1.0))
@@ -928,6 +948,7 @@ def test_float32_tie_unaffected_by_a_strong_edge_elsewhere(extra):
 
 
 def test_chains_of_near_ties_are_row_order_independent():
+    pytest.importorskip("networkx")
     # three routes S-Pi-W whose lengths differ by 0.6e-10 and 1.2e-10 relative: only those within 1e-10 of the
     # shortest count as ties, whatever the row order
     a = [1.0, 1.0 + 1.2e-10, 1.0 + 2.4e-10]
@@ -941,6 +962,7 @@ def test_chains_of_near_ties_are_row_order_independent():
 
 
 def test_float16_keeps_differences_it_can_resolve():
+    pytest.importorskip("networkx")
     # a 1% longer route is well outside float16's tolerance (4 machine epsilons, 0.4%)
     e = pd.DataFrame({"s": ["A", "B", "A", "C"], "t": ["B", "D", "C", "D"], "w": [1.0, 1.0, 1.0, 0.98]})
     stored = e.astype({"w": "float16"})
@@ -962,12 +984,14 @@ def test_float16_keeps_differences_it_can_resolve():
                                                       ("Y", "W", "1000000")], "float32"),
 ])
 def test_a_detour_with_an_extra_hop_is_never_a_tie(rows, dtype):
+    pytest.importorskip("networkx")
     e = pd.DataFrame([(u, v, float(w)) for u, v, w in rows], columns=["s", "t", "w"]).astype({"w": dtype})
     assert vc.network_map(e, "s", "t", weight="w", communities=False).table.set_index("node").loc["Y", "betweenness"] == 0
 
 
 @pytest.mark.parametrize("dtype,strong", [("float32", 5e5), ("float16", 100.0)])
 def test_exact_ties_before_a_strong_last_edge(dtype, strong):
+    pytest.importorskip("networkx")
     # the rounding of 0.09, 0.18 and 0.12 exceeds a quarter of the last edge's length; the two routes to W still tie
     rows = [("A", "B", 0.09), ("B", "D", 0.18), ("A", "C", 0.12), ("C", "E", 0.12), ("D", "W", strong),
             ("E", "W", strong)]
@@ -978,6 +1002,7 @@ def test_exact_ties_before_a_strong_last_edge(dtype, strong):
 
 
 def test_float32_cannot_resolve_differences_below_its_precision():
+    pytest.importorskip("networkx")
     # the detour via Y is 1e-7 of the path length: float64 resolves it, float32 (tolerance 4.8e-7) cannot
     rows = [(f"P{i}", f"P{i+1}", 0.001) for i in range(5)] + [("P5", "W", 1000.0), ("P5", "Y", 2000.0),
                                                             ("Y", "W", 1000.0)]
@@ -991,6 +1016,7 @@ def test_float32_cannot_resolve_differences_below_its_precision():
 
 
 def test_exactly_stored_float32_differences_are_kept():
+    pytest.importorskip("networkx")
     rows = [("S", "A", 0.125), ("A", "B", 1000.0), ("B", "T", 1000.0), ("A", "C", 1001.0), ("C", "T", 1001.0)]
     e = pd.DataFrame(rows, columns=["s", "t", "w"])
     exact = _exact_betweenness(e)
@@ -999,6 +1025,7 @@ def test_exactly_stored_float32_differences_are_kept():
 
 
 def test_betweenness_arithmetic_choice():
+    pytest.importorskip("networkx")
     rng = np.random.default_rng(0)
     m = 2200
     big = pd.DataFrame({"s": rng.integers(0, 400, m), "t": rng.integers(400, 800, m), "w": rng.integers(1, 9, m)})
@@ -1023,6 +1050,7 @@ def test_betweenness_arithmetic_choice():
 
 @pytest.mark.parametrize("total", [99, 365, 438, 1234567])
 def test_betweenness_is_invariant_when_counts_become_shares(total):
+    pytest.importorskip("networkx")
     rng = np.random.default_rng(2)
     pairs = [(f"n{i}", f"n{j}") for i in range(25) for j in range(i + 1, 25) if rng.random() < 0.2]
     counts = pd.DataFrame(pairs, columns=["s", "t"]).assign(w=rng.integers(1, 7, len(pairs)))
@@ -1034,6 +1062,7 @@ def test_betweenness_is_invariant_when_counts_become_shares(total):
 
 @pytest.mark.parametrize("c", ["82.975752746229", "51234.567890123", "0.98989898989899"])
 def test_long_decimals_tie_with_their_doubles(c):
+    pytest.importorskip("networkx")
     from fractions import Fraction
 
     e = pd.DataFrame([("A", "B", float(Fraction(c) * 2)), ("B", "C", float(Fraction(c) * 2)), ("A", "C", float(c))],
@@ -1048,6 +1077,7 @@ def test_long_decimals_tie_with_their_doubles(c):
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_rescaled_decimal_weights_keep_their_ties(dtype):
+    pytest.importorskip("networkx")
     # decimals and the same decimals as shares of 438: neither is stored exactly, both must match the exact answer
     import matplotlib.pyplot as plt
 
