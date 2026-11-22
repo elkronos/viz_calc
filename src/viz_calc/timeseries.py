@@ -369,7 +369,7 @@ def calendar_heatmap(
     Days without data are drawn in *missing_color* so they are not confused
     with zero. One colour scale is shared across years. Years without any
     dated rows get no row, so a stray placeholder date such as
-    ``9999-12-31`` adds one row, not one for every year in between.
+    ``1900-01-01`` adds one row, not one for every year in between.
 
     Parameters
     ----------
