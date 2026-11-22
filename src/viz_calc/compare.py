@@ -230,7 +230,9 @@ def estimation_plot(
     check_has_values(data, y)
     groups = category_order(data[x], order)
     if len(groups) < 2:
-        raise ValueError("estimation_plot needs at least two groups")
+        dropped = int(data[x].isna().sum())
+        note = f" ({dropped} row(s) with a missing {x!r} are left out)" if dropped else ""
+        raise ValueError(f"estimation_plot needs at least two groups{note}")
     reference = groups[0] if reference is None else reference
     if reference not in groups:
         raise ValueError(f"reference {reference!r} is not one of the groups {groups}")

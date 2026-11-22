@@ -240,7 +240,9 @@ def compare_correlations(
     cols = _numeric_columns(data.drop(columns=[group]), columns)
     groups = category_order(data[group], order)
     if len(groups) < 2:
-        raise ValueError("need at least two groups")
+        dropped = int(data[group].isna().sum())
+        note = f" ({dropped} row(s) with a missing {group!r} are left out)" if dropped else ""
+        raise ValueError(f"compare_correlations needs at least two groups{note}")
     per_group = {g: _pairwise(data[level_mask(data[group], g)], cols, method) for g in groups}
 
     frames = []

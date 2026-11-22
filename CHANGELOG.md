@@ -78,7 +78,9 @@
   `compare_correlations` still leave out rows whose group is missing, so they
   never enter a Welch test or a p-value adjustment as a group of their own, and
   now say so in their docstrings and count them in
-  `info["dropped_missing_group"]` (0 when there are none).
+  `info["dropped_missing_group"]` (0 when there are none). When that leaves
+  fewer than two groups, the `estimation_plot` and `compare_correlations` error
+  says how many rows were left out.
 - `period_bars`, `timeseries_fill`, `calendar_heatmap`, `radar`, `pca` and
   `pca_plot` also raise a `ValueError` naming the column when a numeric column
   holds `inf` or `-inf`, before anything is drawn, as the other charts do;

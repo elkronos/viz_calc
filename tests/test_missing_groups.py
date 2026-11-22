@@ -1,5 +1,7 @@
 """Rows whose group is missing: left out and counted by the inferential charts, drawn as "(missing)" by the others."""
 
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -110,6 +112,19 @@ def test_compare_correlations_counts_the_rows_left_out():
     assert sorted(set(res.table["group_a"]) | set(res.table["group_b"])) == ["alpha", "beta", "gamma"]
     clean = vc.compare_correlations(datasets.measurements(), group="group", columns=["length", "width", "depth"])
     assert clean.info["dropped_missing_group"] == 0
+
+
+def test_one_group_left_says_how_many_rows_were_left_out():
+    d = pd.DataFrame({"g": ["a"] * 8 + [None] * 3, "y": np.arange(11.0)})
+    note = " (3 row(s) with a missing 'g' are left out)"
+    with pytest.raises(ValueError, match=re.escape("estimation_plot needs at least two groups" + note)):
+        vc.estimation_plot(d, x="g", y="y")
+    with pytest.raises(ValueError, match=re.escape("compare_correlations needs at least two groups" + note)):
+        vc.compare_correlations(d.assign(z=-d["y"]), group="g", columns=["y", "z"])
+    with pytest.raises(ValueError, match=r"^estimation_plot needs at least two groups$"):
+        vc.estimation_plot(d.dropna(), x="g", y="y")
+    with pytest.raises(ValueError, match=r"^compare_correlations needs at least two groups$"):
+        vc.compare_correlations(d.dropna().assign(z=lambda f: -f["y"]), group="g", columns=["y", "z"])
 
 
 # --- descriptive charts draw the rows as a last "(missing)" group, grey where colour marks the group -------------
