@@ -54,6 +54,11 @@ curve) and its 95% bias-corrected and accelerated (BCa) bootstrap interval
 | low dose | +3.3 | −2.2 to 8.8 | 0.25 [−0.19, 0.69] | 0.258 | 0.258 |
 | high dose | +4.6 | 0.4 to 9.1 | 0.46 [0.01, 0.90] | 0.043 | 0.086 |
 
+`res.info["comparisons"]` also has the Welch *t* interval for each
+difference, in `welch_ci_low` and `welch_ci_high`: −2.5 to 9.2 for low dose
+and 0.2 to 9.1 for high dose. With 40 people per arm it is close to the
+bootstrap interval.
+
 ### How to read it
 
 * **Low dose:** the plausible effects run from about −2 to +9 points. The
@@ -64,11 +69,17 @@ curve) and its 95% bias-corrected and accelerated (BCa) bootstrap interval
   two comparisons against control (Holm, 1979) the p-value is 0.086. So there
   is **suggestive, not conclusive**, evidence of a benefit.
 
-!!! note "Why the CI and the adjusted p-value seem to disagree"
+!!! note "Why the CI and the p-value can disagree"
     Confidence intervals are reported per comparison and are not adjusted
     for multiplicity; the Holm p-value is. Report both, and say which
     comparisons you planned in advance. Set `p_adjust="none"` if you
     pre-registered a single comparison.
+
+    The bootstrap CI and the Welch p-value also come from different
+    methods, so even unadjusted they can disagree near the cut-off, most
+    often in small groups. The Welch interval (`welch_ci_low`,
+    `welch_ci_high`) excludes zero exactly when the unadjusted Welch p is
+    below 0.05.
 
 ### Why these methods
 
@@ -78,8 +89,15 @@ curve) and its 95% bias-corrected and accelerated (BCa) bootstrap interval
   Lakens & Leys, 2017).
 * **Hedges' g** puts the difference on a standardized scale for comparison
   across studies, with a small-sample bias correction (Hedges, 1981).
-* **Bootstrap CI** for the raw difference makes no normality assumption about
-  the sampling distribution.
+* **Bootstrap CI** for the raw difference does not assume a normal sampling
+  distribution, but it is too narrow when groups are small: a nominal 95%
+  BCa interval covered the true difference about 80% of the time at 3 per
+  group and 91–92% at 10 (see
+  [Methodology](../methodology.md#bootstrap-confidence-intervals)). Groups
+  with fewer than 15 observations are listed in `res.info["small_groups"]`
+  and named under the lower panel's title. For such data pass `ci="welch"`
+  to draw and report the Welch *t* interval, which kept 94–98% coverage in
+  the same simulations.
 
 ## 3. Compare each group to a benchmark
 

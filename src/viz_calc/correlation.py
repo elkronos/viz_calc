@@ -218,7 +218,9 @@ def compare_correlations(
 
     The groups must contain different units (independent samples). The
     z-test is asymptotic, so read it with caution when a group has only a few
-    rows.
+    rows. Rows with a missing *group* belong to no group, so they are left
+    out; ``info["dropped_missing_group"]`` counts them (0 when there are
+    none).
 
     References
     ----------
@@ -238,7 +240,9 @@ def compare_correlations(
     cols = _numeric_columns(data.drop(columns=[group]), columns)
     groups = category_order(data[group], order)
     if len(groups) < 2:
-        raise ValueError("need at least two groups")
+        dropped = int(data[group].isna().sum())
+        note = f" ({dropped} row(s) with a missing {group!r} are left out)" if dropped else ""
+        raise ValueError(f"compare_correlations needs at least two groups{note}")
     per_group = {g: _pairwise(data[level_mask(data[group], g)], cols, method) for g in groups}
 
     frames = []
@@ -277,7 +281,8 @@ def compare_correlations(
     fig.suptitle(f"Differences in {method} correlations  (* p < {alpha}, Fisher z, {p_adjust}-adjusted)", x=0.01, ha="left")
     fig.tight_layout()
     return VizResult(fig, axes, table, {"method": method, "p_adjust": p_adjust, "alpha": alpha,
-                                        "group_correlations": per_group})
+                                        "group_correlations": per_group,
+                                        "dropped_missing_group": int(data[group].isna().sum())})
 
 
 def _zscores(values: np.ndarray, center: float) -> tuple[np.ndarray, float]:

@@ -14,6 +14,7 @@ from scipy.stats import gaussian_kde
 
 from . import stats as st
 from ._core import (
+    NEUTRAL,
     VizResult,
     category_order,
     check_choice,
@@ -28,9 +29,12 @@ from ._core import (
     cleanup_on_error,
     foreground,
     get_ax,
+    group_label,
+    group_mask,
     level_label,
     level_mask,
     palette,
+    with_missing,
 )
 
 __all__ = ["histogram", "ridgeplot", "raincloud"]
@@ -79,6 +83,12 @@ def histogram(
     ``ref_line`` draws the mean or median **of each facet** (and of each hue
     group within it), not a single global value; a number draws a fixed line
     at that value.
+
+    Rows with a missing *hue* or *facet* are not dropped: a missing *hue* is
+    drawn as a last hue group, in grey, and a missing *facet* in a last
+    panel, both named "(missing)" whatever *hue_order* and *facet_order*
+    list. Their rows of the table hold the missing value in ``hue`` or
+    ``facet``.
 
     *bins* is one of the rules ``"fd"``, ``"scott"``, ``"sturges"`` and
     ``"auto"``, a number of equal-width bins (an ``int``), or a sequence of
@@ -146,9 +156,11 @@ def histogram(
         edges, rule = np.histogram_bin_edges(values, bins=bins), "user"
     outside = int(((values < edges[0]) | (values > edges[-1])).sum())  # only given edges can leave values out
 
-    facets = category_order(data[facet], facet_order) if facet is not None else [None]
+    facets = with_missing(category_order(data[facet], facet_order), data[facet]) if facet is not None else [None]
     hues = category_order(data[hue], hue_order) if hue is not None else [None]
     cols = palette(len(hues), colors)
+    if hue is not None and data[hue].isna().any():  # the rows without a hue are drawn last, in grey
+        hues, cols = hues + [None], cols + [NEUTRAL]
     ncol = min(col_wrap, len(facets))
     nrow = int(np.ceil(len(facets) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(5 * ncol, 3.6 * nrow), squeeze=False, sharex=True, sharey=True)
@@ -156,9 +168,9 @@ def histogram(
     width = np.diff(edges)
     rows = []
     for ax, f in zip(axes.flat, facets):
-        fdata = data if f is None else data[level_mask(data[facet], f)]
+        fdata = data if facet is None else data[group_mask(data[facet], f)]
         for h, col in zip(hues, cols):
-            s = fdata[x] if h is None else fdata[x][level_mask(fdata[hue], h)]
+            s = fdata[x] if hue is None else fdata[x][group_mask(fdata[hue], h)]
             s = s.dropna().to_numpy(float)
             counts, _ = np.histogram(s, bins=edges)
             if stat == "density":
@@ -167,12 +179,12 @@ def histogram(
                 heights = 100 * counts / counts.sum() if counts.sum() else counts.astype(float)
             else:
                 heights = counts
-            if h is None:
+            if hue is None:
                 ax.bar(edges[:-1], heights, width=width, align="edge", color=col, alpha=alpha,
                        edgecolor="white", lw=0.5)
             else:  # outlined steps keep overlapping groups readable
                 ax.stairs(heights, edges, fill=True, color=col, alpha=alpha * 0.4)
-                ax.stairs(heights, edges, color=col, lw=1.8, label=level_label(h))
+                ax.stairs(heights, edges, color=col, lw=1.8, label=group_label(h))
             if density_curve and counts.sum():
                 dens = _kde(s, grid)
                 if dens is not None:
@@ -183,10 +195,10 @@ def histogram(
                     ax.plot(grid, dens * scale, color=col, lw=1.5)
             if ref_line is not None and s.size:
                 v = {"mean": np.mean, "median": np.median}[ref_line](s) if isinstance(ref_line, str) else float(ref_line)
-                ax.axvline(v, color=col if h is not None else foreground(ax), ls="--", lw=1.2)
+                ax.axvline(v, color=col if hue is not None else foreground(ax), ls="--", lw=1.2)
             rows.append({"facet": f, "hue": h, **_describe(pd.Series(s))})
-        if f is not None:
-            ax.set_title(f"{facet} = {level_label(f)}", fontsize="medium", loc="left")
+        if facet is not None:
+            ax.set_title(f"{facet} = {group_label(f)}", fontsize="medium", loc="left")
         ax.spines[["top", "right"]].set_visible(False)
     for ax in list(axes.flat)[len(facets):]:
         ax.set_visible(False)
@@ -219,7 +231,10 @@ def ridgeplot(
 
     Useful when there are too many groups for overlaid histograms. All
     curves share one x-axis and a common height scale, so peak heights are
-    comparable. The median of each group is marked.
+    comparable. The median of each group is marked. Rows with a missing
+    *group* are not dropped: they are drawn last (at the bottom), in grey,
+    as "(missing)", whatever *order* lists, with the missing value in the
+    table's *group* column.
 
     Parameters
     ----------
@@ -234,20 +249,21 @@ def ridgeplot(
     check_finite(data, x)
     overlap = check_range("overlap", overlap, 0, 1, include_high=False)
     check_has_values(data, x)
-    groups = category_order(data[group], order)
+    named = category_order(data[group], order)
+    groups = with_missing(named, data[group])
     values = data[x].dropna().to_numpy(float)
     pad = 0.05 * np.ptp(values) if np.ptp(values) else 1.0
     grid = np.linspace(values.min() - pad, values.max() + pad, 400)
-    dens = {g: _kde(data[x][level_mask(data[group], g)].dropna().to_numpy(float), grid, bw_method) for g in groups}
+    dens = {g: _kde(data[x][group_mask(data[group], g)].dropna().to_numpy(float), grid, bw_method) for g in groups}
     peak = max((d.max() for d in dens.values() if d is not None), default=1.0)
-    cols = palette(len(groups), colors)
+    cols = palette(len(named), colors) + [NEUTRAL] * (len(groups) - len(named))  # grey for the missing group
     fig, ax = get_ax(ax, figsize=(8, 0.7 * len(groups) + 2))
     step = 1 - overlap
     rows = []
     for i, g in enumerate(groups):
         base = (len(groups) - 1 - i) * step
         d = dens[g]
-        s = data[x][level_mask(data[group], g)]
+        s = data[x][group_mask(data[group], g)]
         if d is not None:
             y = base + d / peak
             ax.fill_between(grid, base, y, color=cols[i], alpha=0.8, zorder=2 * i + 1, lw=0)
@@ -256,7 +272,7 @@ def ridgeplot(
                 m = s.median()
                 ax.plot([m, m], [base, base + np.interp(m, grid, d) / peak], color="black", lw=1, zorder=2 * i + 2)
         rows.append({group: g, **_describe(s)})
-    ax.set_yticks([(len(groups) - 1 - i) * step for i in range(len(groups))], [level_label(g) for g in groups])
+    ax.set_yticks([(len(groups) - 1 - i) * step for i in range(len(groups))], [group_label(g) for g in groups])
     ax.set_xlabel(x)
     ax.set_ylabel(group)
     ax.spines[["top", "right", "left"]].set_visible(False)
@@ -280,6 +296,9 @@ def raincloud(
     A box plot alone hides sample size and multimodality; a violin alone
     hides the data. Raincloud plots show all three with little clutter
     (Allen et al., 2019). Groups run along the vertical axis.
+
+    Rows with a missing *x* belong to no group, so they are left out;
+    ``info["dropped_missing_group"]`` counts them (0 when there are none).
 
     References
     ----------
@@ -321,4 +340,4 @@ def raincloud(
     ax.set_xlabel(y)
     ax.set_ylabel(x)
     ax.spines[["top", "right"]].set_visible(False)
-    return VizResult(fig, ax, pd.DataFrame(rows))
+    return VizResult(fig, ax, pd.DataFrame(rows), {"dropped_missing_group": int(data[x].isna().sum())})

@@ -35,6 +35,7 @@ from ._core import (
     exact_mean,
     foreground,
     get_ax,
+    group_key,
     level_label,
     level_mask,
     level_percent,
@@ -55,25 +56,40 @@ def _jitter(n: int, width: float, rng: np.random.Generator) -> np.ndarray:
 _TIE = 4 * np.finfo(float).eps  # a floating-point rounding difference, relative to the data's scale
 
 
-def _threshold(data: pd.DataFrame, y: str, threshold: Any) -> tuple[float, float]:
-    """``(value, tie tolerance)`` for a *threshold* option: a number, or ``"mean"``/``"median"`` of *y*.
+def _check_threshold(threshold: Any) -> None:
+    """Raise unless *threshold* is a finite number, ``"mean"`` or ``"median"``."""
+    if isinstance(threshold, str) and threshold in ("mean", "median"):
+        return
+    if isinstance(threshold, Real) and not isinstance(threshold, bool) and np.isfinite(float(threshold)):
+        return
+    raise ValueError(f"threshold must be a finite number, 'mean' or 'median', got {threshold!r}")
+
+
+def _drawn_rows(values: pd.Series, groups: Sequence[Any]) -> np.ndarray:
+    """Which rows of the group column *values* hold one of *groups*: the rows the chart draws."""
+    drawn = np.zeros(len(values), dtype=bool)
+    for g in groups:
+        drawn |= level_mask(values, g).to_numpy(dtype=bool, na_value=False)
+    return drawn
+
+
+def _threshold(values: pd.Series, threshold: Any) -> tuple[float, float]:
+    """``(value, tie tolerance)`` for a valid *threshold* option: a number, or ``"mean"``/``"median"`` of *values*.
 
     ``"mean"`` is the correctly rounded mean, and the tolerance is the rounding
     error the data can carry, so a value that equals the mean in decimal is
     not pushed to one side of it by floating-point arithmetic.
     """
-    values = data[y].to_numpy(dtype=float, na_value=np.nan)
-    values = values[~np.isnan(values)]
-    if values.size == 0:
-        raise ValueError(f"column {y!r} has no non-missing values")
-    if isinstance(threshold, str) and threshold in ("mean", "median"):
-        if threshold == "median":
-            return float(np.median(values)), 0.0
-        thr, scale = exact_mean(values), float(np.mean(np.abs(values)))
-        return thr, (_TIE * scale if np.isfinite(thr) and np.isfinite(scale) else 0.0)
-    if isinstance(threshold, Real) and not isinstance(threshold, bool) and np.isfinite(float(threshold)):
+    if not isinstance(threshold, str):
         return float(threshold), 0.0
-    raise ValueError(f"threshold must be a finite number, 'mean' or 'median', got {threshold!r}")
+    v = values.to_numpy(dtype=float, na_value=np.nan)
+    v = v[~np.isnan(v)]
+    if v.size == 0:
+        raise ValueError(f"threshold={threshold!r} needs a value of {values.name!r} in one of the groups drawn")
+    if threshold == "median":
+        return float(np.median(v)), 0.0
+    thr, scale = exact_mean(v), float(np.mean(np.abs(v)))
+    return thr, (_TIE * scale if np.isfinite(thr) and np.isfinite(scale) else 0.0)
 
 
 def _threshold_text(thr: float, tol: float, compared: Any) -> str:
@@ -100,6 +116,11 @@ def _threshold_text(thr: float, tol: float, compared: Any) -> str:
     return text[:-2] if text.endswith(".0") else text
 
 
+# Groups with fewer values are flagged. A 95% bootstrap interval for a mean difference covered the truth in 80% of
+# simulated normal datasets at 3 per group and 91-93% at 10 to 15; the Welch interval covered 94-98%.
+_SMALL_GROUP = 15
+
+
 @cleanup_on_error
 def estimation_plot(
     data: pd.DataFrame,
@@ -113,26 +134,42 @@ def estimation_plot(
     colors: Sequence[str] | str | None = None,
     seed: int = 0,
     figsize: tuple[float, float] = (8, 7),
+    ci: Literal["bca", "welch", "percentile"] = "bca",
 ) -> VizResult:
     """Show every observation and the effect size, not just a p-value.
 
     A Cumming-style estimation plot (Ho et al., 2019). The upper panel shows
     the raw data per group with each group's mean and t-based CI. The lower
     panel shows the difference of each group's mean from the *reference*
-    group: the bootstrap sampling distribution, the BCa confidence interval,
-    and a zero line. Showing the data instead of "dynamite" bars follows
-    Weissgerber et al. (2015).
+    group: the bootstrap sampling distribution, the confidence interval chosen
+    by *ci* (BCa by default), and a zero line. Showing the data instead of
+    "dynamite" bars follows Weissgerber et al. (2015).
 
     The returned table reports, for every comparison, the mean difference with
-    its bootstrap CI, Hedges' *g* with CI, and a Welch *t*-test p-value
-    adjusted for the number of comparisons (Holm by default).
+    its CI and its Welch *t* CI, Hedges' *g* with CI, and a Welch *t*-test
+    p-value adjusted for the number of comparisons (Holm by default).
+
+    Bootstrap intervals treat the spread of the sample as the spread of the
+    population, so with few observations they are too narrow: in simulations
+    of normal data the 95% BCa interval covered the true difference about 80%
+    of the time at 3 per group and 91–92% at 10, while the Welch interval
+    stayed at 94–98% (see Methodology). Groups with fewer than 15 values are
+    listed in ``info["small_groups"]``, and under a bootstrap *ci* a second
+    line of the lower panel's title names them (more than three are counted).
+    The BCa interval and the Welch p-value come from different methods, so at
+    small *n* the interval can exclude zero while p is above 0.05; the Welch
+    interval excludes zero exactly when the unadjusted p is below
+    ``1 - level``.
 
     Parameters
     ----------
     data
         Long-format data: one row per observation.
     x
-        Grouping column.
+        Grouping column. Rows with a missing *x* belong to no group, so they
+        are left out of every group and comparison;
+        ``info["dropped_missing_group"]`` counts them (0 when there are
+        none).
     y
         Numeric outcome column.
     reference
@@ -154,12 +191,23 @@ def estimation_plot(
         is cycled). Defaults to the Okabe–Ito palette.
     seed
         Seed for jitter and bootstrap, so the figure is reproducible.
+    ci
+        Interval for the mean difference: ``"bca"`` (bias-corrected and
+        accelerated bootstrap, the default), ``"percentile"`` (bootstrap
+        percentile) or ``"welch"`` (Welch *t*, the interval that matches the
+        Welch p-value). It is the interval drawn in the lower panel and
+        reported in ``ci_low``/``ci_high``; the shaded curve is the bootstrap
+        distribution for every choice.
 
     Returns
     -------
     VizResult
         ``table`` has one row per group (``n``, ``mean``, ``sd``, CI) and
-        ``info["comparisons"]`` has one row per comparison.
+        ``info["comparisons"]`` has one row per comparison, with the *ci*
+        interval in ``ci_low``/``ci_high`` and the Welch interval in
+        ``welch_ci_low``/``welch_ci_high``. ``info["ci_method"]`` is *ci*, and
+        ``info["small_groups"]`` maps each group with fewer than 15 values to
+        its ``n`` (empty when every group has 15 or more).
 
     References
     ----------
@@ -175,13 +223,16 @@ def estimation_plot(
     check_numeric(data, y)
     check_finite(data, y)
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
+    check_choice("ci", ci, ["bca", "welch", "percentile"])
     check_not_reserved(["n", "mean", "sd", "ci_low", "ci_high"], x=x)
     st._check_level(level)
     check_count("n_resamples", n_resamples)
     check_has_values(data, y)
     groups = category_order(data[x], order)
     if len(groups) < 2:
-        raise ValueError("estimation_plot needs at least two groups")
+        dropped = int(data[x].isna().sum())
+        note = f" ({dropped} row(s) with a missing {x!r} are left out)" if dropped else ""
+        raise ValueError(f"estimation_plot needs at least two groups{note}")
     reference = groups[0] if reference is None else reference
     if reference not in groups:
         raise ValueError(f"reference {reference!r} is not one of the groups {groups}")
@@ -217,16 +268,21 @@ def estimation_plot(
         # Resample the data divided by a power of two (exact), so BCa's sums of powers neither overflow nor underflow.
         s = st._unit_scale(ref, samples[g])
         # The default statistic, mean(b) - mean(a), with ties to the estimate kept exact whatever the units.
-        est, lo, hi, dist = st._bootstrap((ref / s, samples[g] / s), None, level, n_resamples, "BCa", seed)
+        # The resamples do not depend on the method, so for ci="welch" the percentile run (no jackknife) gives the curve.
+        boot = "BCa" if ci == "bca" else "percentile"
+        est, lo, hi, dist = st._bootstrap((ref / s, samples[g] / s), None, level, n_resamples, boot, seed)
         est, lo, hi, dist = est * s, lo * s, hi * s, dist * s
+        w = st.welch_test(ref, samples[g], level)
+        if ci == "welch":
+            lo, hi = w["ci_low"], w["ci_high"]
         dens = _half_violin(dist)
         if dens is not None:
             grid, width = dens
             ax_diff.fill_betweenx(grid, i, i + width * 0.35, color=cols[i], alpha=0.35, lw=0)
         ax_diff.errorbar(i, est, yerr=[[est - lo], [hi - est]], fmt="o", color=foreground(ax_diff), ms=6, lw=2)
-        w = st.welch_test(ref, samples[g], level)
         h = st.hedges_g(ref, samples[g], level)
         comps.append({"group": g, "reference": reference, "difference": est, "ci_low": lo, "ci_high": hi,
+                      "welch_ci_low": w["ci_low"], "welch_ci_high": w["ci_high"],
                       "hedges_g": h["g"], "g_ci_low": h["ci_low"], "g_ci_high": h["ci_high"],
                       "welch_t": w["t"], "df": w["df"], "p": w["p"]})
     comps_df = pd.DataFrame(comps)
@@ -234,12 +290,21 @@ def estimation_plot(
     ax_diff.set_ylabel(f"Difference from\n{level_label(reference)}")
     ax_diff.set_xticks(range(len(groups)), [level_label(g) for g in groups])
     ax_diff.set_xlabel(x)
-    ax_diff.set_title(f"Mean difference with bootstrap {level_percent(level)} CI (BCa)", loc="left", fontsize="medium")
+    method = {"bca": "bootstrap {} CI (BCa)", "percentile": "bootstrap {} CI (percentile)", "welch": "Welch t {} CI"}
+    title = f"Mean difference with {method[ci].format(level_percent(level))}"
+    small_groups = {g: samples[g].size for g in groups if samples[g].size < _SMALL_GROUP}
+    if small_groups and ci != "welch":
+        # The caveat comes before the names, so long group names cut off at the figure edge do not hide it.
+        names = ", ".join(map(level_label, small_groups)) if len(small_groups) <= 3 else f"{len(small_groups)} groups"
+        title += f"\nBootstrap CIs tend to be too narrow for n < {_SMALL_GROUP} ({names})"
+    ax_diff.set_title(title, loc="left", fontsize="medium")
     for ax in (ax_raw, ax_diff):
         ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     return VizResult(fig, np.array([ax_raw, ax_diff]), pd.DataFrame(rows),
-                     {"comparisons": comps_df, "level": level, "p_adjust": p_adjust, "reference": reference})
+                     {"comparisons": comps_df, "level": level, "p_adjust": p_adjust, "reference": reference,
+                      "ci_method": ci, "small_groups": small_groups,
+                      "dropped_missing_group": int(data[x].isna().sum())})
 
 
 def _half_violin(values: np.ndarray, points: int = 200):
@@ -281,13 +346,18 @@ def benchmark_bar(
     2005). Individual points are overlaid by default (Weissgerber et al.,
     2015).
 
+    Rows with a missing *x* belong to no group, so they are left out of the
+    bars and of the threshold; ``info["dropped_missing_group"]`` counts them
+    (0 when there are none).
+
     Parameters
     ----------
     threshold
-        A number, or ``"mean"``/``"median"`` of all observations of *y*.
-        ``"mean"`` is correctly rounded, and group means or CI limits that
-        differ from the threshold only by floating-point rounding count as
-        equal to it.
+        A number, or ``"mean"``/``"median"`` of the observations of *y* that
+        are drawn: those in the groups on the axis, so a group left out of
+        *order* does not count either. ``"mean"`` is correctly rounded, and
+        group means or CI limits that differ from the threshold only by
+        floating-point rounding count as equal to it.
     error
         What the error bars show: ``"ci"``, ``"se"`` or ``"sd"``.
     classify
@@ -314,9 +384,11 @@ def benchmark_bar(
     check_not_reserved(["n", "mean", "sd", "se", "ci_low", "ci_high", "status"], x=x)
     st._check_level(level)
     colors = slot_colors(colors, ("below", "above", "indistinguishable"))
-    thr, tol = _threshold(data, y, threshold)
+    check_has_values(data, y)
+    _check_threshold(threshold)
 
     groups = category_order(data[x], order)
+    thr, tol = _threshold(data[y][_drawn_rows(data[x], groups)], threshold)
     rows = []
     for g in groups:
         s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
@@ -365,7 +437,8 @@ def benchmark_bar(
     ax.legend(handles=[Patch(color=color_for[s], label=s) for s in present], frameon=False, loc="upper left",
               bbox_to_anchor=(1.01, 1))
     ax.spines[["top", "right"]].set_visible(False)
-    return VizResult(fig, ax, table, {"threshold": thr, "error": error, "classify": classify, "level": level})
+    return VizResult(fig, ax, table, {"threshold": thr, "error": error, "classify": classify, "level": level,
+                                      "dropped_missing_group": int(data[x].isna().sum())})
 
 
 @cleanup_on_error
@@ -393,6 +466,10 @@ def lollipop(
     or the rows when *y* is not given. The aggregated values are in the
     table's ``value`` column, so *x* cannot be named ``"value"``.
 
+    Rows with a missing *x* are not dropped: they form a "(missing)"
+    category, drawn last (after the sorted ones) and in grey. Its row in the
+    table holds the missing value in the *x* column.
+
     References
     ----------
     Cleveland, W. S., & McGill, R. (1984). Graphical perception. *JASA*,
@@ -404,35 +481,41 @@ def lollipop(
     check_choice("sort", sort, ["descending", "ascending", None])
     check_not_reserved(["value"], x=x)
     check_has_values(data, x, y)
+    key = group_key(data[x])
     if stat != "count":
         if y is None:
             raise ValueError(f"stat={stat!r} needs a y column")
         check_numeric(data, y)
         check_finite(data, y)
         if stat == "sum":  # in float where an int64 sum could wrap around
-            agg = safe_sum(data[y], data[x], sort=True)
+            agg = safe_sum(data[y], key, sort=True, dropna=False)
         else:
-            agg = data.groupby(x, observed=True)[y].agg(stat)
+            agg = data.groupby(key, observed=True, dropna=False)[y].agg(stat)
     elif y is not None:
-        agg = data.groupby(x, observed=True)[y].count()
+        agg = data.groupby(key, observed=True, dropna=False)[y].count()
     else:
-        agg = data.groupby(x, observed=True).size()
+        agg = data.groupby(key, observed=True, dropna=False).size()
     table = agg.rename("value").reset_index()
     if sort is not None:
         table = table.sort_values("value", ascending=(sort == "ascending"), ignore_index=True)
+    missing = table[x].isna().to_numpy()
+    if missing.any():  # the rows without an x come last, whatever their value
+        last = np.argsort(missing, kind="stable")
+        table, missing = table.iloc[last].reset_index(drop=True), missing[last]
+    dot = [NEUTRAL if m else color for m in missing] if missing.any() else color
 
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)) if horizontal else (8, 5))
     pos = np.arange(len(table))
     if horizontal:
         pos = pos[::-1]  # first row at the top
     alphas = np.where(table["value"] < threshold, 0.3, 1.0) if threshold is not None else np.ones(len(table))
-    for p, v, a in zip(pos, table["value"], alphas):
+    for p, v, a, m in zip(pos, table["value"], alphas, missing):
         if horizontal:
-            ax.hlines(p, 0, v, color=color, alpha=a, lw=1.5)
+            ax.hlines(p, 0, v, color=NEUTRAL if m else color, alpha=a, lw=1.5)
         else:
-            ax.vlines(p, 0, v, color=color, alpha=a, lw=1.5)
+            ax.vlines(p, 0, v, color=NEUTRAL if m else color, alpha=a, lw=1.5)
     xs, ys = (table["value"], pos) if horizontal else (pos, table["value"])
-    ax.scatter(xs, ys, s=90, color=color, alpha=alphas, zorder=3)
+    ax.scatter(xs, ys, s=90, color=dot, alpha=alphas, zorder=3)
     if labels:
         for p, v in zip(pos, table["value"]):
             if horizontal:
@@ -441,7 +524,7 @@ def lollipop(
             else:
                 ax.annotate(abbreviate(v), (p, v), xytext=(0, 8 if v >= 0 else -8), textcoords="offset points",
                             ha="center", va="bottom" if v >= 0 else "top", fontsize=9)
-    ticks = [level_label(v) for v in table[x]]
+    ticks = ["(missing)" if m else level_label(v) for v, m in zip(table[x], missing)]
     label = f"{stat} of {y}" if stat != "count" else "count"
     fmt = AbbrevFormatter()
     if horizontal:
@@ -565,7 +648,9 @@ def divergent_bar(
     column are all missing keeps a missing value there (and no bar), rather
     than a 0. Categories are drawn bottom to
     top in the order of a ``Categorical`` column, and in the order they
-    first appear otherwise.
+    first appear otherwise. Rows with a missing *category* are not dropped:
+    they are summed into a "(missing)" category, drawn last (at the top) and
+    in grey, with the missing value in the table's *category* column.
 
     Parameters
     ----------
@@ -583,17 +668,23 @@ def divergent_bar(
         raise ValueError("divergent_bar expects non-negative values in both columns")
     by_levels = isinstance(data[category].dtype, pd.CategoricalDtype)  # grouping sorts a Categorical by its categories
     # By position; safe_sum sums in float where int64 could wrap, and gives NaN (not pd.NA) for an all-missing category.
-    sums = [safe_sum(values.iloc[:, i], values.iloc[:, 0], sort=by_levels, min_count=1) for i in (1, 2)]
+    sums = [safe_sum(values.iloc[:, i], group_key(values.iloc[:, 0]), sort=by_levels, min_count=1, dropna=False)
+            for i in (1, 2)]
     table = pd.concat(sums, axis=1, keys=[left, right]).rename_axis(category).reset_index()
     if sort:  # by a separate key, so a column named "total" cannot be overwritten
         total = table[left].fillna(0) + table[right].fillna(0)
         table = table.iloc[np.argsort(total.to_numpy(), kind="stable")].reset_index(drop=True)
+    missing = table[category].isna().to_numpy()
+    if missing.any():  # the rows without a category come last, whatever their total
+        last = np.argsort(missing, kind="stable")
+        table, missing = table.iloc[last].reset_index(drop=True), missing[last]
+    left_colors, right_colors = ([NEUTRAL if m else c for m in missing] if missing.any() else c for c in colors)
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)))
     pos = np.arange(len(table))
-    ax.barh(pos, -table[left], color=colors[0], label=left_label or left)
-    ax.barh(pos, table[right], color=colors[1], label=right_label or right)
+    ax.barh(pos, -table[left], color=left_colors, label=left_label or left)
+    ax.barh(pos, table[right], color=right_colors, label=right_label or right)
     ax.axvline(0, color=foreground(ax), lw=0.8)
-    ax.set_yticks(pos, [level_label(v) for v in table[category]])
+    ax.set_yticks(pos, ["(missing)" if m else level_label(v) for v, m in zip(table[category], missing)])
     ax.xaxis.set_major_formatter(AbbrevFormatter(absolute=True))
     lim = max(table[left].max(), table[right].max()) * 1.1
     ax.set_xlim(-lim, lim)
@@ -644,12 +735,18 @@ def centered_bar(
     (Wilson, 1927), which behave well for small groups and extreme
     proportions (Brown, Cai & DasGupta, 2001).
 
+    Rows with a missing *x* belong to no group, so they are left out of the
+    bars and of the threshold; ``info["dropped_missing_group"]`` counts them
+    (0 when there are none).
+
     Parameters
     ----------
     threshold
-        A number, or ``"mean"``/``"median"`` of all observations of *y*.
-        ``"mean"`` is correctly rounded, and values that differ from it only
-        by floating-point rounding count as on it (so at-or-above).
+        A number, or ``"mean"``/``"median"`` of the observations of *y* that
+        are drawn: those in the groups on the axis, so a group left out of
+        *order* does not count either. ``"mean"`` is correctly rounded, and
+        values that differ from it only by floating-point rounding count as
+        on it (so at-or-above).
     level
         Confidence level of the Wilson intervals, strictly between 0 and 1
         (``0.95``, not ``95``).
@@ -664,8 +761,11 @@ def centered_bar(
     check_not_reserved(["n", "n_above", "p_above", "ci_low", "ci_high", "p_below"], x=x)
     st._check_level(level)
     colors = slot_colors(colors, ("at_or_above", "below"))
-    thr, tol = _threshold(data, y, threshold)
+    check_has_values(data, y)
+    _check_threshold(threshold)
     groups = category_order(data[x], order)
+    drawn = data[y][_drawn_rows(data[x], groups)]
+    thr, tol = _threshold(drawn, threshold)
     rows = []
     for g in groups:
         s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
@@ -675,7 +775,7 @@ def centered_bar(
                      "ci_low": float(lo), "ci_high": float(hi), "p_below": (n - k) / n if n else np.nan})
     table = pd.DataFrame(rows)
 
-    shown = _threshold_text(thr, tol, data[y].to_numpy(dtype=float, na_value=np.nan))
+    shown = _threshold_text(thr, tol, drawn.to_numpy(dtype=float, na_value=np.nan))
     fig, ax = get_ax(ax)
     pos = np.arange(len(table))
     up = ax.bar(pos, table["p_above"], color=colors[0], label=f"≥ {shown}")
@@ -699,7 +799,8 @@ def centered_bar(
     ax.set_title(f"Share of {y} above/below {shown} (error bars: {level_percent(level)} Wilson CI)", loc="left")
     ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1, 1))
     ax.spines[["top", "right"]].set_visible(False)
-    return VizResult(fig, ax, table, {"threshold": thr, "level": level})
+    return VizResult(fig, ax, table, {"threshold": thr, "level": level,
+                                      "dropped_missing_group": int(data[x].isna().sum())})
 
 
 @cleanup_on_error

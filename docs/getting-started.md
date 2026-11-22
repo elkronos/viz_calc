@@ -247,9 +247,10 @@ same thing everywhere. The exceptions are listed here.
   `ridgeplot`, `category` and `value` in `waffle`, `outer` or `inner` and
   `value` in `nested_pie`, `group` and `value` in `circular_bar`, a column in
   both the `categorical` and the `numeric` list of `profile_boxes`, and a
-  `group` that is also one of the `features` of `pca_plot`. So does one column
-  for both ends of a change (`start` and `end`, `left` and `right`), and for
-  both the outcome and the panels of `percent_grid` (`column` and `facet`).
+  `group` that is also one of the `features` of `pca_plot` or the `metrics`
+  of `radar`. So does one column for both ends of a change (`start` and
+  `end`, `left` and `right`), and for both the outcome and the panels of
+  `percent_grid` (`column` and `facet`).
   Roles that read naturally together may share a column: a `label` may also be
   the `value` (`waterfall`, `bullet`, `circular_bar`) or the `group`
   (`circular_bar`), `bullet`'s `value` may also be its `target`, and
@@ -257,9 +258,24 @@ same thing everywhere. The exceptions are listed here.
 * **Infinite values.** A numeric column that holds inf or -inf raises an
   error naming the column, before anything is drawn, in the charts for
   comparing groups, correlations, distributions and part-to-whole (see the
-  [API reference](api.md)), in `profile_boxes` and `profile_scatters`, and
-  in `animated_bubble`. `sankey` and `network_map` reject infinite flows
-  and edge weights. Missing values are handled as each function describes.
+  [API reference](api.md)), in `profile_boxes` and `profile_scatters`, in
+  `period_bars`, `timeseries_fill` (a numeric time column included),
+  `calendar_heatmap` and `animated_bubble`, and in `pca_plot` and `radar`.
+  `sankey` and `network_map` reject infinite flows and edge weights. Missing
+  values are handled as each function describes.
+* **Missing groups.** Rows whose group is missing are not dropped by the
+  charts that describe the data: `lollipop`, `divergent_bar`,
+  `stacked_percentages` (`group`), `percent_grid` (`facet`), `histogram`
+  (`hue` and `facet`), `ridgeplot`, `radar`, `waffle`, `nested_pie`,
+  `circular_bar`, `gantt`, `pca_plot` and `animated_bubble` (`color`) draw
+  them as a last group named "(missing)", in grey where colour tells the
+  groups apart. The charts that estimate or test differences between groups
+  (`estimation_plot`, `benchmark_bar`, `centered_bar`,
+  `compare_correlations`), and `raincloud`, leave those rows out, so they
+  never enter a comparison as a group of their own, and count them in the
+  result's info, under "dropped_missing_group". In `benchmark_bar` and
+  `centered_bar`, a `threshold` of "mean" or "median" is taken from the rows
+  in the groups drawn.
 * **Grid width** of multi-panel figures is `col_wrap` in `histogram`,
   `percent_grid` and `donut_grid`, and `ncols` in the `profile_*` functions.
 * **Column labels** need not be strings: a column labelled 0 (from a

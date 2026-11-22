@@ -35,6 +35,9 @@ from ._core import (
     column_list,
     foreground,
     get_ax,
+    group_key,
+    group_label,
+    group_mask,
     level_codes,
     level_label,
     level_mask,
@@ -44,6 +47,7 @@ from ._core import (
     select_columns,
     slot_colors,
     text_color,
+    with_missing,
 )
 from ._core import (
     category_order as _levels,
@@ -170,7 +174,9 @@ def percent_grid(
     Each title reports the percentage, its Wilson score CI and *n*, so small
     groups are not over-read. A group with no non-missing values is titled
     "no data (n=0)". Each dot is 1 %; the percentage is rounded half up to
-    a whole number of dots.
+    a whole number of dots. Rows with a missing *facet* are not dropped:
+    they are drawn in a last panel, "(missing)", whatever *facet_order*
+    lists, and its row of the table holds the missing value in ``facet``.
 
     Parameters
     ----------
@@ -216,13 +222,13 @@ def percent_grid(
             raise ValueError(f"set success= to the value of {column!r} to count (found {sorted(map(str, uniq))})")
     elif len(uniq) == 2 and _level_key(success) not in uniq:
         raise ValueError(f"success={success!r} does not occur in {column!r}; its values are {sorted(map(str, uniq))}")
-    facets = _levels(data[facet], facet_order) if facet is not None else [None]
+    facets = with_missing(_levels(data[facet], facet_order), data[facet]) if facet is not None else [None]
     ncol = min(col_wrap, len(facets))
     nrow = int(np.ceil(len(facets) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.2 * ncol, 3.6 * nrow), squeeze=False)
     rows = []
     for ax, f in zip(axes.flat, facets):
-        s = (data if f is None else data[level_mask(data[facet], f)])[column].dropna()
+        s = (data if facet is None else data[group_mask(data[facet], f)])[column].dropna()
         n, k = int(s.size), int(level_mask(s, success).sum())
         p = k / n if n else np.nan
         lo, hi = st.wilson_ci(k, n, level)
@@ -234,7 +240,7 @@ def percent_grid(
         ax.set_ylim(-0.7, 9.7)
         ax.set_aspect("equal")
         ax.axis("off")
-        head = f"{level_label(f)}: " if f is not None else ""
+        head = f"{group_label(f)}: " if facet is not None else ""
         stat = f"{p:.1%}\n{level_percent(level)} CI {float(lo):.1%}–{float(hi):.1%}, n={n}" if n else "no data (n=0)"
         ax.set_title(f"{head}{stat}", fontsize="medium")
         rows.append({"facet": f, "n": n, "successes": k, "percent": 100 * p,
@@ -266,7 +272,10 @@ def stacked_percentages(
     Group sizes (*n*) are shown in the tick labels because percentages hide
     them. Segments smaller than *min_label* percent (a finite number) are
     not labelled. Rows with a missing *category* are left out of *n* and the
-    percentages. *group* and *category* must be different columns.
+    percentages. Rows with a missing *group* are not dropped: they are the
+    last bar, "(missing)", whatever *group_order* lists, with the missing
+    value in the table's *group* column. *group* and *category* must be
+    different columns.
 
     *group_order* may list a subset of groups. *category_order* sets the
     stacking order; it must list every category that occurs (so shares add to
@@ -289,11 +298,14 @@ def stacked_percentages(
     if reserved:
         raise ValueError(f"rename column(s) {reserved}: 'n' and 'percent' are the names of the output columns")
     _check_real("min_label", min_label)
-    groups = _levels(data[group], group_order)
+    groups = with_missing(_levels(data[group], group_order), data[group])
     cats = _levels(data[category], category_order, complete=True, allow_absent=True)
     # crosstab aligns its inputs on the index, which fails on repeated labels (pd.concat) in pandas 3
     counts = pd.crosstab(data[group].reset_index(drop=True), data[category].reset_index(drop=True))
     counts = counts.reindex(index=groups, columns=cats, fill_value=0)
+    unknown = data[group].isna()
+    if unknown.any():  # crosstab leaves out the rows without a group; they make the last bar
+        counts.iloc[-1] = data[category][unknown].value_counts().reindex(cats, fill_value=0).to_numpy()
     pct = counts.div(counts.sum(axis=1).replace(0, np.nan), axis=0).fillna(0) * 100
     cols = palette(len(cats), colors)
     fig, ax = get_ax(ax, figsize=(9, max(3, 0.5 * len(groups) + 1.5)) if horizontal else (max(6, 0.9 * len(groups) + 3), 5))
@@ -306,7 +318,7 @@ def stacked_percentages(
         center_labels(ax, bars, [f"{v:.0f}%" if v >= min_label else "" for v in vals], fontsize=8,
                       color=text_color(col))
         base += vals
-    ticks = [f"{level_label(g)}\n(n={n})" for g, n in zip(groups, counts.sum(axis=1))]
+    ticks = [f"{group_label(g)}\n(n={n})" for g, n in zip(groups, counts.sum(axis=1))]
     if horizontal:
         ax.set_yticks(pos, ticks)
         ax.xaxis.set_major_formatter(PercentFormatter())
@@ -319,7 +331,7 @@ def stacked_percentages(
     ax.legend(title=str(category), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
     ax.spines[["top", "right"]].set_visible(False)
     table = counts.stack().rename("n").reset_index()
-    group_n = table.groupby(group)["n"].transform("sum")
+    group_n = table.groupby(group, dropna=False)["n"].transform("sum")
     table["percent"] = table["n"] / group_n.replace(0, np.nan) * 100  # nan for a group with n = 0
     return VizResult(fig, ax, table)
 
@@ -430,7 +442,8 @@ def nested_pie(
                          "names of the output columns")
     check_has_values(data, outer, inner)  # an all-missing value column is a zero total, reported below
     # dropna=False: rows with a missing category keep their share of the total
-    grouped = data.groupby([outer, inner], sort=False, observed=True, dropna=False)
+    keys = [group_key(data[outer]), group_key(data[inner])]
+    grouped = data.groupby(keys, sort=False, observed=True, dropna=False)
     if value is None:
         agg = grouped.size().rename("value")
     else:
@@ -438,7 +451,7 @@ def nested_pie(
         check_finite(data, value)
         if (data[value] < 0).any():
             raise ValueError("nested_pie values must be non-negative")
-        agg = safe_sum(data[value], [data[outer], data[inner]], dropna=False).rename("value")
+        agg = safe_sum(data[value], keys, dropna=False).rename("value")
     agg = agg.reset_index()
     if not (agg["value"] > 0).any():  # not agg["value"].sum(), which can overflow
         raise ValueError("nested_pie needs a positive total; every value is zero or missing")

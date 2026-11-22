@@ -60,6 +60,20 @@ def _pages(n: int, per_page: int, ncols: int):
         yield start, fig, list(axes.flat[:count])
 
 
+def _categorical(values: pd.Series) -> pd.Series:
+    """*values*, with a dictionary-encoded Arrow column turned into the pandas Categorical it holds.
+
+    ``read_parquet(dtype_backend="pyarrow")`` returns a Categorical as such a
+    column, and pyarrow cannot sort it. The Categorical has the column's
+    categories in their declared order, unused ones included.
+    """
+    dtype = values.dtype
+    if isinstance(dtype, pd.ArrowDtype) and dtype.type is pd.CategoricalDtype.type:
+        return pd.Series(pd.Categorical(values.array.__arrow_array__().to_pandas()), index=values.index,
+                         name=values.name)
+    return values
+
+
 @cleanup_on_error
 def profile_bars(
     data: pd.DataFrame,
@@ -89,7 +103,7 @@ def profile_bars(
     figs, rows = [], []
     for start, fig, axes in _pages(len(cols), per_page, ncols):
         for ax, c in zip(axes, cols[start:]):
-            counts = data[c].value_counts(dropna=False, sort=False)
+            counts = _categorical(data[c]).value_counts(dropna=False, sort=False)
             # pandas 2.0 lists a missing-value row with count 0 for nullable dtypes that have no missing values
             counts = counts[~(counts.index.isna() & (counts.to_numpy() == 0))]
             try:
