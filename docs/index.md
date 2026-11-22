@@ -46,7 +46,8 @@ pip install "viz_calc @ git+https://github.com/elkronos/viz_calc"
 pip install "viz_calc[all] @ git+https://github.com/elkronos/viz_calc"
 ```
 
-The core needs only NumPy, pandas, Matplotlib and SciPy.
+The core needs NumPy, pandas, Matplotlib and SciPy. The package also lists
+python-dateutil and Pillow, which pandas and Matplotlib already install.
 
 ## Design rules
 

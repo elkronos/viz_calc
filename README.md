@@ -30,7 +30,9 @@ pip install "viz_calc @ git+https://github.com/elkronos/viz_calc"
 pip install "viz_calc[all] @ git+https://github.com/elkronos/viz_calc"   # + networkx, plotly, python-pptx
 ```
 
-The core needs only NumPy, pandas, Matplotlib and SciPy (Python ≥ 3.10).
+The core needs NumPy, pandas, Matplotlib and SciPy (Python ≥ 3.10). The
+package also lists python-dateutil and Pillow, which pandas and Matplotlib
+already install.
 
 ## What it offers beyond Matplotlib, seaborn and Plotly
 
