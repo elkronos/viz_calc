@@ -52,7 +52,8 @@ def test_confidence_ellipse_covers_the_true_mean_at_its_level(n):
     # The chi-square radius covered the mean of a correlated normal 51% (n = 3), 75% (n = 5) and 87% (n = 10)
     # of the time for a nominal 95%.
     rng = np.random.default_rng(n)
-    ax = SimpleNamespace(add_patch=lambda patch: None)  # only the geometry is needed; drawing 2000 patches is slow
+    # Only the geometry is needed; drawing 2000 patches is slow.
+    ax = SimpleNamespace(add_patch=lambda patch: None, add_artist=lambda patch: None)
     reps = 2000
     hits = sum(
         _inside(multivariate._ellipse(ax, rng.multivariate_normal([0, 0], [[4, 1.5], [1.5, 1]], n), 0.95,
@@ -60,6 +61,19 @@ def test_confidence_ellipse_covers_the_true_mean_at_its_level(n):
         for _ in range(reps)
     )
     assert hits / reps == pytest.approx(0.95, abs=0.02)
+
+
+def test_confidence_ellipse_of_a_small_group_does_not_set_the_axis_limits():
+    # At n = 3 the 95% region for the mean is 11.5 times the chi-square radius; as a patch it zoomed the axes out
+    # to 15 times the span of the points.
+    rng = np.random.default_rng(7)
+    arms = ["control"] * 12 + ["dose"] * 12 + ["small"] * 3
+    df = pd.DataFrame({"arm": arms, "m1": rng.normal(10, 2, 27), "m2": rng.normal(5, 1, 27),
+                       "m3": rng.normal(0, 3, 27)})
+    res = vc.pca_plot(df, ["m1", "m2", "m3"], group="arm", ellipse="confidence")
+    assert sorted(res.info["ellipses"]) == ["control", "dose", "small"]
+    assert np.ptp(res.axes.get_xlim()) < 2 * np.ptp(res.table["PC1"])
+    assert np.ptp(res.axes.get_ylim()) < 2 * np.ptp(res.table["PC2"])
 
 
 # --- PCA input: constant features and Arrow-backed columns --------------------------------------------------------

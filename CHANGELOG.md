@@ -64,8 +64,11 @@
   chi-square radius, which assumes a known covariance: a nominal 95% ellipse
   covered the true mean about 51% of the time in groups of 3, 75% in groups of 5
   and 87% in groups of 10. It now uses Hotelling's T² radius, √(2(n − 1)/(n − 2)
-  · F₂,ₙ₋₂(level)), which covers at the stated level from 3 points on; at n = 5
-  the ellipse is about twice as wide. The `"data"` ellipse keeps its chi-square
+  · F₂,ₙ₋₂(level)), which covers at the stated level from 3 points on; the
+  ellipse is about twice as wide at n = 5 and 11.5 times as wide at n = 3. A
+  confidence ellipse no longer sets the axis limits, so a small group's ellipse
+  is cut off at the edges of the plot rather than zooming the axes out until
+  the points sit in its middle. The `"data"` ellipse keeps its chi-square
   radius and is now described as the normal-theory ellipse at the group's mean
   and covariance.
 - The BCa intervals of `estimation_plot` and `stats.bootstrap_ci` changed with
