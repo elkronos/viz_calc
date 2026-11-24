@@ -235,7 +235,13 @@ same thing everywhere. The exceptions are listed here.
   each group), and `gantt` and `duration_plot` (start date); only with
   `sort=True`, `benchmark_bar` (mean) and `divergent_bar` (total). With it
   off, `dumbbell`, `gantt` and `duration_plot` keep row order and `likert`
-  the order of *items*. `upset` orders by `sort_by`.
+  the order of *items*. Tied values keep the order they would have
+  unsorted: category order in `lollipop` and `benchmark_bar`, row order in
+  `dumbbell`, `circular_bar`, `gantt` and `duration_plot`, the order of
+  *items* in `likert`. `upset` orders by `sort_by`.
+  A column whose values cannot all be compared, such as numbers next to
+  text from a spreadsheet, is sorted one type at a time: numbers first, then
+  the other types in alphabetical order of their type names.
   So `estimation_plot`'s default `reference` is the first level in sorted
   order unless the column is Categorical or `order=` is given. Where the
   order applies to one particular argument it is named after it:

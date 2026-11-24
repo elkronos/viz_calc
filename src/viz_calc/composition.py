@@ -561,7 +561,7 @@ def circular_bar(
     for i in range(len(groups)):
         sub = d[codes == i]
         if sort:
-            sub = sub.sort_values(value, ascending=False)
+            sub = sub.sort_values(value, ascending=False, kind="stable")  # ties keep row order
         parts.append(sub)
         part_codes.append(np.full(len(sub), i))
         slot_idx += range(slot, slot + len(sub))

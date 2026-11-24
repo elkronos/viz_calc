@@ -299,3 +299,32 @@ def test_network_map_hover_abbreviates_strength():
     edges = pd.DataFrame({"s": ["a", "b"], "t": ["b", "c"], "w": [18_000.0, 2.0]})
     res = vc.network_map(edges, "s", "t", weight="w", interactive=True)
     assert "strength 18K" in res.figure.data[-1].hovertext[0]
+
+
+# --- ties -------------------------------------------------------------------------------------------------------------
+
+def _alternating(n=40):
+    keys = [f"r{i:02d}" for i in range(n)]
+    return pd.DataFrame({"k": keys, "y": [5.0, 3.0] * (n // 2)})
+
+
+def test_tied_values_keep_label_or_row_order_under_sort():
+    d = _alternating()
+    fives = [k for k, y in zip(d["k"], d["y"]) if y == 5]
+    assert vc.lollipop(d, x="k", y="y").table["k"].tolist()[:len(fives)] == fives
+    shuffled = d.sample(frac=1, random_state=1)
+    rows = shuffled.assign(a=0.0, b=shuffled["y"])
+    assert vc.dumbbell(rows, "k", "a", "b").table["k"].tolist() == \
+        [k for y in (3.0, 5.0) for k in shuffled["k"][shuffled["y"] == y]]
+    res = vc.circular_bar(shuffled, label="k", value="y")
+    assert res.table["k"].tolist() == [k for y in (5.0, 3.0) for k in shuffled["k"][shuffled["y"] == y]]
+    bench = vc.benchmark_bar(pd.DataFrame({"g": [f"g{i:02d}" for i in range(24)] * 2, "y": [1.0] * 48}), x="g", y="y",
+                             sort=True)
+    assert bench.table["g"].tolist() == [f"g{i:02d}" for i in range(24)]
+
+
+def test_likert_ties_keep_the_order_of_items():
+    items = [f"q{i:02d}" for i in range(24)]
+    d = pd.DataFrame({q: ["a", "b"] * 5 for q in items})
+    res = vc.likert(d, items=items, levels=["a", "b"])
+    assert res.table["item"].tolist() == items

@@ -413,7 +413,7 @@ def benchmark_bar(
                      "ci_low": lo, "ci_high": hi, "status": status})
     table = pd.DataFrame(rows)
     if sort:
-        table = table.sort_values("mean", ascending=False, ignore_index=True)
+        table = table.sort_values("mean", ascending=False, ignore_index=True, kind="stable")  # ties keep order
 
     if error == "ci":
         err = np.vstack([table["mean"] - table["ci_low"], table["ci_high"] - table["mean"]])
@@ -503,7 +503,7 @@ def lollipop(
         agg = data.groupby(key, observed=True, dropna=False).size()
     table = agg.rename("value").reset_index()
     if sort is not None:
-        table = table.sort_values("value", ascending=(sort == "ascending"), ignore_index=True)
+        table = table.sort_values("value", ascending=(sort == "ascending"), ignore_index=True, kind="stable")
     missing = table[x].isna().to_numpy()
     if missing.any():  # the rows without an x come last, whatever their value
         last = np.argsort(missing, kind="stable")
@@ -609,7 +609,7 @@ def dumbbell(
         # In float: abs() of the smallest int64 wraps around to itself.
         table["pct_change"] = np.where(first != 0, table["change"].to_numpy(dtype=float) / np.abs(first) * 100, np.nan)
     if sort:
-        table = table.sort_values("change", ignore_index=True)
+        table = table.sort_values("change", ignore_index=True, kind="stable")  # ties keep row order
     else:
         table = table.reset_index(drop=True)
 
@@ -883,7 +883,7 @@ def likert(
                      "net": shares.iloc[k - half:].sum() - shares.iloc[:half].sum()})
     table = pd.DataFrame(rows)
     if sort:
-        table = table.sort_values("net", ignore_index=True)
+        table = table.sort_values("net", ignore_index=True, kind="stable")  # ties keep the order of items
 
     cols = palette(k, colors)
     fig, ax = get_ax(ax, figsize=(9, max(3, 0.5 * len(table) + 1.5)))
