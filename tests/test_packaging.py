@@ -96,6 +96,14 @@ def test_ci_lints_with_the_ruff_release_the_dev_extra_requires():
     assert _version(floor) == _version(pinned.pop())
 
 
+def test_docs_extra_caps_the_mkdocs_and_material_majors():
+    # Material for MkDocs 9 builds on mkdocs 1 and gets no fixes after 5 May 2027. A major release of either
+    # changes the docs toolchain, so the docs extra installs neither until the site moves on purpose.
+    docs = {_name(req): REQUIREMENT.match(req).group(3) for req in _pyproject()["project"]["optional-dependencies"]["docs"]}
+    assert re.search(r"<\s*2\b", docs["mkdocs"])
+    assert re.search(r"<\s*10\b", docs["mkdocs-material"])
+
+
 def test_numpy_floor_skips_1_24_0():
     # NumPy 1.24.0's np.ma.masked_invalid raises TypeError for a pandas Series, which Matplotlib's
     # fill_between passes it, so timeseries_fill failed with a numeric time column. 1.24.1 fixed it.
