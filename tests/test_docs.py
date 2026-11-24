@@ -397,6 +397,8 @@ def test_api_page_says_where_each_entry_imports_from():
             assert f"`viz_calc.{name}`" in intro, f"docs/api.md does not say the {name} functions are in viz_calc.{name}"
         else:
             assert name in vc.__all__, f"docs/api.md says {name} imports from the top level"
+            if name not in CHARTS:  # pca, to_pptx and the like are named, as "the chart functions" leaves them out
+                assert f"`{name}`" in intro, f"docs/api.md does not say that {name} imports from the top level"
 
 
 def test_okabe_ito_has_a_docstring_the_api_page_shows():

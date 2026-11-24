@@ -1,7 +1,7 @@
 # API reference
 
-The chart functions, `VizResult`, `palette` and `OKABE_ITO` are importable
-from the top level (`import viz_calc as vc`). The statistics are in
+The chart functions, `pca`, `to_pptx`, `VizResult`, `palette` and `OKABE_ITO`
+are importable from the top level (`import viz_calc as vc`). The statistics are in
 `viz_calc.stats` and the example datasets in `viz_calc.datasets`
 (`from viz_calc import stats, datasets`).
 
