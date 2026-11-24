@@ -838,6 +838,7 @@ def likert(
         columns, so levels with those names must be renamed.
     colors
         A diverging colormap name or a list of exactly one colour per level.
+        ``None`` gives the default, ``"RdBu"``.
 
     References
     ----------
@@ -859,7 +860,9 @@ def likert(
     reserved = [lv for lv in levels if isinstance(lv, str) and lv in ("item", "n", "net")]
     if reserved:
         raise ValueError(f"rename level(s) {reserved}: 'item', 'n' and 'net' are the names of the table's own columns")
-    if colors is not None and not isinstance(colors, str):
+    if colors is None:  # palette(k, None) would colour the levels with the categorical Okabe-Ito palette
+        colors = "RdBu"
+    if not isinstance(colors, str):
         colors = list(colors)
         if len(colors) != len(levels):
             raise ValueError(f"colors must be a colormap name or {len(levels)} colours (one per level), "

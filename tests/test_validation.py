@@ -179,6 +179,18 @@ def test_likert_colors_need_one_per_level():
     vc.likert(s, items=items, levels=levels, colors="PuOr")
 
 
+def test_likert_colors_none_draws_the_default_diverging_colormap():
+    # a categorical palette would hide which side of the scale is negative
+    s = datasets.survey()
+    levels = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"]
+
+    def fills(colors):
+        res = vc.likert(s, items=["Tools are adequate"], levels=levels, colors=colors)
+        return [to_hex(p.get_facecolor()) for p in res.axes.patches]
+
+    assert fills(None) == fills("RdBu")
+
+
 def test_palette_rejects_invalid_colours():
     with pytest.raises(ValueError, match="invalid colour"):
         vc.palette(3, ["red", "nope"])
