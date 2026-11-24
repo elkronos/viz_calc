@@ -198,6 +198,33 @@ def test_every_third_party_import_is_a_declared_dependency():
     assert not undeclared, f"imported but not in pyproject.toml dependencies or extras: {undeclared}"
 
 
+def _require_calls() -> set[tuple[str, str]]:
+    """(module, extra) for each ``require("module", "extra")`` call in the package source."""
+    calls = set()
+    for path in sorted((ROOT / "src" / "viz_calc").rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "require" and len(node.args) == 2
+                    and all(isinstance(arg, ast.Constant) for arg in node.args)):
+                calls.add((node.args[0].value, node.args[1].value))
+    return calls
+
+
+def test_missing_optional_dependency_names_the_package_to_install(monkeypatch):
+    # The module imported (plotly.graph_objects, pptx) is not the package pip installs (plotly, python-pptx).
+    from viz_calc._core import require
+
+    calls = _require_calls()
+    if not calls:
+        pytest.skip("the package source is not next to the tests")
+    extras = _pyproject()["project"]["optional-dependencies"]
+    for module, extra in sorted(calls):
+        monkeypatch.setitem(sys.modules, module, None)  # the import fails as if the package were missing
+        with pytest.raises(ImportError) as info:
+            require(module, extra)
+        named = re.search(r"optional dependency '([^']+)'", str(info.value)).group(1)
+        assert _name(named) in {_name(req) for req in extras[extra]}, f"require({module!r}, {extra!r}) names {named!r}"
+
+
 def test_readme_images_load_from_the_package_page():
     # README.md is the package's long description, and a package index resolves a relative src against
     # its own site, so each image is the raw.githubusercontent.com URL of a file in this repository.

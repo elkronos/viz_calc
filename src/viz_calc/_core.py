@@ -802,15 +802,23 @@ class AbbrevFormatter(ScalarFormatter):
         return "" if self._mode is not None else super().get_offset()
 
 
+_DISTRIBUTIONS = {"pptx": "python-pptx"}  # import name -> the package that installs it, where they differ
+
+
 def require(module: str, extra: str) -> Any:
-    """Import an optional dependency or explain how to install it."""
+    """Import an optional dependency or explain how to install it.
+
+    The message names the package to install (plotly, python-pptx), not the module imported
+    (plotly.graph_objects, pptx).
+    """
     import importlib
 
     try:
         return importlib.import_module(module)
     except ImportError as exc:  # pragma: no cover - depends on environment
+        top = module.split(".")[0]
         raise ImportError(
-            f"This function needs the optional dependency '{module}'. "
+            f"This function needs the optional dependency '{_DISTRIBUTIONS.get(top, top)}'. "
             f"Install it with: {install_hint(extra)}"
         ) from exc
 
