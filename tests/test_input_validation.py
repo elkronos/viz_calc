@@ -605,3 +605,62 @@ def test_counts_given_as_whole_floats_get_the_same_message_everywhere(call, name
     with pytest.raises(ValueError, match=rf"{name} must be a whole number of at least \d given as an int, "
                                          rf"got the float \d\.0; use \d$"):
         call()
+
+
+# --- no row holds every value a chart needs -------------------------------------------------------------------------
+
+
+def _apart(data, first, second):
+    """*data* with *first* missing in its first half and *second* in its second half: no row has both."""
+    d = data.copy().reset_index(drop=True)
+    half = len(d) // 2
+    d.loc[: half - 1, first] = None
+    d.loc[half:, second] = None
+    return d
+
+
+@pytest.mark.parametrize("call, message", [
+    (lambda: vc.correlogram(_apart(datasets.measurements(), "length", "width"), columns=["length", "width"]),
+     r"no row has a value in two of the columns \['length', 'width'\]"),
+    (lambda: vc.compare_correlations(_apart(datasets.measurements(), "length", "width"), group="group",
+                                     columns=["length", "width"]),
+     r"no row has a value in two of the columns \['length', 'width'\]"),
+    (lambda: vc.gantt(_apart(datasets.projects(), "start", "end"), task="task", start="start", end="end"),
+     r"no row has a value in each of \['start', 'end'\]"),
+    (lambda: vc.duration_plot(_apart(datasets.projects(), "start", "end"), "task", "start", "end", "work_start",
+                              "work_end"),
+     r"no row has a value in each of \['start', 'end'\]"),
+    (lambda: vc.raincloud(_apart(datasets.trial(), "arm", "score"), x="arm", y="score"),
+     r"no row has a value in each of \['arm', 'score'\]"),
+    (lambda: vc.timeseries_fill(_apart(datasets.sales(), "online", "store"), time="date", series=["online", "store"]),
+     "no time has both a 'online' and a 'store' value"),
+], ids=["correlogram", "compare_correlations", "gantt", "duration_plot", "raincloud", "timeseries_fill"])
+def test_a_chart_with_no_complete_row_raises_before_drawing(call, message):
+    with pytest.raises(ValueError, match=message):
+        call()
+    assert plt.get_fignums() == []
+
+
+def test_charts_still_draw_when_some_rows_are_complete():
+    d = _apart(datasets.measurements(), "length", "width")
+    d.loc[0, "length"] = 5.0
+    d.loc[1, "length"] = 4.0  # two complete rows
+    assert vc.correlogram(d, columns=["length", "width", "depth"]).table["n"].tolist() == [2, 77, 75]
+    p = datasets.projects()
+    p.loc[:2, "end"] = pd.NaT
+    assert vc.gantt(p, task="task", start="start", end="end").table["duration_days"].notna().sum() == 3
+    inner = datasets.projects().assign(work_start=pd.NaT)  # a missing inner window is documented: no inner bar
+    assert vc.duration_plot(inner, "task", "start", "end", "work_start", "work_end").table["inner_days"].isna().all()
+    # Rows of one time are averaged before the series are compared, so values on different rows still pair up.
+    long = pd.DataFrame({"t": [1, 1, 2, 2], "a": [1.0, None, 3.0, None], "b": [None, 2.0, None, 1.0]})
+    assert vc.timeseries_fill(long, time="t", series=["a", "b"]).table["difference"].tolist() == [-1.0, 2.0]
+
+
+def test_profile_scatters_marks_a_pair_with_no_complete_rows():
+    d = _apart(datasets.measurements(), "length", "width")
+    res = vc.profile_scatters(d, columns=["length", "width", "depth"])
+    empty = res.table.index[res.table["n"] == 0].tolist()
+    assert len(empty) == 1
+    ax = res.figure[0].axes[empty[0]]
+    assert ax.get_title(loc="left") == "n=0"
+    assert [t.get_text() for t in ax.texts] == ["no complete rows"]

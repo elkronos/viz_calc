@@ -262,6 +262,17 @@ def check_has_values(data: pd.DataFrame, *columns: str | None) -> None:
             raise ValueError(f"column {c!r} has no non-missing values")
 
 
+def check_complete(data: pd.DataFrame, *columns: Any) -> None:
+    """Raise unless some row has a value in every column of *columns*; ``None`` entries are skipped.
+
+    Each column may have values while no row has all of them, which would
+    leave nothing to draw.
+    """
+    columns = [c for c in columns if c is not None]
+    if columns and not select_columns(data, columns).notna().all(axis=1).any():
+        raise ValueError(f"no row has a value in each of {columns}, so there is nothing to draw")
+
+
 def check_not_reserved(reserved: Sequence[str], **roles: Any) -> None:
     """Raise if a column given for one of *roles* is named like one of the table's own columns, *reserved*.
 

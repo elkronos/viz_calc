@@ -268,7 +268,9 @@ same thing everywhere. The exceptions are listed here.
   `period_bars`, `timeseries_fill` (a numeric time column included),
   `calendar_heatmap` and `animated_bubble`, and in `pca_plot` and `radar`.
   `sankey` and `network_map` reject infinite flows and edge weights. Missing
-  values are handled as each function describes. A complex column raises an
+  values are handled as each function describes; a chart that would have
+  nothing to draw, because no row holds all the values it needs (such as
+  both dates of a task), raises an error instead. A complex column raises an
   error naming it wherever a chart expects numbers, rather than being drawn by
   its real part, and the columns a chart picks by default leave it out.
 * **Missing groups.** Rows whose group is missing are not dropped by the

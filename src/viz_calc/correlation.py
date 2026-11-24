@@ -68,6 +68,12 @@ def _pairwise(data: pd.DataFrame, cols: list[str], method: Method, level: float 
     return pd.DataFrame(rows)
 
 
+def _check_pairs(table: pd.DataFrame, cols: list[Any]) -> None:
+    """Raise if no pair in *table* (from :func:`_pairwise`) has a complete row: every cell would be empty."""
+    if not (table["n"] > 0).any():
+        raise ValueError(f"no row has a value in two of the columns {cols}, so there is no pair to correlate")
+
+
 def _at_or_above(values: np.ndarray, centre: float, kind: str) -> np.ndarray:
     """Which *values* are at or above *centre* (their ``"mean"`` or ``"median"``, per *kind*), rounding included.
 
@@ -164,6 +170,7 @@ def correlogram(
     check_cmap("cmap", cmap)
     cols = _numeric_columns(data, columns)
     table = _pairwise(data, cols, method)
+    _check_pairs(table, cols)
     table["p_adjusted"] = st.adjust_pvalues(table["p"], p_adjust)
     table["significant"] = table["p_adjusted"] < alpha
 
@@ -250,6 +257,7 @@ def compare_correlations(
         note = f" ({dropped} row(s) with a missing {group!r} are left out)" if dropped else ""
         raise ValueError(f"compare_correlations needs at least two groups{note}")
     per_group = {g: _pairwise(data[level_mask(data[group], g)], cols, method) for g in groups}
+    _check_pairs(pd.concat(per_group.values()), cols)
 
     frames = []
     for ga, gb in combinations(groups, 2):

@@ -18,6 +18,7 @@ from ._core import (
     VizResult,
     category_order,
     check_choice,
+    check_complete,
     check_count,
     check_dataframe,
     check_distinct,
@@ -312,6 +313,7 @@ def raincloud(
     check_numeric(data, y)
     check_finite(data, y)
     check_has_values(data, y)
+    check_complete(data, x, y)  # rows with a missing x are left out
     groups = category_order(data[x], order)
     cols = palette(len(groups), colors)
     rng = np.random.default_rng(seed)

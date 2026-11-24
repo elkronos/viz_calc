@@ -27,6 +27,7 @@ from ._core import (
     check_choice,
     check_cmap,
     check_color,
+    check_complete,
     check_count,
     check_dataframe,
     check_finite,
@@ -333,6 +334,8 @@ def timeseries_fill(
     d[time] = _numpy_numbers(col)
     check_finite(d, time)  # a numeric time column too, also years stored as objects or in a Categorical
     d = d.dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
+    if not (d[a].notna() & d[b].notna()).any():
+        raise ValueError(f"no time has both a {a!r} and a {b!r} value, so there is nothing to compare")
     t = d[time]
     tz = getattr(t.dtype, "tz", None)
     # Matplotlib converts tz-aware values one Timestamp at a time; their UTC date numbers draw the same, fast
@@ -507,6 +510,7 @@ def gantt(
     _check_distinct(group=group, start=start, end=end)
     check_not_reserved(["duration_days"], task=task, start=start, end=end, group=group)
     check_has_values(data, start, end)
+    check_complete(data, start, end)
     d = data.copy()
     tz = _timeline_columns(d, [start, end])
     bad = d[d[end] < d[start]]
@@ -594,6 +598,7 @@ def duration_plot(
                        inner_start=inner_start, inner_end=inner_end)
     colors = slot_colors(colors, ("outer", "inner"))
     check_has_values(data, start, end)
+    check_complete(data, start, end)
     d = data.copy()
     # dict.fromkeys: the inner window may reuse the outer window's columns, which must be selected once
     columns = list(dict.fromkeys([label, start, end, inner_start, inner_end]))

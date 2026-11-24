@@ -221,7 +221,8 @@ def profile_scatters(
     :func:`viz_calc.stats.correlation_test`), so a tiny pair does not get a
     near-zero p-value from the large-sample approximation. Large data are
     subsampled to *max_points* points per panel for drawing only (statistics
-    use all rows).
+    use all rows). A pair with no complete rows gets ``n=0`` and an empty
+    panel saying so.
     """
     columns = None if columns is None else column_list("columns", columns, distinct=True)
     check_dataframe(data, columns or [])
@@ -259,7 +260,11 @@ def profile_scatters(
                 ax.plot(gx, icpt + slope * gx, color=OKABE_ITO[5], lw=1.2)
             ax.set_xlabel(r.x, fontsize=8)
             ax.set_ylabel(r.y, fontsize=8)
-            ax.set_title(f"r={r.r:.2f}, p_adj={r.p_adjusted:.2g}", fontsize="small", loc="left")
+            if r.n == 0:
+                ax.text(0.5, 0.5, "no complete rows", transform=ax.transAxes, ha="center", va="center", color=NEUTRAL)
+                ax.set_title("n=0", fontsize="small", loc="left")
+            else:
+                ax.set_title(f"r={r.r:.2f}, p_adj={r.p_adjusted:.2g}", fontsize="small", loc="left")
             ax.spines[["top", "right"]].set_visible(False)
         fig.tight_layout()
         figs.append(fig)
