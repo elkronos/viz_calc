@@ -217,6 +217,23 @@ def test_waffle_percent_is_unchanged_for_ordinary_values():
         plt.close("all")
 
 
+def test_waffle_computes_the_data_limits_from_the_corner_tiles_only(monkeypatch):
+    # add_patch recomputed the limits from every tile: about 7 s for a 150 x 150 grid
+    from matplotlib.axes import Axes
+
+    added = []
+    add_patch = Axes.add_patch
+    monkeypatch.setattr(Axes, "add_patch", lambda ax, p: (added.append(p), add_patch(ax, p))[1])
+    res = vc.waffle(datasets.survey(), category="team", rows=30, columns=40)
+    tiles = res.axes.patches
+    assert len(tiles) == 1200 and all(type(t) is plt.Rectangle for t in tiles)
+    assert added == [tiles[0], tiles[39], tiles[-1]]
+    bounds = res.axes.dataLim.bounds
+    assert bounds == pytest.approx((0, 0, 39.9, 29.9))
+    res.axes.relim()
+    assert res.axes.dataLim.bounds == bounds
+
+
 # --- percent_grid level, bullet bands, stacked_percentages columns --------------------------------------------------
 
 

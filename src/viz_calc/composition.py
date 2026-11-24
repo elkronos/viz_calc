@@ -137,11 +137,21 @@ def waffle(
     tiles = st.largest_remainder(values.astype(float), n_tiles)
 
     fig, ax = get_ax(ax, figsize=(columns * 0.45 + 3, rows * 0.45 + 1))
+    # add_patch recomputes the data limits from each tile it adds, which took most of the time on large grids.
+    # Tiles fill the grid row by row from the top left, so the first tile, the last of the first row and the last
+    # tile span them all: adding those three with add_patch, and the rest with add_artist, gives the same limits
+    # (also after relim()).
+    count = int(sum(tiles))
+    corners = {0, min(columns, count) - 1, count - 1}
     idx = 0
     for c, t in enumerate(tiles):
         for _ in range(t):
             r, k = divmod(idx, columns)
-            ax.add_patch(plt.Rectangle((k, rows - 1 - r), 0.9, 0.9, color=cols[c]))
+            tile = plt.Rectangle((k, rows - 1 - r), 0.9, 0.9, color=cols[c])
+            if idx in corners:
+                ax.add_patch(tile)
+            else:
+                ax.add_artist(tile)
             idx += 1
     ax.set_xlim(-0.1, columns)
     ax.set_ylim(-0.1, rows)
