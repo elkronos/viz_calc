@@ -27,6 +27,7 @@ from ._core import (
     check_not_reserved,
     check_numeric,
     check_range,
+    check_seed,
     cleanup_on_error,
     foreground,
     get_ax,
@@ -334,6 +335,7 @@ def raincloud(
     check_has_values(data, y)
     check_complete(data, x, y)  # rows with a missing x are left out
     bw_method = _check_bw(bw_method)
+    check_seed(seed)
     groups = category_order(data[x], order)
     cols = palette(len(groups), colors)
     rng = np.random.default_rng(seed)

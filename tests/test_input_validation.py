@@ -868,3 +868,54 @@ def test_lower_precision_values_just_below_a_threshold_stay_below():
     d = pd.DataFrame({"g": ["a"] * 3, "y": np.array([0.7, 0.6999999, 0.71], dtype="float32")})
     assert vc.centered_bar(d, x="g", y="y", threshold=0.7).table["n_above"].tolist() == [2]
     assert (pd.Series(d["y"]) >= 0.7).sum() == 2  # as pandas counts them
+
+
+# --- seeds and dataset sizes ----------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("seed, message", [
+    (True, "seed must be a whole number of at least 0, got True"),
+    (-1, "seed must be a whole number of at least 0, got -1"),
+    (2.0, "seed must be a whole number of at least 0 given as an int, got the float 2.0; use 2"),
+    ("1", "seed must be a whole number of at least 0, got '1'"),
+])
+@pytest.mark.parametrize("call", [
+    lambda seed: datasets.trial(seed=seed),
+    lambda seed: datasets.sales(seed=seed),
+    lambda seed: datasets.memberships(seed=seed),
+    lambda seed: vc.raincloud(datasets.trial(), x="arm", y="score", seed=seed),
+    lambda seed: vc.estimation_plot(datasets.trial(), x="arm", y="score", n_resamples=50, seed=seed),
+], ids=["trial", "sales", "memberships", "raincloud", "estimation_plot"])
+def test_a_seed_must_be_a_whole_number_of_at_least_zero(call, seed, message):
+    with pytest.raises(ValueError, match=re.escape(message)):
+        call(seed)
+    assert plt.get_fignums() == []
+
+
+def test_seeds_may_be_numpy_integers_and_generators():
+    assert datasets.trial(seed=np.int64(1)).equals(datasets.trial(seed=1))
+    vc.raincloud(datasets.trial(), x="arm", y="score", seed=np.random.default_rng(1))
+    assert datasets.survey(seed=None).shape == (300, 8)
+
+
+@pytest.mark.parametrize("seed, message", [
+    (2.7, "seed must be a whole number of at least 0, got 2.7"),  # was truncated to 2
+    (-1, "seed must be a whole number of at least 0, got -1"),
+    (2**40, "seed must be below 2**32"),
+    (np.random.default_rng(1), "seed must be a whole number of at least 0, got Generator"),
+])
+def test_network_map_seed_is_what_networkx_takes(seed, message):
+    pytest.importorskip("networkx")
+    with pytest.raises(ValueError, match=re.escape(message)):
+        vc.network_map(datasets.network(), "source", "target", "strength", seed=seed)
+    vc.network_map(datasets.network(), "source", "target", "strength", seed=np.int64(3))
+
+
+@pytest.mark.parametrize("call, name", [
+    (lambda size: datasets.trial(n_per_group=size), "n_per_group"),
+    (lambda size: datasets.survey(n=size), "n"),
+])
+@pytest.mark.parametrize("size", [0, -1, 2.0, True])
+def test_dataset_sizes_must_be_whole_numbers_of_at_least_one(call, name, size):
+    with pytest.raises(ValueError, match=f"{name} must be a whole number of at least 1"):
+        call(size)

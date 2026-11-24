@@ -31,6 +31,7 @@ from ._core import (
     check_has_values,
     check_not_reserved,
     check_numeric,
+    check_seed,
     cleanup_on_error,
     column_list,
     exact_mean,
@@ -195,7 +196,8 @@ def estimation_plot(
         A colormap name or a list of colours, one per group (a shorter list
         is cycled). Defaults to the Okabe–Ito palette.
     seed
-        Seed for jitter and bootstrap, so the figure is reproducible.
+        Seed for jitter and bootstrap, so the figure is reproducible:
+        ``None``, an ``int`` of at least 0 or a NumPy ``Generator``.
     ci
         Interval for the mean difference: ``"bca"`` (bias-corrected and
         accelerated bootstrap, the default), ``"percentile"`` (bootstrap
@@ -232,6 +234,7 @@ def estimation_plot(
     check_not_reserved(["n", "mean", "sd", "ci_low", "ci_high"], x=x)
     st._check_level(level)
     check_count("n_resamples", n_resamples)
+    check_seed(seed)
     check_has_values(data, y)
     groups = category_order(data[x], order)
     if len(groups) < 2:

@@ -238,6 +238,23 @@ def check_count(name: str, value: Any, minimum: int = 1) -> None:
         raise ValueError(f"{name} must be a whole number of at least {minimum}, got {value!r}")
 
 
+def check_seed(seed: Any, generators: bool = True) -> None:
+    """Raise unless *seed* is ``None``, an ``int`` of at least 0, or a NumPy ``Generator``, ``BitGenerator`` or ``SeedSequence``.
+
+    These are the seeds :func:`numpy.random.default_rng` takes, as
+    :func:`viz_calc.stats.bootstrap_ci` checks them. With
+    ``generators=False`` (networkx layouts) only ``None`` or an ``int``
+    below 2**32 is accepted.
+    """
+    if seed is None:
+        return
+    if generators and isinstance(seed, (np.random.Generator, np.random.BitGenerator, np.random.SeedSequence)):
+        return
+    check_count("seed", seed, minimum=0)
+    if not generators and seed >= 2**32:
+        raise ValueError(f"seed must be below 2**32, got {seed!r}")
+
+
 def check_range(name: str, value: Any, low: float, high: float, include_high: bool = True) -> float:
     """*value* as a float, after checking it is a real number from *low* to *high* (inclusive unless told otherwise).
 

@@ -23,6 +23,7 @@ from ._core import (
     check_distinct,
     check_has_values,
     check_numeric,
+    check_seed,
     cleanup_on_error,
     foreground,
     palette,
@@ -303,7 +304,8 @@ def network_map(
     Louvain communities (Blondel et al., 2008), using NetworkX's built-in
     implementation. Node size encodes *size_by* (``"degree"``, ``"strength"``
     or ``"betweenness"``); colour encodes community.
-    The layout is seeded so it is reproducible. Rows missing *source* or
+    The layout is seeded so it is reproducible (*seed* is ``None`` or an
+    ``int`` from 0 to 2**32 - 1, as networkx takes it). Rows missing *source* or
     *target* are left out, whatever their weight. Repeated edges (including
     B→A after A→B in an undirected graph) are merged, summing their weights;
     missing weights raise an error. Weighted betweenness uses 1/weight as edge
@@ -347,6 +349,7 @@ def network_map(
     check_dataframe(data, [source, target, weight])
     check_distinct(source=source, target=target, weight=weight)
     check_choice("size_by", size_by, ["degree", "strength", "betweenness"])
+    check_seed(seed, generators=False)  # networkx takes an int below 2**32
     weighted = weight is not None  # a column may legitimately be labelled 0
     if weighted:
         if pd.api.types.is_complex_dtype(data[weight]):

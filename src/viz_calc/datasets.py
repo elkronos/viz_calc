@@ -2,12 +2,17 @@
 
 They are generated, not downloaded, so the examples work offline and give
 the same numbers every time. None of them describe real people or companies.
+Sizes are ``int`` values of at least 1, and a *seed* is ``None``, an ``int``
+of at least 0 or a NumPy ``Generator``, as :func:`numpy.random.default_rng`
+takes it.
 """
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+
+from ._core import check_count, check_seed
 
 __all__ = ["trial", "survey", "sales", "measurements", "projects", "network", "memberships"]
 
@@ -21,6 +26,8 @@ def trial(n_per_group: int = 40, seed: int = 1) -> pd.DataFrame:
     half a standard deviation); the low dose by 3 points with a larger
     spread, so the group variances differ and Welch's test matters.
     """
+    check_count("n_per_group", n_per_group)
+    check_seed(seed)
     rng = np.random.default_rng(seed)
     arms = {"control": (50, 10), "low dose": (53, 14), "high dose": (56, 10)}
     frames = []
@@ -45,6 +52,8 @@ def survey(n: int = 300, seed: int = 2) -> pd.DataFrame:
     manageable"``) and holds one of five labels from "Strongly disagree" to
     "Strongly agree"; ``remote`` is boolean.
     """
+    check_count("n", n)
+    check_seed(seed)
     rng = np.random.default_rng(seed)
     levels = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"]
     leanings = {"Workload is manageable": -0.6, "My manager supports me": 0.8, "Tools are adequate": 0.1,
@@ -64,6 +73,7 @@ def sales(seed: int = 3) -> pd.DataFrame:
     Columns: ``date``, ``online`` and ``store`` (the two channels' sales) and
     ``region`` (East or West).
     """
+    check_seed(seed)
     rng = np.random.default_rng(seed)
     days = pd.date_range("2023-01-01", "2024-12-31", freq="D")
     t = np.arange(days.size)
@@ -81,6 +91,7 @@ def measurements(seed: int = 4) -> pd.DataFrame:
     Columns: ``group`` (alpha / beta / gamma), the numeric ``length``,
     ``width``, ``depth`` and ``mass``, and ``grade`` (A, B or C).
     """
+    check_seed(seed)
     rng = np.random.default_rng(seed)
     specs = {"alpha": (5.0, 3.4, 1.5, 0.3), "beta": (5.9, 2.8, 4.3, 1.3), "gamma": (6.6, 3.0, 5.6, 2.0)}
     frames = []
@@ -114,6 +125,7 @@ def projects() -> pd.DataFrame:
 
 def network(seed: int = 5) -> pd.DataFrame:
     """An edge list with two loosely linked friend groups: ``source``, ``target``, ``strength``."""
+    check_seed(seed)
     rng = np.random.default_rng(seed)
     a = ["Ana", "Ben", "Cai", "Dee", "Eli", "Fay"]
     b = ["Gus", "Hal", "Ivy", "Jo", "Kai", "Lu"]
@@ -129,6 +141,7 @@ def network(seed: int = 5) -> pd.DataFrame:
 
 def memberships(seed: int = 6) -> dict[str, set[str]]:
     """Five overlapping sets of user IDs, e.g. users of five product features."""
+    check_seed(seed)
     rng = np.random.default_rng(seed)
     users = [f"u{i:03d}" for i in range(400)]
     rates = {"Search": 0.6, "Export": 0.25, "Sharing": 0.35, "Alerts": 0.2, "API": 0.08}
