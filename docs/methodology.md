@@ -136,7 +136,9 @@ conditional on the ties). The *t* approximation is badly anti-conservative
 there: it gives $p = 0$ for any perfect rank agreement, whereas the exact
 two-sided p for $|\rho| = 1$ is $2/n!$, i.e. 0.33 at $n = 3$ and 0.083 at
 $n = 4$, so no rank correlation of three or four pairs can reach $p < 0.05$.
-From $n = 10$ the *t* approximation is used. `correlogram`,
+The pairings are counted by dynamic programming over the positions not yet
+paired, with tied ranks grouped, so each table takes a few milliseconds at
+$n = 9$. From $n = 10$ the *t* approximation is used. `correlogram`,
 `profile_scatters` and `quadrant_plot` inherit this.
 
 ### Difference between two independent correlations

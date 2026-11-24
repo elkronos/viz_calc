@@ -96,6 +96,43 @@ def test_small_n_spearman_p_matches_full_enumeration_with_ties():
     assert checked > 40
 
 
+def test_spearman_p_up_to_nine_pairs_is_the_exact_share_of_all_pairings():
+    rng = np.random.default_rng(8)
+    for n in (8, 9):
+        pairings = np.array(list(itertools.permutations(range(n))))
+        for levels in (3, 5, 50):
+            x, y = rng.integers(0, levels, n).astype(float), rng.integers(0, 4, n).astype(float)
+            a, b = np.rint(2 * sps.rankdata(x)).astype(np.int64), np.rint(2 * sps.rankdata(y)).astype(np.int64)
+            t = np.abs(n * (b[pairings] @ a) - a.sum() * b.sum())
+            reach = int((t >= abs(n * (a @ b) - a.sum() * b.sum())).sum())
+            assert st.correlation_test(x, y, "spearman")["p"] == reach / math.factorial(n)
+
+
+def test_exact_spearman_null_counts_the_pairings_without_listing_them():
+    # Listing all 9! = 362,880 pairings took about 28 MB and 15-40 ms for every new pair of tie patterns.
+    import tracemalloc
+
+    st._spearman_null.cache_clear()
+    tracemalloc.start()
+    try:
+        st._spearman_null(tuple(range(2, 19, 2)), tuple(range(2, 19, 2)))  # no ties: the most states
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak < 8 * 2**20
+
+
+def test_cached_spearman_null_tables_are_read_only():
+    a, b = (2, 4, 6, 8, 10), (3, 3, 6, 8, 10)
+    values, at_least = st._spearman_null(a, b)
+    assert st._spearman_null(a, b)[1] is at_least  # every caller shares the cached arrays
+    for arr in (values, at_least):
+        with pytest.raises(ValueError, match="read-only"):
+            arr[0] = 0
+    # the sorted pairing, with or without the tie swapped, and its reverse
+    assert st.correlation_test([1.0, 2, 3, 4, 5], [1.0, 1, 3, 4, 5], "spearman")["p"] == 4 / 120
+
+
 def test_spearman_from_ten_pairs_and_pearson_keep_the_t_test():
     rng = np.random.default_rng(5)
     x, y = rng.normal(size=10), rng.normal(size=10)

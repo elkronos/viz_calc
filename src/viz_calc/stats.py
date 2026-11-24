@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import math
 import numbers
 from collections.abc import Callable, Sequence
 from fractions import Fraction
 from functools import lru_cache
-from itertools import permutations
 from typing import Any, Literal
 
 import numpy as np
@@ -515,10 +515,9 @@ def _check_method(method: str) -> None:
 _SPEARMAN_EXACT_MAX_N = 9
 
 
-@lru_cache(maxsize=16)
-def _permutations(n: int) -> np.ndarray:
-    """All ``n!`` orderings of ``range(n)`` as an ``(n!, n)`` array."""
-    return np.array(list(permutations(range(n))), dtype=np.int8)
+def _tie_states(ranks: tuple[int, ...]) -> int:
+    """Number of ways to leave some positions of each tied group of *ranks* free: the product of (size + 1)."""
+    return math.prod(ranks.count(v) + 1 for v in set(ranks))
 
 
 @lru_cache(maxsize=256)
@@ -526,13 +525,51 @@ def _spearman_null(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[np.ndarray, 
     """Exact null distribution of ``|T|`` for doubled midranks *a* and *b* (see :func:`_spearman_exact_p`).
 
     Returns the sorted distinct values of ``|T|`` over all ``n!`` pairings and, for
-    each, how many pairings reach at least that value. It depends only on the two
-    multisets of ranks, so it is cached: data without ties share one table per *n*.
+    each, how many pairings reach at least that value, as read-only arrays. It
+    depends only on the two multisets of ranks, so it is cached: data without
+    ties share one table per *n*.
+
+    The values of *b* are paired one at a time with a free position of *a*,
+    and the pairings are counted without being listed. Positions holding equal
+    values of *a* are interchangeable, so a state is the number of free
+    positions per distinct value of *a*, and it holds how many partial
+    pairings reach each partial sum of ``a_i·b_j``. There are at most ``2**n``
+    states (512 at n = 9), and fewer with ties; *a* is whichever side has more
+    ties, since the distribution is the same either way.
     """
-    av, bv = np.array(a, dtype=float), np.array(b, dtype=float)  # small integers: float arithmetic is exact
-    t = np.abs(av.size * (bv[_permutations(av.size)] @ av) - av.sum() * bv.sum())
-    values, counts = np.unique(t, return_counts=True)
-    return values, np.cumsum(counts[::-1])[::-1]
+    if _tie_states(b) < _tie_states(a):
+        a, b = b, a
+    n, low_a, low_b = len(a), min(a), min(b)
+    levels = sorted(set(a))
+    # Sums of (a - low_a)·(b - low_b) are non-negative and at most the sorted pairing's (rearrangement inequality).
+    size = sum((x - low_a) * (y - low_b) for x, y in zip(sorted(a), sorted(b))) + 1
+    start = np.zeros(size, dtype=np.int64)
+    start[0] = 1
+    states = {tuple(a.count(v) for v in levels): start}
+    for y in b:
+        reached: dict = {}
+        for free, counts in states.items():
+            for i, f in enumerate(free):
+                if f:
+                    key = free[:i] + (f - 1,) + free[i + 1:]
+                    if key not in reached:
+                        reached[key] = np.zeros(size, dtype=np.int64)
+                    shift = (levels[i] - low_a) * (y - low_b)
+                    reached[key][shift:] += f * counts[:size - shift]  # any of the f equal positions
+        states = reached
+    (counts,) = states.values()
+    sums = np.flatnonzero(counts)
+    # Σ a_i·b_i = Σ (a_i - low_a)(b_i - low_b) + low_a·Σb + low_b·Σa - n·low_a·low_b; small integers, so the
+    # float arithmetic is exact.
+    t = np.abs(n * (sums + (low_a * sum(b) + low_b * sum(a) - n * low_a * low_b)).astype(float)
+               - float(sum(a)) * float(sum(b)))
+    values, where = np.unique(t, return_inverse=True)
+    reach = np.zeros(values.size, dtype=np.int64)
+    np.add.at(reach, where.ravel(), counts[sums])
+    at_least = np.cumsum(reach[::-1])[::-1].copy()
+    # The cache hands every caller these same arrays.
+    values.flags.writeable = at_least.flags.writeable = False
+    return values, at_least
 
 
 def _spearman_exact_p(x: np.ndarray, y: np.ndarray) -> float:
