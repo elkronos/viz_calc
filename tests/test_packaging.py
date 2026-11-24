@@ -79,7 +79,9 @@ def _ci_entry(label: str) -> dict[str, str]:
 
 def test_ci_minimum_job_installs_exactly_the_declared_floors():
     pins = dict(p.split("==") for p in _ci_entry("minimum versions")["deps"].split())
-    floors = _floors(_runtime_requirements())
+    # The job runs the suite with the dev extra's pytest, so that floor is pinned too; ruff only lints.
+    dev = [req for req in _pyproject()["project"]["optional-dependencies"]["dev"] if _name(req) != "ruff"]
+    floors = _floors(_runtime_requirements() + dev)
     assert {_name(k): _version(v) for k, v in pins.items()} == {k: _version(v) for k, v in floors.items()}
 
 
@@ -113,6 +115,17 @@ def test_python_classifiers_name_the_versions_ci_tests():
     classified = {c.rsplit(" :: ", 1)[1] for c in _pyproject()["project"]["classifiers"]
                   if re.fullmatch(r"Programming Language :: Python :: 3\.[0-9]+", c)}
     assert classified == tested
+
+
+def test_ci_tests_each_python_release_from_the_floor_to_3_14():
+    # requires-python has no upper bound, so the matrix runs every minor release from the floor up to 3.14,
+    # the newest stable one.
+    if not CI.exists():
+        pytest.skip("the CI workflow is not next to the tests")
+    tested = sorted({_version(v) for v in re.findall(r'^ +- python: "(3\.[0-9]+)"', CI.read_text(encoding="utf-8"), re.M)})
+    floor = _version(re.fullmatch(r">=\s*([0-9.]+)", _pyproject()["project"]["requires-python"]).group(1))
+    assert tested[-1] >= (3, 14)
+    assert tested == [(3, minor) for minor in range(floor[1], tested[-1][1] + 1)]
 
 
 def test_ci_builds_checks_and_imports_the_distributions():
