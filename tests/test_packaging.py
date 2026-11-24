@@ -1,6 +1,7 @@
-"""The package metadata in pyproject.toml agrees with the code and with the CI and publish workflows."""
+"""The package metadata in pyproject.toml agrees with the code, the workflows and the docs site configuration."""
 
 import ast
+import json
 import os
 import re
 import shutil
@@ -237,6 +238,52 @@ def test_readme_images_load_from_the_package_page():
         match = url.fullmatch(src)
         assert match, f"README.md image {src!r} is not a raw.githubusercontent.com URL of this repository"
         assert (ROOT / match.group(1)).is_file(), f"README.md image {src!r} is not in the repository"
+
+
+# Runs docs/javascripts/mathjax.js in a stand-in page, once with math and once without, calls its page-load
+# callback twice, and prints the src of each script element it adds.
+MATHJAX_HARNESS = """
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync(process.argv[2], "utf8");
+function load(hasMath) {
+  const added = [];
+  const callbacks = [];
+  const page = {
+    document: {
+      querySelector: (selector) => (selector === ".arithmatex" && hasMath ? {} : null),
+      getElementById: (id) => added.find((element) => element.id === id) || null,
+      createElement: (tag) => ({ tag }),
+      head: { appendChild: (element) => added.push(element) },
+    },
+    document$: { subscribe: (callback) => callbacks.push(callback) },
+  };
+  page.window = page;
+  vm.runInNewContext(source, page);
+  for (const callback of [...callbacks, ...callbacks]) callback();
+  return added.map((element) => element.src);
+}
+console.log(JSON.stringify({ math: load(true), plain: load(false) }));
+"""
+
+
+def test_docs_load_mathjax_only_on_pages_with_math(tmp_path):
+    # Only the methodology page has math, so no other page fetches the MathJax bundle from the CDN.
+    config = ROOT / "mkdocs.yml"
+    if not config.is_file():
+        pytest.skip("mkdocs.yml is not next to the tests")
+    scripts = re.search(r"^extra_javascript:\n((?:  - .*\n)+)", config.read_text(encoding="utf-8"), re.M).group(1)
+    assert "://" not in scripts, "every page loads a script from another site"
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    (tmp_path / "harness.js").write_text(MATHJAX_HARNESS, encoding="utf-8")
+    result = subprocess.run([node, str(tmp_path / "harness.js"), str(ROOT / "docs" / "javascripts" / "mathjax.js")],
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    added = json.loads(result.stdout)
+    assert added["plain"] == []
+    assert len(added["math"]) == 1 and added["math"][0].endswith("/mathjax@3/es5/tex-mml-chtml.js")
 
 
 def _publish_workflow() -> str:
