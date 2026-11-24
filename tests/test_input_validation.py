@@ -938,3 +938,28 @@ def test_unscaled_pca_of_constant_features_raises(call, value):
     assert plt.get_fignums() == []
     one_varies = d.assign(length=datasets.measurements()["length"])
     assert vc.pca(one_varies, MEASURES, scale=False)["explained_variance_ratio"].iloc[0] == 1.0
+
+
+# --- upset input forms ----------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("sets", [[[1, 2, 3], [3, 4]], [{1, 2, 3}, {3, 4}], "abc", 3],
+                         ids=["list of lists", "list of sets", "str", "int"])
+def test_upset_needs_a_mapping_or_a_frame(sets):
+    with pytest.raises(TypeError, match="sets must be a mapping of set names to members, such as"):
+        vc.upset(sets)
+
+
+@pytest.mark.parametrize("members", ["abc", b"abc"], ids=["str", "bytes"])
+def test_upset_does_not_split_a_text_member_into_characters(members):
+    with pytest.raises(TypeError, match=r"the members of set\(s\) \['A', 'B'\] are given as one"):
+        vc.upset({"A": members, "B": members})
+    assert vc.upset({"A": [members], "B": [members, "x"]}).table["size"].tolist() == [1, 1]
+
+
+def test_upset_accepts_a_series_of_sets_and_rejects_a_bool_min_size():
+    assert vc.upset(pd.Series({"A": {1, 2}, "B": {2, 3}})).table["size"].sum() == 3
+    with pytest.raises(ValueError, match="min_size must be a finite number, got True"):
+        vc.upset({"A": [1, 2], "B": [2, 3]}, min_size=True)
+    with pytest.raises(ValueError, match="column 'A' appears 2 times in sets"):
+        vc.upset(pd.DataFrame([[True, False, True]], columns=["A", "B", "A"]))

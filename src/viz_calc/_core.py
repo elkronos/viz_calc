@@ -161,8 +161,8 @@ def check_dataframe(data: Any, columns: Iterable[str | None] = ()) -> pd.DataFra
     return data
 
 
-def check_unique_labels(data: pd.DataFrame, columns: Iterable[Any]) -> None:
-    """Raise if a label in *columns* selects more than one column of *data*; ``None`` entries are skipped."""
+def check_unique_labels(data: pd.DataFrame, columns: Iterable[Any], name: str = "data") -> None:
+    """Raise if a label in *columns* selects more than one column of *data* (called *name*); ``None`` is skipped."""
     for c in columns:
         if c is None or data.columns.is_unique and not isinstance(data.columns, pd.MultiIndex):
             continue
@@ -171,11 +171,11 @@ def check_unique_labels(data: pd.DataFrame, columns: Iterable[Any]) -> None:
             continue
         labels = list(data.columns[loc])
         if isinstance(data.columns, pd.MultiIndex):
-            raise ValueError(f"column {c!r} matches {len(labels)} columns in data, {labels}; "
+            raise ValueError(f"column {c!r} matches {len(labels)} columns in {name}, {labels}; "
                              "name one of them by its full label")
         if len({str(lab) for lab in labels}) == 1:
-            raise ValueError(f"column {c!r} appears {len(labels)} times in data; give each column its own label")
-        raise ValueError(f"column {c!r} matches {len(labels)} columns in data, {labels}: pandas treats these labels "
+            raise ValueError(f"column {c!r} appears {len(labels)} times in {name}; give each column its own label")
+        raise ValueError(f"column {c!r} matches {len(labels)} columns in {name}, {labels}: pandas treats these labels "
                          "as one (as it does 0 and False, and 1 and True), so they cannot be used as different "
                          "columns; rename one of them")
 

@@ -34,6 +34,7 @@ from ._core import (
     check_has_values,
     check_not_reserved,
     check_numeric,
+    check_unique_labels,
     cleanup_on_error,
     column_items,
     column_list,
@@ -907,14 +908,17 @@ def upset(
     Parameters
     ----------
     sets
-        A mapping ``{name: iterable of members}`` or a DataFrame of boolean
-        membership columns (one row per element). Missing values (``None``,
+        A mapping ``{name: iterable of members}`` (a text value is one
+        member, so ``{"A": ["abc"]}``, not ``{"A": "abc"}``) or a DataFrame of
+        boolean membership columns (one row per element). Missing values (``None``,
         ``NaN``, ``NaT``, ``pd.NA``) are not members, in either form. One set
         or more, with at least one member between them; ``"size"`` and
         ``"degree"`` cannot be set names, as they name the table's count
         columns.
     min_size
-        Hide intersections smaller than this (a number).
+        Hide intersections smaller than this (a number, not a bool). Above
+        the largest intersection it hides them all, leaving the bars and the
+        table empty.
     max_intersections
         Show at most this many, keeping the largest (a positive integer;
         ``None`` shows all).
@@ -934,12 +938,22 @@ def upset(
     UpSet: visualization of intersecting sets. *IEEE TVCG*, 20(12), 1983–1992.
     """
     check_choice("sort_by", sort_by, ["size", "degree"])
-    if not (isinstance(min_size, numbers.Real) and math.isfinite(min_size)):
+    if isinstance(min_size, bool) or not (isinstance(min_size, numbers.Real) and math.isfinite(min_size)):
         raise ValueError(f"min_size must be a finite number, got {min_size!r}")
     if max_intersections is not None:
         check_count("max_intersections", max_intersections)
     if color is not None:
         check_color("color", color)
+    if isinstance(sets, pd.DataFrame):
+        check_unique_labels(sets, sets.columns, "sets")
+    elif isinstance(sets, (str, bytes)) or not hasattr(sets, "items"):  # a Mapping, or a Series of sets
+        raise TypeError("sets must be a mapping of set names to members, such as {'A': [1, 2], 'B': [2, 3]}, or a "
+                        f"DataFrame of True/False membership columns; got {type(sets).__name__}")
+    else:
+        text = [k for k, v in sets.items() if isinstance(v, (str, bytes))]
+        if text:  # its characters would be read as the members
+            raise TypeError(f"the members of set(s) {text} are given as one {type(sets[text[0]]).__name__}; give a "
+                            f"list or set of members, such as {{{text[0]!r}: [{sets[text[0]]!r}]}}")
     if isinstance(sets, pd.DataFrame):
         for c in sets.columns:
             bad = [v for v in pd.unique(sets[c].dropna()) if v not in (True, False)]  # 0/1 compare equal to bools
