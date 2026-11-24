@@ -58,6 +58,16 @@ def test_dates_beyond_the_range_of_pandas_2_are_named(call):
         call(_frame(["2024-01-01", "9999-12-31"]))
 
 
+@pytest.mark.parametrize("call", list(_DATE_CALLS.values()), ids=list(_DATE_CALLS))
+def test_text_with_different_utc_offsets_outside_iso_8601_is_named(call):
+    # the message called the first value "not in the format of the other values"
+    with pytest.raises(ValueError, match=re.escape("column 'd' could not be parsed as dates: its values do not all have "
+                                                   "the same UTC offset, and different offsets are read only from ISO "
+                                                   "8601 text")) as info:
+        call(_frame(["01/03/2024 10:00 +01:00", "01/04/2024 10:00 +02:00", None]))
+    assert info.value.__cause__ is not None
+
+
 _NOT_TEXT = [("bool", [True, False], "boolean values (bool)"),
              ("timedelta", pd.to_timedelta([1, 2], unit="D"), "timedelta64 values (timedelta64[")]
 

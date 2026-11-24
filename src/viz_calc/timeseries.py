@@ -126,8 +126,10 @@ def _unparsed(s: pd.Series, values: Any, name: str, dayfirst: bool) -> str:
     if kind in ("boolean", "timedelta", "timedelta64", "interval", "time"):
         return f"column {name!r} holds {kind} values ({values.dtype}), which cannot be read as dates"
     present = s.notna().to_numpy()
-    bad = None
-    for kwargs in ({"dayfirst": dayfirst}, {"format": "ISO8601", "utc": True}):  # the readings _dates tries
+    bad = best = None
+    # The readings _dates tries, then one in UTC that also reads other text with different UTC offsets
+    readings = ({"dayfirst": dayfirst}, {"format": "ISO8601", "utc": True}, {"dayfirst": dayfirst, "utc": True})
+    for kwargs in readings:
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")  # the failed readings have warned already
@@ -137,10 +139,13 @@ def _unparsed(s: pd.Series, values: Any, name: str, dayfirst: bool) -> str:
         if pd.api.types.is_datetime64_any_dtype(parsed):
             missed = present & (parsed.isna().to_numpy() | _yearless(s, parsed))
             if bad is None or missed.sum() < bad.sum():
-                bad = missed
-    if bad is None or not bad.any():
+                bad, best = missed, kwargs
+    if bad is None or (not bad.any() and best is not readings[-1]):
         return (f"column {name!r} could not be parsed as dates; use one consistent format, "
                 "ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
+    if not bad.any():  # only the reading in UTC parses every value
+        return (f"column {name!r} could not be parsed as dates: its values do not all have the same UTC offset, "
+                "and different offsets are read only from ISO 8601 text (YYYY-MM-DD HH:MM+HH:MM)")
     i = int(np.argmax(bad))  # the first value that the reading which parses the most values leaves out
     if isinstance(s.iloc[i], str) and _has_year(s.iloc[i]) is False:
         return _without_year(s, i, name)
