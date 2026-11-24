@@ -174,45 +174,81 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
     *Journal of Mathematical Sociology*, 25(2), 163–177.
     """
     nodes = list(G)
-    out = {v: [(w, distance[(v, w)]) for w in G[v] if (v, w) in distance] for v in nodes}
+    n = len(nodes)
+    index = {v: i for i, v in enumerate(nodes)}  # nodes are numbered, so per-source state is held in lists
+    out = [[(index[w], distance[(v, w)]) for w in G[v] if (v, w) in distance] for v in nodes]
     if exact is not None:
-        into = {v: [] for v in nodes}  # w -> [(v, float length, exact length, residue)]
+        into = [[] for _ in nodes]  # w -> [(v, float length, exact length, residue)]
         for (v, w), q in exact.items():
-            into[w].append((v, distance[(v, w)], q, q.numerator * pow(q.denominator, -1, _PRIME) % _PRIME))
-    bc = dict.fromkeys(nodes, 0.0)
-    for s in nodes:
-        dist, done, heap, counter = {s: 0.0}, set(), [(0.0, 0, s)], count(1)
+            into[index[w]].append((index[v], distance[(v, w)], q,
+                                   q.numerator * pow(q.denominator, -1, _PRIME) % _PRIME))
+        # the same edges as arrays, grouped by w in the order of into[w], so each source tests them all at once
+        tail = np.array([v for edges in into for v, *_ in edges], dtype=np.intp)
+        head = np.repeat(np.arange(n), [len(edges) for edges in into])
+        length = np.array([x for edges in into for _, x, _, _ in edges], dtype=float)
+        exact_edges = [(v, q, r) for edges in into for v, _, q, r in edges]
+        first = np.cumsum([0] + [len(edges) for edges in into])
+    else:
+        tail = np.repeat(np.arange(n), [len(edges) for edges in out])
+        head = np.array([w for edges in out for w, _ in edges], dtype=np.intp)
+        length = np.array([x for edges in out for _, x in edges], dtype=float)
+    heappush, heappop = heapq.heappush, heapq.heappop
+    bc = [0.0] * n
+    for s in range(n):
+        dist, found, done = [None] * n, [s], [False] * n  # found: the nodes in the order Dijkstra first reaches them
+        dist[s] = 0.0
+        heap, counter = [(0.0, 0, s)], 1
         while heap:  # 1. shortest distances
-            d, _, v = heapq.heappop(heap)
-            if v in done:
+            d, _, v = heappop(heap)
+            if done[v]:
                 continue
-            done.add(v)
-            for w, length in out[v]:
-                if w not in dist or d + length < dist[w]:
-                    dist[w] = d + length
-                    heapq.heappush(heap, (dist[w], next(counter), w))
-        order = sorted(dist, key=dist.get)  # predecessors are closer (or ordered within a float-tied run below)
+            done[v] = True
+            for w, x in out[v]:
+                new = d + x
+                old = dist[w]
+                if old is None:
+                    found.append(w)
+                elif new >= old:
+                    continue
+                dist[w] = new
+                heappush(heap, (new, counter, w))
+                counter += 1
+        order = sorted(found, key=dist.__getitem__)  # predecessors are closer (or ordered within a float-tied run below)
         if math.isinf(dist[order[-1]]):  # every overflowed length would tie with every other
             raise ValueError("a shortest path is longer than the largest float (its 1/weight edge lengths add up "
                              "past it); multiply the weights by a constant, which leaves betweenness unchanged")
-        preds = {v: [] for v in dist}  # 2. predecessors on the shortest paths
+        at = np.full(n, np.inf)
+        at[found] = [dist[v] for v in found]
+        dv, dw = at[tail], at[head]
+        reached = (dv < np.inf) & (dw < np.inf)
+        preds = [()] * n  # 2. predecessors on the shortest paths
         if exact is None:
-            runs: dict = {}  # nodes at the same float distance, per distance
-            for v in dist:
-                runs.setdefault(dist[v], []).append(v)
-                for w, length in out[v]:
-                    # beyond the data's own rounding, the slack is at most a quarter of the edge being tested
-                    slack = max(rounding * dist[w], min(rel_tol * dist[w], 0.25 * length))
-                    if dist[v] < dist[w] and dist[v] + length <= dist[w] + slack:
-                        preds[w].append(v)
+            # The same float operations as on Python floats, edge by edge; overflow gives inf, as it does there.
+            # Beyond the data's own rounding, the slack is at most a quarter of the edge being tested.
+            with np.errstate(over="ignore", invalid="ignore"):
+                slack = np.maximum(rounding * dw, np.minimum(rel_tol * dw, 0.25 * length))
+                hits = np.flatnonzero(reached & (dv < dw) & (dv + length <= dw + slack))
+                tiny = (reached & (dv == dw) & (dv + length == dw)).any()  # too short to change the float sum
+            position = np.empty(n, dtype=np.intp)
+            position[found] = np.arange(len(found))
+            hits = hits[np.argsort(position[tail[hits]], kind="stable")]  # preds[w] in the order found has them
+            for v, w in zip(tail[hits].tolist(), head[hits].tolist()):
+                if preds[w]:
+                    preds[w].append(v)
+                else:
+                    preds[w] = [v]
             rank: dict = {}
+            runs: dict = {}  # nodes at the same float distance, per distance
+            if tiny:
+                for v in found:
+                    runs.setdefault(dist[v], []).append(v)
             for run in runs.values():
                 inside = {u: [] for u in run}
                 members = set(run)
                 for v in run:
-                    for w, length in out[v]:
-                        if w in members and dist[v] + length == dist[w]:  # too short to change the float sum
-                            inside[w].append((v, Fraction(length)))
+                    for w, x in out[v]:
+                        if w in members and dist[v] + x == dist[w]:  # too short to change the float sum
+                            inside[w].append((v, Fraction(x)))
                 if not any(inside.values()):
                     continue
                 # an edge too short for float64 to add to the path length: floats cannot order its ends, so order
@@ -221,65 +257,82 @@ def _weighted_betweenness(G, distance: dict, rel_tol: float = 1e-10, rounding: f
                 ranked, offset = _rational_shortest_paths(start, inside)
                 for u in ranked:
                     for v, q in inside[u]:
-                        slack = max(Fraction(rounding) * offset[u], min(Fraction(rel_tol) * offset[u], q / 4))
-                        if v in offset and offset[v] < offset[u] and offset[v] + q <= offset[u] + slack:
-                            preds[u].append(v)
+                        slack_q = max(Fraction(rounding) * offset[u], min(Fraction(rel_tol) * offset[u], q / 4))
+                        if v in offset and offset[v] < offset[u] and offset[v] + q <= offset[u] + slack_q:
+                            if preds[u]:
+                                preds[u].append(v)
+                            else:
+                                preds[u] = [v]
                 rank.update((u, i) for i, u in enumerate(ranked))
             if rank:
-                order = sorted(dist, key=lambda v: (dist[v], rank.get(v, -1)))
+                order = sorted(found, key=lambda v: (dist[v], rank.get(v, -1)))
         else:
+            with np.errstate(over="ignore"):
+                close = reached & (dv + length <= dw * (1 + 1e-11))
+            unresolved = set(head[close & (dv >= dw)].tolist())  # has an in-edge too short for floats to resolve
+            near_at = np.flatnonzero(close & (dv < dw))
+            near_from = np.searchsorted(near_at, first).tolist()  # near_at[near_from[w]:near_from[w + 1]] end at w
+            near_at = near_at.tolist()
+            exact_preds: dict = {}  # w -> [(v, exact length)]
             residue, value, exact_order, i = {s: 0}, {s: Fraction(0)}, [s], 1
             while i < len(order):
                 w = order[i]
-                window = dist[w] * (1 + 1e-11)
-                if any(dist[v] >= dist[w] and dist[v] + length <= window for v, length, *_ in into[w] if v in dist):
+                if w in unresolved:
                     # an edge too short for float64 to resolve against the path: floats cannot order its ends, so
                     # order this run of nodes that floats cannot separate in exact arithmetic
                     j = i + 1
                     while j < len(order) and dist[order[j]] <= dist[order[j - 1]] * (1 + 1e-11):
                         j += 1
                     run = set(order[i:j])
-                    close = {u: [(v, q) for v, length, q, _ in into[u]
-                                 if v in run or (v in residue and dist[v] + length <= dist[u] * (1 + 1e-11))]
-                             for u in run}
-                    start = {u: min(_exact_distance(v, preds, value) + q for v, q in edges if v not in run)
-                             for u, edges in close.items() if any(v not in run for v, _ in edges)}
-                    inside = {u: [(v, q) for v, q in edges if v in run] for u, edges in close.items()}
+                    # in the order of the set of the nodes themselves, which breaks ties in the heap of
+                    # _rational_shortest_paths
+                    members = [index[u] for u in set([nodes[k] for k in order[i:j]])]
+                    close_run = {u: [(v, q) for v, x, q, _ in into[u]
+                                     if v in run or (v in residue and dist[v] + x <= dist[u] * (1 + 1e-11))]
+                                 for u in members}
+                    start = {u: min(_exact_distance(v, exact_preds, value) + q for v, q in edges if v not in run)
+                             for u, edges in close_run.items() if any(v not in run for v, _ in edges)}
+                    inside = {u: [(v, q) for v, q in edges if v in run] for u, edges in close_run.items()}
                     ranked, exact_value = _rational_shortest_paths(start, inside)
                     value.update(exact_value)
                     for u in ranked:
-                        preds[u] = [(v, q) for v, q in close[u] if value[v] + q == value[u]]
+                        exact_preds[u] = [(v, q) for v, q in close_run[u] if value[v] + q == value[u]]
+                        preds[u] = [v for v, _ in exact_preds[u]]
                         residue[u] = value[u].numerator * pow(value[u].denominator, -1, _PRIME) % _PRIME
                     exact_order += ranked
                     i = j
                     continue
-                near = [(v, q, (residue[v] + r) % _PRIME) for v, length, q, r in into[w]
-                        if v in dist and dist[v] < dist[w] and dist[v] + length <= window]
-                if len({r for *_, r in near}) > 1:  # candidates that really differ: keep the exactly shortest
-                    totals = [_exact_distance(v, preds, value) + q for v, q, _ in near]
-                    value[w] = min(totals)
-                    near = [c for c, t in zip(near, totals) if t == value[w]]
-                preds[w] = [(v, q) for v, q, _ in near]
-                residue[w] = near[0][2]
+                candidates = near_at[near_from[w]:near_from[w + 1]]
+                if len(candidates) == 1:  # nothing to compare
+                    v, q, r = exact_edges[candidates[0]]
+                    exact_preds[w], preds[w], residue[w] = [(v, q)], [v], (residue[v] + r) % _PRIME
+                else:
+                    near = [(v, q, (residue[v] + r) % _PRIME) for v, q, r in map(exact_edges.__getitem__, candidates)]
+                    if len({r for *_, r in near}) > 1:  # candidates that really differ: keep the exactly shortest
+                        totals = [_exact_distance(v, exact_preds, value) + q for v, q, _ in near]
+                        value[w] = min(totals)
+                        near = [c for c, t in zip(near, totals) if t == value[w]]
+                    exact_preds[w] = [(v, q) for v, q, _ in near]
+                    preds[w] = [v for v, _, _ in near]
+                    residue[w] = near[0][2]
                 exact_order.append(w)
                 i += 1
             order = exact_order
-            preds = {w: [v for v, _ in ps] for w, ps in preds.items()}
-        sigma = dict.fromkeys(order, 0.0)
+        sigma = [0.0] * n
         sigma[s] = 1.0
         for w in order:
             if w != s:
-                sigma[w] = sum(sigma[v] for v in preds[w])
-        delta = dict.fromkeys(order, 0.0)  # 3. Brandes accumulation
+                sigma[w] = sum([sigma[v] for v in preds[w]])
+        delta = [0.0] * n  # 3. Brandes accumulation
         for w in reversed(order):
             if sigma[w] > 0:
+                sigma_w, through_w = sigma[w], 1 + delta[w]
                 for v in preds[w]:
-                    delta[v] += sigma[v] / sigma[w] * (1 + delta[w])
+                    delta[v] += sigma[v] / sigma_w * through_w
             if w != s:
                 bc[w] += delta[w]
-    n = len(nodes)
     scale = 1 / ((n - 1) * (n - 2)) if n > 2 else 0.0
-    return {v: b * scale for v, b in bc.items()}
+    return {v: b * scale for v, b in zip(nodes, bc)}
 
 
 @cleanup_on_error

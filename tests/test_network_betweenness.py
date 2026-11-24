@@ -26,6 +26,33 @@ def _truth(rows, directed=False):
     return {k: float(v) for k, v in nx.betweenness_centrality(H, weight="d").items()}
 
 
+class _Length(float):
+    """An edge length that counts how often Python adds it to a distance."""
+
+    adds = 0
+
+    def __radd__(self, other):
+        _Length.adds += 1
+        return float.__radd__(self, other)
+
+
+@pytest.mark.parametrize("exact", [True, False])
+def test_betweenness_adds_each_edge_length_once_per_source(exact):
+    # Dijkstra adds each edge length to a distance once per source; the predecessor tests then run on arrays
+    # rather than adding every length again, edge by edge, in Python.
+    from viz_calc import network
+
+    G = nx.connected_watts_strogatz_graph(40, 6, 0.3, seed=1)
+    weights = dict(zip(G.edges(), np.random.default_rng(3).integers(1, 5, G.number_of_edges()).tolist()))
+    floats = {e: 1 / k for (u, v), k in weights.items() for e in [(u, v), (v, u)]}
+    lengths = {e: Fraction(1, k) for (u, v), k in weights.items() for e in [(u, v), (v, u)]}
+    kw = {"exact": lengths} if exact else {"rounding": 1e-12}
+    _Length.adds = 0
+    bc = network._weighted_betweenness(G, {e: _Length(d) for e, d in floats.items()}, **kw)
+    assert _Length.adds == G.number_of_nodes() * len(floats)
+    assert bc == network._weighted_betweenness(G, floats, **kw)
+
+
 @pytest.mark.parametrize("k,dtype", [(5_600_003, "float32"), (703, "float16")])
 def test_counts_rounded_by_a_low_precision_type_keep_their_ties(k, dtype):
     # 1/(3k) + 1/(6k) == 1/(2k), but float32/float16 cannot hold 3k and 6k exactly
