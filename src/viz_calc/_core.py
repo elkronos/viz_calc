@@ -982,7 +982,8 @@ class AbbrevFormatter(ScalarFormatter):
         ticks = ticks[np.isfinite(ticks)]
         if ticks.size == 0 or np.max(np.abs(ticks)) < 1e4:
             return None
-        scale = self.axis.get_scale() if self.axis is not None else "linear"
+        get_scale = getattr(self.axis, "get_scale", None)  # the stand-in axis of create_dummy_axis has none
+        scale = get_scale() if get_scale is not None else "linear"
         steps = np.diff(np.sort(ticks))
         noise = 16 * np.spacing(np.max(np.abs(ticks)))  # float spacing at this magnitude
         if scale != "linear" or (steps.size and not np.allclose(steps, steps[0], rtol=1e-6, atol=noise)):

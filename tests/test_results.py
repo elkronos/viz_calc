@@ -346,3 +346,17 @@ def test_to_pptx_checks_the_image_size_itself_and_hides_pillows_warning(monkeypa
     with warnings.catch_warnings():
         warnings.simplefilter("error", Image.DecompressionBombWarning)
         assert len(_slide_texts(vc.to_pptx(res, BytesIO(), dpi=100))) == 1
+
+
+# --- AbbrevFormatter outside an Axes --------------------------------------------------------------------------------
+
+
+def test_abbrev_formatter_works_on_a_dummy_axis():
+    from viz_calc._core import AbbrevFormatter
+
+    fmt = AbbrevFormatter()
+    fmt.create_dummy_axis()
+    assert fmt.format_ticks([10000, 20000, 30000]) == ["10K", "20K", "30K"]
+    points = plt.figure().add_subplot().scatter([1, 2, 3], [1, 2, 3], c=[10000, 20000, 30000])
+    _, labels = points.legend_elements(fmt=AbbrevFormatter())
+    assert labels and all("K" in label for label in labels)
