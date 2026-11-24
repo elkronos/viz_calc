@@ -139,8 +139,8 @@ def test_python_classifiers_name_the_versions_ci_tests():
 
 
 def test_ci_tests_each_python_release_from_the_floor_to_3_14():
-    # requires-python has no upper bound, so the matrix runs every minor release from the floor up to 3.14,
-    # the newest stable one.
+    # requires-python has no upper bound, so the matrix runs every minor release from the floor to the newest
+    # one it lists, 3.14 or later.
     if not CI.exists():
         pytest.skip("the CI workflow is not next to the tests")
     tested = sorted({_version(v) for v in re.findall(r'^ +- python: "(3\.[0-9]+)"', CI.read_text(encoding="utf-8"), re.M)})
@@ -243,7 +243,7 @@ def test_readme_images_load_from_the_package_page():
 
 # Runs docs/javascripts/mathjax.js in a stand-in page, once with math and once without, calls its page-load
 # callback twice, and prints the src of each script element it adds.
-MATHJAX_HARNESS = """
+MATHJAX_RUNNER = """
 const fs = require("fs");
 const vm = require("vm");
 const source = fs.readFileSync(process.argv[2], "utf8");
@@ -278,8 +278,8 @@ def test_docs_load_mathjax_only_on_pages_with_math(tmp_path):
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not installed")
-    (tmp_path / "harness.js").write_text(MATHJAX_HARNESS, encoding="utf-8")
-    result = subprocess.run([node, str(tmp_path / "harness.js"), str(ROOT / "docs" / "javascripts" / "mathjax.js")],
+    (tmp_path / "runner.js").write_text(MATHJAX_RUNNER, encoding="utf-8")
+    result = subprocess.run([node, str(tmp_path / "runner.js"), str(ROOT / "docs" / "javascripts" / "mathjax.js")],
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     added = json.loads(result.stdout)
@@ -456,6 +456,16 @@ def test_docs_job_that_can_push_runs_no_package_code():
     assert len(writers) == 1
     code = "".join(line for line in writers[0].splitlines(keepends=True) if not line.lstrip().startswith("#"))
     assert not re.search(r"pip|python|mkdocs|actions/checkout|actions/setup-python", code)
+
+
+def test_docs_publish_the_commit_ci_tested():
+    # For a workflow_run event, github.sha is the newest commit on main, which CI may not have tested yet.
+    jobs = _jobs(_docs_workflow())
+    writers = [lines for lines in jobs.values() if "contents: write" in lines]
+    assert len(writers) == 1
+    tested = re.escape("${{ github.event.workflow_run.head_sha || github.sha }}")
+    assert re.search(rf"^ +ref: {tested}( +#.*)?$", jobs[_needs(writers[0])[0]], re.M), "the build checks out another commit"
+    assert re.search(rf"^ +SHA: {tested}$", writers[0], re.M), "the deploy message names another commit"
 
 
 def test_docs_deploy_replaces_gh_pages_with_one_commit(tmp_path):
