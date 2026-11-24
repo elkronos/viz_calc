@@ -26,6 +26,7 @@ from ._core import (
     cleanup_on_error,
     column_items,
     column_list,
+    is_number_column,
     level_label,
     level_mask,
     require,
@@ -41,7 +42,7 @@ def _split(data: pd.DataFrame, max_levels: int) -> tuple[list[str], list[str]]:
     for c, s in column_items(data):
         if not s.notna().any():
             continue
-        is_num = pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s)
+        is_num = is_number_column(s)
         if is_num and s.nunique() > max_levels:
             num.append(c)
         elif s.nunique() <= max_levels:
@@ -228,8 +229,7 @@ def profile_scatters(
         check_count(name, value)
     check_count("min_levels", min_levels, minimum=0)
     if columns is None:
-        columns = [c for c, s in column_items(data) if pd.api.types.is_numeric_dtype(s)
-                   and not pd.api.types.is_bool_dtype(s) and s.nunique() >= min_levels]
+        columns = [c for c, s in column_items(data) if is_number_column(s) and s.nunique() >= min_levels]
         check_dataframe(data, columns)  # a column picked by default may have a repeated label
     check_numeric(data, *columns)
     check_finite(data, *columns)

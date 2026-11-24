@@ -180,10 +180,23 @@ def check_unique_labels(data: pd.DataFrame, columns: Iterable[Any]) -> None:
 
 
 def check_numeric(data: pd.DataFrame, *columns: str) -> None:
-    """Raise unless every column in *columns* has a numeric dtype."""
+    """Raise unless every column in *columns* has a numeric dtype of real numbers.
+
+    A complex column is rejected too: it would be drawn and summarised by
+    its real part alone.
+    """
     bad = [c for c in columns if not pd.api.types.is_numeric_dtype(data[c])]
     if bad:
         raise TypeError(f"column(s) must be numeric: {bad}")
+    complex_ = [c for c in columns if pd.api.types.is_complex_dtype(data[c])]
+    if complex_:
+        raise TypeError(f"column(s) must hold real numbers, not complex: {complex_}")
+
+
+def is_number_column(values: pd.Series) -> bool:
+    """Whether *values* holds real numbers other than booleans, the kind of column a chart picks by default."""
+    return (pd.api.types.is_numeric_dtype(values) and not pd.api.types.is_bool_dtype(values)
+            and not pd.api.types.is_complex_dtype(values))
 
 
 def check_finite(data: pd.DataFrame, *columns: str) -> None:

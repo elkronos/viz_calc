@@ -349,9 +349,9 @@ def network_map(
     check_choice("size_by", size_by, ["degree", "strength", "betweenness"])
     weighted = weight is not None  # a column may legitimately be labelled 0
     if weighted:
-        check_numeric(data, weight)
         if pd.api.types.is_complex_dtype(data[weight]):
             raise TypeError(f"edge weights in {weight!r} must be real numbers, not complex")
+        check_numeric(data, weight)
     check_has_values(data, source, target, weight)
     # Work on plain Python objects: categorical columns, non-string labels and nullable dtypes all behave the same.
     src = data[source].to_numpy(dtype=object)
@@ -566,10 +566,10 @@ def sankey(
     """
     go = require("plotly.graph_objects", "interactive")
     check_dataframe(data, [source, target, value])
-    check_numeric(data, value)
-    check_distinct(source=source, target=target, value=value)
     if pd.api.types.is_complex_dtype(data[value]):
         raise TypeError(f"flow values in {value!r} must be real numbers, not complex")
+    check_numeric(data, value)
+    check_distinct(source=source, target=target, value=value)
     check_has_values(data, source, target, value)
     for column in (source, target):
         missing = int(data[column].isna().sum())

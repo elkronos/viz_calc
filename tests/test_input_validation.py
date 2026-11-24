@@ -410,3 +410,107 @@ def test_a_frame_from_another_library_gets_a_conversion_hint():
     pa = pytest.importorskip("pyarrow")
     with pytest.raises(TypeError, match=r"got pyarrow\.lib\.Table; convert it first with \.to_pandas\(\)"):
         vc.lollipop(pa.table({"arm": ["a"], "score": [1.0]}), x="arm", y="score")
+
+
+# --- complex numbers ------------------------------------------------------------------------------------------------
+
+# These calls pick their columns by default, and a complex column is not picked (see the next tests).
+COMPLEX_CALLS = [name for name in INFINITE_CALLS if name not in ("correlogram default columns", "compare_correlations")]
+
+
+@pytest.mark.parametrize("name", COMPLEX_CALLS)
+def test_a_complex_column_in_a_numeric_role_raises_naming_it(name):
+    call, column = INFINITE_CALLS[name]
+    d = NUMBERS.assign(**{column: NUMBERS[column] + 1j})
+    with pytest.raises(TypeError, match=rf"column\(s\) must hold real numbers, not complex: \['{column}'\]"):
+        call(d)
+    assert plt.get_fignums() == []
+
+
+@pytest.mark.parametrize("call", [
+    lambda d: vc.pca(d, ["v", "w", "u"]),
+    lambda d: vc.period_bars(d.assign(t=pd.date_range("2024-01-01", periods=12)), date="t", value="u"),
+], ids=["pca", "period_bars"])
+def test_more_charts_reject_complex_columns(call):
+    with pytest.raises(TypeError, match=r"not complex: \['u'\]"):
+        call(NUMBERS.assign(u=NUMBERS["u"] * 1j))
+
+
+def test_charts_leave_complex_columns_out_of_their_default_columns():
+    d = NUMBERS.assign(z=NUMBERS["u"] + 1j)
+    assert list(vc.correlogram(d).info["matrix"].columns) == ["v", "w", "u"]
+    assert vc.donut_grid(d.head(3)).table["category"].unique().tolist() == ["v", "w", "u"]
+    assert set(vc.profile_scatters(d, min_levels=2).table[["x", "y"]].stack()) == {"v", "w", "u"}
+    assert set(vc.compare_correlations(d, group="g").table[["var1", "var2"]].stack()) == {"v", "w", "u"}
+
+
+@pytest.mark.parametrize("call, name", [
+    (lambda v: st.mean_ci(v), "x"),
+    (lambda v: st.welch_test([1.0, 2.0, 3.0], v), "b"),
+    (lambda v: st.hedges_g(v, [1.0, 2.0, 3.0]), "a"),
+    (lambda v: st.bootstrap_ci(v, n_resamples=10), "samples"),
+    (lambda v: st.correlation_test([1.0, 2.0, 3.0], v), "y"),
+    (lambda v: st.histogram_bins(v), "x"),
+    (lambda v: st.largest_remainder(v, 10), "values"),
+], ids=["mean_ci", "welch_test", "hedges_g", "bootstrap_ci", "correlation_test", "histogram_bins", "largest_remainder"])
+@pytest.mark.parametrize("kind", ["array", "Series", "list"])
+def test_statistics_reject_complex_numbers(call, name, kind):
+    values = [1 + 2j, 3 + 0j, 4 + 1j]
+    values = {"array": np.array(values), "Series": pd.Series(values), "list": values}[kind]
+    with pytest.raises(TypeError, match=f"{name} must be real numbers, not complex"):
+        call(values)
+
+
+# --- inputs to the statistics functions -----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("call, message", [
+    (lambda: st.mean_ci("123"), "x must be numbers, not the str '123'"),
+    (lambda: st.mean_ci(b"5"), "x must be numbers, not the bytes b'5'"),
+    (lambda: st.welch_test("12", "34"), "a must be numbers"),
+    (lambda: st.adjust_pvalues("0.5"), "p must be numbers"),
+    (lambda: st.histogram_bins("5"), "x must be numbers"),
+    (lambda: st.largest_remainder("12", 3), "values must be numbers"),
+    (lambda: st.wilson_ci("12", 40), "successes must be numbers"),
+    (lambda: st.correlation_test([1.0, 2.0, 3.0], "123"), "y must be numbers"),
+], ids=["mean_ci", "mean_ci bytes", "welch_test", "adjust_pvalues", "histogram_bins", "largest_remainder",
+        "wilson_ci", "correlation_test"])
+def test_statistics_do_not_read_a_string_as_a_number(call, message):
+    with pytest.raises(TypeError, match=message):
+        call()
+
+
+def test_statistics_read_iterables_that_are_not_sequences():
+    expected = st.mean_ci([1.0, 2.0, 4.0])
+    assert st.mean_ci(v for v in [1.0, 2.0, 4.0]) == expected
+    assert st.mean_ci({"a": 1.0, "b": 2.0, "c": 4.0}.values()) == expected
+    assert st.mean_ci(map(float, [1, 2, 4])) == expected
+    pairs = st.correlation_test((v for v in [1.0, 2.0, 3.0, 4.0]), iter([1.0, 2.0, 3.0, 5.0]))
+    assert pairs == st.correlation_test([1.0, 2.0, 3.0, 4.0], [1.0, 2.0, 3.0, 5.0])
+
+
+@pytest.mark.parametrize("x, y", [
+    ([1.0, 2.0, 3.0], [1.0, 2.0, 3.0, 4.0]),
+    ([1.0, 2.0, 3.0, 4.0], [1.0]),  # raised an IndexError
+], ids=["3 and 4", "4 and 1"])
+def test_correlation_test_needs_paired_values(x, y):
+    with pytest.raises(ValueError, match=r"x and y must have the same length, since their values are paired"):
+        st.correlation_test(x, y)
+
+
+def test_correlation_test_rejects_unordered_values():
+    with pytest.raises(TypeError, match="x must be a sequence such as a list or an array, not a set"):
+        st.correlation_test({1.0, 2.0, 3.0, 4.0}, [1.0, 2.0, 3.0, 5.0])
+    with pytest.raises(TypeError, match="y must be a sequence .* not a dict_values"):
+        st.correlation_test([1.0, 2.0, 3.0, 4.0], {"a": 1.0, "b": 2.0, "c": 3.0, "d": 5.0}.values())
+
+
+def test_elementwise_statistics_name_their_arguments_when_shapes_differ():
+    with pytest.raises(ValueError, match=r"successes and n must have the same length.*\(3,\) and \(2,\)"):
+        st.wilson_ci([1, 2, 3], [10, 10])
+    with pytest.raises(ValueError, match=r"r1, n1, r2 and n2 must have matching shapes.*r1 \(3,\), n1 \(2,\)"):
+        st.compare_correlations_test([0.1, 0.2, 0.3], [10, 10], [0.3, 0.4], 10)
+    low, high = st.wilson_ci([1, 2, 3], 10)  # a single number still pairs with every element
+    assert low.shape == high.shape == (3,)
+    z, p = st.compare_correlations_test([0.1, 0.2], 10, [0.3, 0.4], 10)
+    assert z.shape == p.shape == (2,)

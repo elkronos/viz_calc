@@ -6,13 +6,18 @@ them on their own when you want the numbers without the picture.
 
 References are listed in each docstring and collected on the *Methodology*
 page of the documentation.
+
+Samples are lists, arrays or pandas Series of real numbers, with ``None``,
+``nan`` or ``pd.NA`` for a missing value; a generator or another iterable is
+read into a list. A lone string is rejected rather than read as a number, and
+so are complex values, whose imaginary part would otherwise be dropped.
 """
 
 from __future__ import annotations
 
 import inspect
 import numbers
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Mapping, MappingView, Sequence
 from fractions import Fraction
 from functools import lru_cache
 from itertools import permutations
@@ -38,8 +43,21 @@ __all__ = [
 ]
 
 
-def _as_float(x: Any) -> np.ndarray:
-    """*x* as a float array, with missing values (``None``, ``nan``, ``pd.NA``) as ``nan``."""
+def _as_float(x: Any, name: str = "values") -> np.ndarray:
+    """*x* as a float array, with missing values (``None``, ``nan``, ``pd.NA``) as ``nan``.
+
+    Text is rejected rather than read as a number (``"123"`` is not the value
+    123), and so are complex numbers, whose imaginary part a cast to float
+    would drop; the errors name the argument *name*. An iterable that is
+    neither a sequence nor array-like, such as a generator or
+    ``dict.values()``, is read into a list first.
+    """
+    if isinstance(x, (str, bytes)):
+        raise TypeError(f"{name} must be numbers, not the {type(x).__name__} {x!r}")
+    if isinstance(x, Iterable) and not isinstance(x, (Sequence, Mapping)) and not hasattr(x, "__array__"):
+        x = list(x)
+    if np.iscomplexobj(x):
+        raise TypeError(f"{name} must be real numbers, not complex")
     if isinstance(x, (pd.Series, pd.Index, pd.DataFrame, pd.api.extensions.ExtensionArray)):
         # np.asarray(x, dtype=float) raises for nullable dtypes holding pd.NA on pandas 2.0
         return x.to_numpy(dtype=float, na_value=np.nan)
@@ -50,8 +68,8 @@ def _as_float(x: Any) -> np.ndarray:
         return np.where(pd.isna(obj), np.nan, obj).astype(float)
 
 
-def _clean(x: Sequence[float] | np.ndarray | pd.Series) -> np.ndarray:
-    arr = _as_float(x).ravel()
+def _clean(x: Sequence[float] | np.ndarray | pd.Series, name: str = "values") -> np.ndarray:
+    arr = _as_float(x, name).ravel()
     return arr[~np.isnan(arr)]
 
 
@@ -156,8 +174,10 @@ def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0
     arrays for array input. ``n == 0`` gives ``nan``, and so does a missing
     count. Counts need not be whole numbers (weighted data), but they must be
     possible: a negative or infinite count, or more *successes* than *n*,
-    raises ``ValueError``. *level* must be strictly between 0 and 1
-    (``0.95``, not ``95``), else ``ValueError``.
+    raises ``ValueError``. Arrays of *successes* and *n* pair up element by
+    element, so they must have the same length unless one is a single
+    number. *level* must be strictly between 0 and 1 (``0.95``, not ``95``),
+    else ``ValueError``.
 
     References
     ----------
@@ -167,9 +187,13 @@ def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0
     binomial proportion. *Statistical Science*, 16(2), 101–133.
     """
     level = _check_level(level)
-    k = _as_float(successes)
-    n = _as_float(n)
-    pairs_k, pairs_n = np.broadcast_arrays(k, n)
+    k = _as_float(successes, "successes")
+    n = _as_float(n, "n")
+    try:
+        pairs_k, pairs_n = np.broadcast_arrays(k, n)
+    except ValueError:
+        raise ValueError("successes and n must have the same length, or one of them be a single number; got "
+                         f"shapes {k.shape} and {n.shape}") from None
     with np.errstate(invalid="ignore"):  # comparisons with nan are False, so missing counts pass
         bad = np.isinf(pairs_k) | np.isinf(pairs_n) | (pairs_k < 0) | (pairs_n < 0) | (pairs_k > pairs_n)
     if bad.any():
@@ -203,7 +227,7 @@ def mean_ci(x: Sequence[float], level: float = 0.95) -> tuple[float, float, floa
     strictly between 0 and 1 (``0.95``, not ``95``), else ``ValueError``.
     """
     level = _check_level(level)
-    x = _clean(x)
+    x = _clean(x, "x")
     n = x.size
     if n == 0:
         return (np.nan, np.nan, np.nan)
@@ -243,7 +267,7 @@ def welch_test(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> d
     Review of Social Psychology*, 30(1), 92–101.
     """
     level = _check_level(level)
-    a, b = _clean(a), _clean(b)
+    a, b = _clean(a, "a"), _clean(b, "b")
     if a.size < 2 or b.size < 2:
         raise ValueError("each group needs at least two non-missing values")
     c = _offset(a, b)
@@ -282,7 +306,7 @@ def hedges_g(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> dic
     Meta-Analysis*. Academic Press.
     """
     level = _check_level(level)
-    a, b = _clean(a), _clean(b)
+    a, b = _clean(a, "a"), _clean(b, "b")
     n1, n2 = a.size, b.size
     if n1 < 2 or n2 < 2:
         raise ValueError("each group needs at least two non-missing values")
@@ -398,7 +422,7 @@ def _bootstrap(samples, statistic, level, n_resamples, method, seed):
         statistic = _default_statistic(len(samples))
     elif not samples:
         raise ValueError("bootstrap_ci needs at least one sample")
-    data = tuple(_clean(s) for s in samples)
+    data = tuple(_clean(s, "samples") for s in samples)
     if any(d.size < 2 for d in data):
         raise ValueError("each sample needs at least two non-missing values")
     shift = _offset(*data) if default else 0.0
@@ -449,7 +473,7 @@ def adjust_pvalues(p: Sequence[float], method: Literal["holm", "fdr_bh", "bonfer
     methods = ("holm", "fdr_bh", "bonferroni", "none")
     if method not in methods:  # checked first, so an all-missing input cannot hide a typo
         raise ValueError(f"method must be one of {list(methods)}, got {method!r}")
-    p = _as_float(p)
+    p = _as_float(p, "p")
     out = np.full_like(p, np.nan)
     mask = ~np.isnan(p)
     q = p[mask]
@@ -534,8 +558,10 @@ def correlation_test(x: Sequence[float], y: Sequence[float], method: Literal["pe
                      level: float = 0.95) -> dict[str, float]:
     """Correlation with p-value and Fisher-*z* confidence interval.
 
-    Pairs with a missing value in either variable are dropped. Returns
-    ``r``, ``ci_low``, ``ci_high``, ``p`` and ``n``.
+    *x* and *y* are paired by position, so they must have the same length,
+    and a set, which has no order of its own, is rejected. Pairs with a
+    missing value in either variable are dropped. Returns ``r``, ``ci_low``,
+    ``ci_high``, ``p`` and ``n``.
 
     The Pearson p-value is the usual *t* test. For Spearman with at most 9
     complete pairs the p-value is exact: the share of all ``n!`` pairings of
@@ -556,8 +582,15 @@ def correlation_test(x: Sequence[float], y: Sequence[float], method: Literal["pe
     """
     _check_method(method)
     level = _check_level(level)
-    x = _as_float(x)
-    y = _as_float(y)
+    for name, values in (("x", x), ("y", y)):
+        if isinstance(values, (set, frozenset, MappingView)):  # no order of their own to pair the values by
+            raise TypeError(f"{name} must be a sequence such as a list or an array, not a {type(values).__name__}: "
+                            "x and y are paired by position")
+    x = _as_float(x, "x")
+    y = _as_float(y, "y")
+    if x.shape != y.shape:
+        raise ValueError(f"x and y must have the same length, since their values are paired; got shapes {x.shape} "
+                         f"and {y.shape}")
     keep = ~(np.isnan(x) | np.isnan(y))
     x, y = x[keep], y[keep]
     n = x.size
@@ -587,7 +620,8 @@ def compare_correlations_test(r1: float | np.ndarray, n1: int | np.ndarray, r2: 
     """Test whether two *independent* correlations differ: ``(z, p)``.
 
     Fisher's r-to-z test: ``z = (atanh r1 - atanh r2) / sqrt(se1² + se2²)``,
-    two-sided. Works element-wise on arrays, e.g. two correlation matrices.
+    two-sided. Works element-wise on arrays of the same shape, e.g. two
+    correlation matrices; any argument may instead be a single number.
     Only valid when the correlations come from different people/units. The
     result is ``nan`` wherever either ``n`` is 3 or less. The test is
     asymptotic, so read it with caution for groups of only a few units; a
@@ -602,7 +636,14 @@ def compare_correlations_test(r1: float | np.ndarray, n1: int | np.ndarray, r2: 
     Erlbaum.
     """
     _check_method(method)
-    r1, r2 = np.clip(_as_float(r1), -0.999999, 0.999999), np.clip(_as_float(r2), -0.999999, 0.999999)
+    values = {"r1": _as_float(r1, "r1"), "n1": _as_float(n1, "n1"), "r2": _as_float(r2, "r2"), "n2": _as_float(n2, "n2")}
+    try:
+        np.broadcast_shapes(*(v.shape for v in values.values()))
+    except ValueError:
+        shapes = ", ".join(f"{k} {v.shape}" for k, v in values.items())
+        raise ValueError(f"r1, n1, r2 and n2 must have matching shapes, or be single numbers; got {shapes}") from None
+    r1, n1, r2, n2 = values.values()
+    r1, r2 = np.clip(r1, -0.999999, 0.999999), np.clip(r2, -0.999999, 0.999999)
     se = np.sqrt(_fisher_se(n1, method) ** 2 + _fisher_se(n2, method) ** 2)
     z = (np.arctanh(r1) - np.arctanh(r2)) / se
     p = 2 * _st.norm.sf(np.abs(z))
@@ -654,7 +695,7 @@ def histogram_bins(x: Sequence[float], rule: Literal["fd", "sturges", "scott", "
 
 def _bin_edges(x: Sequence[float], rule: str) -> tuple[np.ndarray, str]:
     """Bin edges and the rule actually used (FD falls back to Sturges when IQR = 0; whole-number widths on integers)."""
-    x = _clean(x)
+    x = _clean(x, "x")
     if x.size == 0:
         raise ValueError("no non-missing values")
     if rule not in ("fd", "sturges", "scott", "auto"):

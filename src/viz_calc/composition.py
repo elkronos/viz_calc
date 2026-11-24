@@ -39,6 +39,7 @@ from ._core import (
     group_key,
     group_label,
     group_mask,
+    is_number_column,
     level_codes,
     level_label,
     level_mask,
@@ -366,7 +367,7 @@ def donut_grid(
     _check_count("col_wrap", col_wrap)
     _check_real("min_label", min_label)
     columns = columns if columns is not None else [
-        c for c, s in column_items(data) if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s)]
+        c for c, s in column_items(data) if is_number_column(s)]
     check_dataframe(data, columns)  # a column picked by default may have a repeated label
     if not columns:
         raise ValueError("donut_grid needs at least one category column: columns= is empty or data has no "

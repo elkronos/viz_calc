@@ -31,6 +31,7 @@ from ._core import (
     exact_mean,
     foreground,
     get_ax,
+    is_number_column,
     level_label,
     level_mask,
     select_columns,
@@ -45,7 +46,7 @@ Adjust = Literal["holm", "fdr_bh", "bonferroni", "none"]
 
 def _numeric_columns(data: pd.DataFrame, columns: Sequence[str] | None) -> list[str]:
     if columns is None:
-        columns = [c for c, s in column_items(data) if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s)]
+        columns = [c for c, s in column_items(data) if is_number_column(s)]
     else:
         columns = column_list("columns", columns, distinct=True)
     check_dataframe(data, columns)
