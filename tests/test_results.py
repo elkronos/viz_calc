@@ -194,3 +194,69 @@ def test_a_failed_call_closes_the_figures_of_the_plotting_calls_it_made():
     with pytest.raises(RuntimeError, match="outer"):
         outer()
     assert plt.get_fignums() == [keep.number]
+
+
+# --- a failed call takes back what it drew on the caller's Axes ------------------------------------------------------
+
+
+def _pixels(fig):
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=40)
+    buf.seek(0)
+    return plt.imread(buf)
+
+
+def _fail_at_the_end(monkeypatch, func):
+    """Make *func* fail at its last step, after it has drawn everything."""
+    import sys
+
+    def fails(*args, **kwargs):
+        raise RuntimeError("failed after drawing")
+
+    monkeypatch.setattr(sys.modules[func.__wrapped__.__module__], "VizResult", fails)
+
+
+@pytest.mark.parametrize("content", [False, True], ids=["empty", "with content"])
+@pytest.mark.parametrize("name", list(AX_CALLS))
+def test_a_call_that_fails_after_drawing_leaves_the_callers_axes_as_they_were(name, content, monkeypatch):
+    import numpy as np
+
+    func, data, kwargs = _ax_call(name)
+    fig = plt.figure(figsize=(6, 4))
+    ax = fig.add_subplot(1, 2, 1, projection="polar" if AX_CALLS[name][3] else None)
+    fig.add_subplot(1, 2, 2).plot([1, 2], [3, 1])
+    if content:
+        ax.plot([0, 1, 2], [1, 3, 2], label="mine")
+        ax.set_title("My title")
+        ax.set_xlabel("x")
+        ax.legend()
+    before, children, axes = _pixels(fig), ax.get_children(), fig.axes
+    _fail_at_the_end(monkeypatch, func)
+    with pytest.raises(RuntimeError, match="failed after drawing"):
+        func(data, ax=ax, **kwargs)
+    assert ax.get_children() == children and fig.axes == axes
+    assert np.array_equal(_pixels(fig), before)
+
+
+@pytest.mark.parametrize("where", ["add_axes", "subfigure", "styled"])
+def test_a_failed_call_removes_its_colour_bar_and_gives_the_room_back(where, monkeypatch):
+    import numpy as np
+
+    fig = plt.figure(figsize=(6, 4))
+    if where == "add_axes":
+        ax = fig.add_axes([0.1, 0.1, 0.5, 0.8])
+    elif where == "subfigure":
+        ax = fig.subfigures(1, 2)[0].subplots()
+    else:
+        ax = fig.subplots()
+        ax.scatter([1, 2, 30], [4, 5, 60], label="points")
+        ax.set_xticks([1, 10, 30], ["one", "ten", "thirty"], rotation=30, color="red")
+        ax.grid(True)
+        ax.tick_params(labelsize=6, length=8)
+        ax.legend()
+    before, position = _pixels(fig), ax.get_position().bounds
+    _fail_at_the_end(monkeypatch, vc.correlogram)
+    with pytest.raises(RuntimeError):
+        vc.correlogram(datasets.measurements(), ax=ax)
+    assert len(fig.axes) == 1 and ax.get_position().bounds == position
+    assert np.array_equal(_pixels(fig), before)

@@ -22,6 +22,7 @@ from matplotlib.axis import Axis
 from matplotlib.category import StrCategoryFormatter
 from matplotlib.colors import is_color_like, to_hex, to_rgb, to_rgba
 from matplotlib.figure import FigureBase
+from matplotlib.projections.polar import PolarAxes
 from matplotlib.text import Text
 from matplotlib.ticker import FixedFormatter, FuncFormatter, ScalarFormatter
 from matplotlib.transforms import Bbox
@@ -380,6 +381,141 @@ def _note_figure(figure: Any) -> None:
         made.append(figure)
 
 
+def _style(text: Text) -> tuple[Text, str, Any, bool]:
+    """A copy of *text*'s look (font, colour, alignment, rotation), its text, position and ``parse_math``."""
+    look = Text()
+    look.update_from(text)
+    return look, text.get_text(), text.get_position(), text.get_parse_math()
+
+
+def _set_style(text: Text, style: tuple[Text, str, Any, bool], own_transform: bool = False) -> None:
+    look, value, position, parse = style
+    transform = text.get_transform()
+    text.update_from(look)
+    if own_transform:  # a new tick's label, placed by that tick
+        text.set_transform(transform)
+    text.set_text(value)
+    text.set_position(position)
+    text.set_parse_math(parse)
+
+
+def _tick_labels(axis: Axis) -> list[Text]:
+    """The labels of the first major and minor tick, which Matplotlib copies to the ticks it adds."""
+    return [label for tick in (axis.majorTicks[0], axis.minorTicks[0]) for label in (tick.label1, tick.label2)]
+
+
+def _tick_params(axis: Axis) -> tuple[Any, ...]:
+    """What tick settings and tick label styling a chart may change on *axis*, in a form that compares."""
+    looks = [(t.get_rotation(), t.get_ha(), t.get_va(), t.get_fontsize(), to_rgba(t.get_color()), t.get_fontweight(),
+              t.get_visible(), t.get_parse_math()) for t in _tick_labels(axis)]
+    return axis.get_tick_params(which="major"), axis.get_tick_params(which="minor"), looks
+
+
+def _set_ticks(axis: Axis, params: tuple[Any, ...], labels: list[Any]) -> None:
+    """Make *axis*'s ticks afresh from *params*, their labels styled as *labels* (from :func:`_style`)."""
+    major, minor, _ = params
+    axis.set_tick_params(which="major", reset=True, **major)
+    axis.set_tick_params(which="minor", reset=True, **minor)
+    for label, style in zip(_tick_labels(axis), labels):
+        _set_style(label, style, own_transform=True)
+
+
+def _limits(ax: Axes) -> tuple[Any, Any, bool, bool]:
+    return ax.get_xlim(), ax.get_ylim(), ax.get_autoscalex_on(), ax.get_autoscaley_on()
+
+
+def _set_limits(ax: Axes, limits: tuple[Any, Any, bool, bool]) -> None:
+    xlim, ylim, x_auto, y_auto = limits
+    ax.set_autoscale_on(False)
+    ax.get_xlim()  # with autoscaling off, this drops the call's pending request to autoscale
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_autoscalex_on(x_auto)
+    ax.set_autoscaley_on(y_auto)
+
+
+def _settings(ax: Axes) -> list[tuple[Callable[[], Any], Callable[[Any], Any]]]:
+    """``(get, set)`` pairs for what a chart may change on *ax*, in the order they are set back."""
+    def attribute(owner: Any, name: str) -> tuple[Callable[[], Any], Callable[[Any], Any]]:
+        return functools.partial(getattr, owner, name), functools.partial(setattr, owner, name)
+
+    pairs = [(ax.get_xscale, ax.set_xscale), (ax.get_yscale, ax.set_yscale)]
+    for axis in (ax.xaxis, ax.yaxis):
+        pairs += [(axis.get_major_locator, axis.set_major_locator), (axis.get_minor_locator, axis.set_minor_locator),
+                  (axis.get_major_formatter, axis.set_major_formatter),
+                  (axis.get_minor_formatter, axis.set_minor_formatter),
+                  *(attribute(axis, f"isDefault_{kind}") for kind in ("majloc", "minloc", "majfmt", "minfmt"))]
+    pairs += [
+        (lambda: ax.dataLim.get_points().copy(), ax.dataLim.set_points),
+        attribute(ax, "ignore_existing_data_limits"),
+        (ax.margins, lambda margins: ax.margins(*margins)),
+        (functools.partial(_limits, ax), functools.partial(_set_limits, ax)),
+        (ax.get_aspect, ax.set_aspect), (ax.get_adjustable, ax.set_adjustable),
+        (ax.get_subplotspec, lambda spec: spec is not None and ax.set_subplotspec(spec)),
+        (lambda: ax.get_position(original=True).bounds, ax.set_position), (ax.get_in_layout, ax.set_in_layout),
+        (ax.get_axisbelow, ax.set_axisbelow), (ax.get_facecolor, ax.set_facecolor),
+        (ax.get_frame_on, ax.set_frame_on), (ax.get_visible, ax.set_visible),
+        (lambda: ax.axison, lambda on: ax.set_axis_on() if on else ax.set_axis_off()),
+        *((spine.get_visible, spine.set_visible) for spine in ax.spines.values()),
+        attribute(ax, "legend_"),
+        (lambda: list(ax.containers), lambda containers: ax.containers.__setitem__(slice(None), containers)),
+    ]
+    if isinstance(ax, PolarAxes):
+        pairs += [(ax.get_theta_offset, ax.set_theta_offset), (ax.get_theta_direction, ax.set_theta_direction)]
+    return pairs
+
+
+def _differs(now: Any, before: Any) -> bool:
+    try:
+        return bool(now != before)
+    except ValueError:  # NumPy arrays
+        return True
+
+
+def _subfigures(figure: Any) -> Iterator[Any]:
+    """*figure* and the subfigures in it, at any depth."""
+    yield figure
+    for sub in figure.subfigs:
+        yield from _subfigures(sub)
+
+
+class _Drawing:
+    """The caller's Axes before a plotting call, so that a failed call can take back what it drew there."""
+
+    def __init__(self, axes: Iterable[Axes]) -> None:
+        self.axes = list(dict.fromkeys(axes))
+        figures = dict.fromkeys(ax.figure.figure for ax in self.axes)
+        parents = [*(sub for figure in figures for sub in _subfigures(figure)), *self.axes]
+        self.children = {parent: set(parent.get_children()) for parent in parents}
+        self.settings = [(get, set_, get()) for ax in self.axes for get, set_ in _settings(ax)]
+        self.ticks = {axis: (_tick_params(axis), [_style(label) for label in _tick_labels(axis)])
+                      for ax in self.axes for axis in (ax.xaxis, ax.yaxis)}
+        self.texts = {text: _style(text) for ax in self.axes
+                      for text in (*(c for c in ax.get_children() if isinstance(c, Text)), ax.xaxis.label,
+                                   ax.yaxis.label)}
+
+    def undo(self) -> None:
+        """Remove the artists, Axes and colour bars the call added, and set the caller's Axes back as they were."""
+        for ax in self.axes:  # a colour bar first: removing it also gives its Axes back the room it took
+            for artist in ax.get_children():
+                bar = getattr(artist, "colorbar", None)
+                if bar is not None and artist not in self.children[ax]:
+                    bar.remove()
+        for parent, before in self.children.items():
+            for artist in parent.get_children():
+                if artist not in before:
+                    with contextlib.suppress(NotImplementedError, ValueError):  # an artist that cannot be removed
+                        artist.remove()
+        for get, set_, value in self.settings:
+            if _differs(get(), value):
+                set_(value)
+        for axis, (params, labels) in self.ticks.items():
+            if _tick_params(axis) != params:  # new ticks only when needed: they can move a polar label a little
+                _set_ticks(axis, params, labels)
+        for text, style in self.texts.items():
+            _set_style(text, style)
+
+
 def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
     """Decorator for the plotting functions: their text is drawn as written, and a failed call closes its figures.
 
@@ -394,7 +530,10 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
     pyplot, which Jupyter or ``plt.show()`` would then display. Only the
     figures the call made are closed: those that existed before it (such as
     the one holding a caller's *ax*) and those other threads make while it
-    runs are left open.
+    runs are left open. What a failed call drew on a caller's *ax* is taken
+    off again: the artists, legends, colour bars and Axes it added are
+    removed, and the titles, axis labels, limits, scales, ticks, spines and
+    legend of *ax* are set back as they were.
 
     An *ax* argument that is not one Matplotlib Axes (a figure, or the whole
     array from ``plt.subplots``) raises ``TypeError`` before the call starts.
@@ -408,7 +547,7 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
             ax = kwargs["ax"] if "ax" in kwargs else args[ax_at] if len(args) > ax_at else None
             _check_ax_type(func.__name__, ax)
         axes = [a for a in (*args, *kwargs.values()) if isinstance(a, Axes)]
-        text = _Text(axes)
+        text, drawing = _Text(axes), _Drawing(axes)
         hooks = plt.rcParams["figure.hooks"]
         rc = {**_NO_MATH, "figure.hooks": hooks if _NOTE_FIGURE in hooks else [*hooks, _NOTE_FIGURE]}
         outer, made = _made.get(), []
@@ -419,6 +558,8 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
         except BaseException:
             for figure in made:
                 plt.close(figure)
+            with contextlib.suppress(Exception):  # the call's own error is the one to report
+                drawing.undo()
             raise
         finally:
             _made.reset(token)
