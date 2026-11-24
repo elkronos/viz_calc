@@ -249,3 +249,17 @@ def test_a_qualitative_colormap_gives_its_colours_in_order():
     with pytest.raises(ValueError, match="'tab10' has 10 colours, too few for 11"):
         vc.palette(11, "tab10")
     assert len(set(vc.palette(300, "viridis"))) > 200  # a continuous map is still sampled end to end
+
+
+# --- pca_plot order ---------------------------------------------------------------------------------------------------
+
+def test_pca_plot_order_must_list_every_group():
+    d = datasets.measurements()
+    features = ["length", "width", "depth", "mass"]
+    with pytest.raises(ValueError, match=r"must list every level; missing: \['gamma'\]"):
+        vc.pca_plot(d, features, "group", order=["alpha", "beta"])
+    res = vc.pca_plot(d, features, "group", order=["gamma", "alpha", "beta"])
+    assert sum(len(c.get_offsets()) for c in res.axes.collections) == len(res.table) == len(d)
+    assert _legend(res.axes) == ["gamma", "alpha", "beta"]
+    with pytest.raises(ValueError, match=r"level '\(missing\)' and missing values"):
+        vc.pca_plot(d.assign(group=d["group"].replace("beta", "(missing)").where(d.index % 7 > 0)), features, "group")

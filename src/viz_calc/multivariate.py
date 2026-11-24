@@ -148,6 +148,8 @@ def pca_plot(
     whose *group* is missing are still scored and drawn, in grey as
     ``(missing)`` and without an ellipse. *group* cannot be one of the
     *features*; to colour by a feature, pass a copy of it under another name.
+    *order* sets the order of the groups in the legend and must list every
+    group that occurs, since every row is scored and drawn.
 
     The table has one row per scored row: ``row`` (its index label in
     *data*, a tuple for a ``MultiIndex``; named ``index`` when *group* is
@@ -204,7 +206,8 @@ def pca_plot(
     if group is not None:
         complete = select_columns(data, features).notna().all(axis=1)  # the rows pca() kept, matched by position
         scores[group] = data[group][complete].array  # positional, and keeps a Categorical's order
-        groups = category_order(scores[group], order)
+        groups = category_order(scores[group], order, complete=True)  # every row is drawn, so every group is listed
+        check_labels(group, groups, missing=scores[group].isna().any())
     cols = palette(len(groups), colors)
 
     fig, ax = get_ax(ax, figsize=(8, 7))
