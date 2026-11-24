@@ -89,8 +89,8 @@ def _draw_matrix(ax: Axes, mat: np.ndarray, labels: list[str], triangle: str, vl
         mask = np.tril(np.ones((k, k), bool))
     sub = np.ma.array(mat, mask=mask)[np.ix_(rows, cols)]
     im = ax.imshow(sub, cmap=cmap, vmin=-vlim, vmax=vlim)
-    ax.set_xticks(range(len(cols)), [labels[c] for c in cols], rotation=45, ha="right")
-    ax.set_yticks(range(len(rows)), [labels[r] for r in rows])
+    ax.set_xticks(range(len(cols)), [level_label(labels[c]) for c in cols], rotation=45, ha="right")
+    ax.set_yticks(range(len(rows)), [level_label(labels[r]) for r in rows])
     ax.set_xticks(np.arange(-0.5, len(cols)), minor=True)
     ax.set_yticks(np.arange(-0.5, len(rows)), minor=True)
     ax.grid(which="minor", color="white", lw=2)
@@ -322,7 +322,7 @@ def quadrant_plot(
         only by floating-point rounding.
     label
         Optional column whose values annotate each point. It may be *x* or
-        *y* itself.
+        *y* itself. A point whose label is missing is left unannotated.
     fit
         Draw the ordinary least-squares line.
     """
@@ -365,7 +365,9 @@ def quadrant_plot(
         ax.plot(grid, intercept + slope * grid, color=OKABE_ITO[5], lw=1.5)
     if label is not None:
         for xi, yi, t in zip(xv, yv, d[label]):
-            ax.annotate(str(t), (xi, yi), xytext=(3, 3), textcoords="offset points", fontsize=7, color=NEUTRAL)
+            if pd.api.types.is_scalar(t) and pd.isna(t):  # a point without a label is left unannotated
+                continue
+            ax.annotate(level_label(t), (xi, yi), xytext=(3, 3), textcoords="offset points", fontsize=7, color=NEUTRAL)
 
     spec = [("high x, high y", right & top, 0.97, 0.97, "right", "top"),
             ("low x, high y", ~right & top, 0.03, 0.97, "left", "top"),
@@ -382,7 +384,7 @@ def quadrant_plot(
     sym = "r" if method == "pearson" else "ρ"
     ax.set_title(f"{sym} = {cor['r']:.2f}  [95% CI {cor['ci_low']:.2f}, {cor['ci_high']:.2f}],  n = {cor['n']}",
                  loc="left", fontsize="medium")
-    ax.set_xlabel(f"{x} (z-score)" if standardize else x)
-    ax.set_ylabel(f"{y} (z-score)" if standardize else y)
+    ax.set_xlabel(f"{level_label(x)} (z-score)" if standardize else level_label(x))
+    ax.set_ylabel(f"{level_label(y)} (z-score)" if standardize else level_label(y))
     ax.spines[["top", "right"]].set_visible(False)
     return VizResult(fig, ax, pd.DataFrame(rows), {"correlation": cor, "center": (cx, cy), "standardized": standardize})

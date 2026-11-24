@@ -223,7 +223,7 @@ def pca_plot(
         mult = 0.8 * span / np.abs(top.to_numpy()).max()
         for f, (lx, ly) in zip(top.index, top.to_numpy() * mult):
             ax.annotate("", (lx, ly), (0, 0), arrowprops={"arrowstyle": "->", "color": NEUTRAL, "lw": 1.2})
-            ax.text(lx * 1.08, ly * 1.08, f, color=foreground(ax), fontsize=8, ha="center", va="center")
+            ax.text(lx * 1.08, ly * 1.08, level_label(f), color=foreground(ax), fontsize=8, ha="center", va="center")
     evr = res["explained_variance_ratio"]
     ax.set_xlabel(f"{pc_x} ({evr[pc_x]:.1%} of variance)")
     ax.set_ylabel(f"{pc_y} ({evr[pc_y]:.1%} of variance)")
@@ -231,7 +231,7 @@ def pca_plot(
     ax.axvline(0, color=foreground(ax, "#dddddd"), lw=0.8, zorder=0)
     ax.set_aspect("equal", adjustable="datalim")
     if group is not None:
-        ax.legend(title=str(group), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
+        ax.legend(title=level_label(group), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
     title = "standardized features" if scale else "unscaled features"
     if ellipse:
         title += f"; ellipses: {level_percent(level)} {'of data' if ellipse == 'data' else 'CI of mean'}"
@@ -350,7 +350,7 @@ def radar(
         ax.plot(closed, np.r_[vals, vals[0]], color=c, lw=2, marker="o", ms=4, label=name)
         if not np.isnan(vals).any():  # a polygon with a missing vertex would be misleading
             ax.fill(closed, np.r_[vals, vals[0]], color=c, alpha=0.12)
-    ax.set_xticks(angles, metrics)
+    ax.set_xticks(angles, [level_label(m) for m in metrics])
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
     if normalize != "none":

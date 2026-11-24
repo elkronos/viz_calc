@@ -246,7 +246,7 @@ def period_bars(
         ax.plot(mids, agg["trend"], color=OKABE_ITO[5], lw=2, label=f"{trend_window}-{freq} moving average")
     _date_axis(ax)
     ax.yaxis.set_major_formatter(AbbrevFormatter())
-    ax.set_ylabel(f"{stat} of {value}")
+    ax.set_ylabel(f"{stat} of {level_label(value)}")
     ax.legend(frameon=False, loc="upper left")
     ax.spines[["top", "right"]].set_visible(False)
     table = agg.rename_axis("period").reset_index()
@@ -345,7 +345,7 @@ def timeseries_fill(
         ax.xaxis_date(tz)  # a date axis in the data's zone, as plotting the values themselves gives
     if pd.api.types.is_datetime64_any_dtype(t):
         _date_axis(ax, tz=tz)
-    ax.set_xlabel(time)
+    ax.set_xlabel(level_label(time))
     ax.legend(frameon=False, loc="upper left")
     ax.spines[["top", "right"]].set_visible(False)
     diff = ya - yb
@@ -425,7 +425,7 @@ def calendar_heatmap(
             s.set_visible(False)
         ax.set_ylabel(str(year), rotation=0, ha="right", va="center", fontsize=11, weight="bold")
     fig.colorbar(mesh, ax=axes[:, 0].tolist(), orientation="horizontal", fraction=0.04, pad=0.08,
-                 label=f"{stat}{f' of {value}' if value is not None else ''} per day")
+                 label=f"{stat}{f' of {level_label(value)}' if value is not None else ''} per day")
     return VizResult(fig, axes[:, 0], daily.rename("value").rename_axis("date").reset_index())
 
 
@@ -539,7 +539,7 @@ def gantt(
         handles = [Patch(color=c, label=level_label(g)) for g, c in zip(groups, cols)]
         if (codes < 0).any():
             handles.append(Patch(color=NEUTRAL, label="(missing)"))
-        ax.legend(handles=handles, title=str(group), frameon=False,
+        ax.legend(handles=handles, title=level_label(group), frameon=False,
                   loc="upper left", bbox_to_anchor=(1.01, 1))
     ax.grid(axis="x", color=foreground(ax, "#eeeeee"))
     ax.set_axisbelow(True)
@@ -730,7 +730,8 @@ def _stamps(frames: list[Any]) -> list[str]:
             if ts.tz is not None:
                 fmt += " %Z"
             return [t.strftime(fmt).rstrip() for t in ts]
-    return [str(int(f)) if isinstance(f, (float, np.floating)) and float(f).is_integer() else str(f) for f in frames]
+    return [str(int(f)) if isinstance(f, (float, np.floating)) and float(f).is_integer() else level_label(f)
+            for f in frames]
 
 
 def _check_positive(name: str, value: Any) -> None:
@@ -836,14 +837,14 @@ def animated_bubble(
                        label=name)
             if label is not None:  # label only the bubbles that are drawn, and only when there is a label
                 for _, r in sub.dropna(subset=[label]).iterrows():
-                    ax.annotate(str(r[label]), (r[x], r[y]), fontsize=7, ha="center", va="center")
+                    ax.annotate(level_label(r[label]), (r[x], r[y]), fontsize=7, ha="center", va="center")
         ax.set_xlim(*xlim)
         ax.set_ylim(*ylim)
-        ax.set_xlabel(x)
-        ax.set_ylabel(y)
+        ax.set_xlabel(level_label(x))
+        ax.set_ylabel(level_label(y))
         ax.text(0.98, 0.04, stamps[i], transform=ax.transAxes, ha="right", fontsize=22, color=NEUTRAL, alpha=0.5)
         if color is not None:
-            ax.legend(title=str(color), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
+            ax.legend(title=level_label(color), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
         ax.spines[["top", "right"]].set_visible(False)
         return ax.collections
 

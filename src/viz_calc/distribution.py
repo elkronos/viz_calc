@@ -198,18 +198,18 @@ def histogram(
                 ax.axvline(v, color=col if hue is not None else foreground(ax), ls="--", lw=1.2)
             rows.append({"facet": f, "hue": h, **_describe(pd.Series(s))})
         if facet is not None:
-            ax.set_title(f"{facet} = {group_label(f)}", fontsize="medium", loc="left")
+            ax.set_title(f"{level_label(facet)} = {group_label(f)}", fontsize="medium", loc="left")
         ax.spines[["top", "right"]].set_visible(False)
     for ax in list(axes.flat)[len(facets):]:
         ax.set_visible(False)
     for ax in axes[-1]:
-        ax.set_xlabel(x)
+        ax.set_xlabel(level_label(x))
     for ax in axes[:, 0]:
         ax.set_ylabel({"count": "Count", "density": "Density", "percent": "Percent"}[stat])
     if hue is not None:
-        axes.flat[0].legend(title=str(hue), frameon=False)
+        axes.flat[0].legend(title=level_label(hue), frameon=False)
     note = f"; {outside} value{'s' if outside > 1 else ''} outside the bins not shown" if outside else ""
-    fig.suptitle(f"Distribution of {x}  (bins: {rule}, width ≈ {np.mean(width):.3g}{note})", x=0.01, ha="left")
+    fig.suptitle(f"Distribution of {level_label(x)}  (bins: {rule}, width ≈ {np.mean(width):.3g}{note})", x=0.01, ha="left")
     fig.tight_layout()
     table = pd.DataFrame(rows).drop(columns=[c for c, used in (("facet", facet), ("hue", hue)) if used is None])
     return VizResult(fig, axes, table, {"bin_edges": edges, "bin_rule": rule, "stat": stat, "outside_bins": outside})
@@ -273,8 +273,8 @@ def ridgeplot(
                 ax.plot([m, m], [base, base + np.interp(m, grid, d) / peak], color="black", lw=1, zorder=2 * i + 2)
         rows.append({group: g, **_describe(s)})
     ax.set_yticks([(len(groups) - 1 - i) * step for i in range(len(groups))], [group_label(g) for g in groups])
-    ax.set_xlabel(x)
-    ax.set_ylabel(group)
+    ax.set_xlabel(level_label(x))
+    ax.set_ylabel(level_label(group))
     ax.spines[["top", "right", "left"]].set_visible(False)
     ax.tick_params(axis="y", length=0)
     return VizResult(fig, ax, pd.DataFrame(rows))
@@ -337,7 +337,7 @@ def raincloud(
             ax.scatter(s, pos - 0.22 + rng.uniform(-0.08, 0.08, s.size), s=10, color=cols[i], alpha=0.6, lw=0)
         rows.append({x: g, **_describe(pd.Series(s))})
     ax.set_yticks([len(groups) - 1 - i for i in range(len(groups))], [f"{level_label(g)}\n(n={r['n']})" for g, r in zip(groups, rows)])
-    ax.set_xlabel(y)
-    ax.set_ylabel(x)
+    ax.set_xlabel(level_label(y))
+    ax.set_ylabel(level_label(x))
     ax.spines[["top", "right"]].set_visible(False)
     return VizResult(fig, ax, pd.DataFrame(rows), {"dropped_missing_group": int(data[x].isna().sum())})

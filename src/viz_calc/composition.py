@@ -328,7 +328,7 @@ def stacked_percentages(
         ax.set_xticks(pos, ticks)
         ax.yaxis.set_major_formatter(PercentFormatter())
         ax.set_ylim(0, 100)
-    ax.legend(title=str(category), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
+    ax.legend(title=level_label(category), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
     ax.spines[["top", "right"]].set_visible(False)
     table = counts.stack().rename("n").reset_index()
     group_n = table.groupby(group, dropna=False)["n"].transform("sum")
@@ -473,17 +473,14 @@ def nested_pie(
         child_cols += [tuple(rgb + (end - rgb) * t) for t in np.linspace(0.25, 0.65, int((codes == i).sum()))]
     child_cols = [NEUTRAL if gap else c for c, gap in zip(child_cols, agg[inner].isna())]
 
-    def name(v: Any) -> str:
-        return "(missing)" if pd.isna(v) else level_label(v)
-
     fig, ax = get_ax(ax, figsize=(7, 7))
     wedges, texts = ax.pie(parent_tot, radius=0.7, colors=base_cols,
-                           labels=[name(p) for p in parents] if labels else None,
+                           labels=[level_label(p) for p in parents] if labels else None,
                            labeldistance=0.75, wedgeprops={"width": 0.35, "edgecolor": "white"}, startangle=90,
                            counterclock=False, textprops={"weight": "bold", "ha": "center", "fontsize": 9})
     for t, c in zip(texts, base_cols):
         t.set_color(text_color(c))
-    ax.pie(weights, radius=1.0, colors=child_cols, labels=[name(v) for v in agg[inner]] if labels else None,
+    ax.pie(weights, radius=1.0, colors=child_cols, labels=[level_label(v) for v in agg[inner]] if labels else None,
            labeldistance=1.06, wedgeprops={"width": 0.3, "edgecolor": "white"}, startangle=90, counterclock=False,
            textprops={"fontsize": 8})
     ax.set_aspect("equal")
@@ -586,13 +583,13 @@ def circular_bar(
         for i, (g, c) in enumerate(zip(groups, cols)):
             th = theta[ordered_codes == i]
             ax.plot(np.linspace(th.min(), th.max(), 30), np.full(30, inner_radius - 0.05), color=c, lw=2)
-            ax.text(th.mean(), inner_radius - 0.16, "(missing)" if g is None else level_label(g), ha="center",
+            ax.text(th.mean(), inner_radius - 0.16, group_label(g), ha="center",
                     va="center", fontsize=9, weight="bold")
     ax.set_ylim(0, inner_radius + 1.35)
     ax.set_theta_zero_location("N")
     ax.set_theta_direction(-1)
     ax.axis("off")
-    ax.set_title(f"{value} (bar length relative to max = {abbreviate(top)})", fontsize="medium")
+    ax.set_title(f"{level_label(value)} (bar length relative to max = {abbreviate(top)})", fontsize="medium")
     return VizResult(fig, ax, ordered)
 
 
@@ -639,12 +636,13 @@ def waterfall(
     if missing:
         raise ValueError(f"{value!r} is missing for {missing}; a waterfall needs every step "
                          "(fill or drop those rows first)")
-    labels = data[label].astype(str).tolist()
+    # The text drawn for each step; a missing label stays missing in the table and reads "(missing)" on the chart.
+    labels = [np.nan if pd.api.types.is_scalar(v) and pd.isna(v) else level_label(v) for v in data[label]]
     vals = data[value].to_numpy(dtype=float)
     if values_are == "levels":
         changes = np.r_[vals[0], np.diff(vals)]
         if start_label is None:
-            start_label = labels[0]
+            start_label = group_label(labels[0])
     else:
         changes = vals.copy()
     if start_label is not None:
@@ -669,9 +667,10 @@ def waterfall(
     for i in range(len(table) - 1):
         ax.plot([i + 0.33, i + 1 - 0.33], [table["end"][i]] * 2, color=NEUTRAL, lw=0.8)
     ax.axhline(0, color=foreground(ax), lw=0.8)
-    ax.set_xticks(pos, table["label"], rotation=30, ha="right")
+    ax.set_xticks(pos, [lab if isinstance(lab, str) else group_label(lab) for lab in table["label"]], rotation=30,
+                  ha="right")
     ax.yaxis.set_major_formatter(AbbrevFormatter())
-    ax.set_ylabel(value)
+    ax.set_ylabel(level_label(value))
     ax.legend(handles=[Patch(color=colors[0], label="increase"), Patch(color=colors[1], label="decrease"),
                        Patch(color=colors[2], label="total")], frameon=False, loc="upper left", bbox_to_anchor=(1, 1))
     ax.spines[["top", "right"]].set_visible(False)
@@ -742,7 +741,7 @@ def funnel(
                     fontsize=9)
         if p != pos[0]:
             ax.text(vmax / 2 * 1.02, p + 0.5, f"↓ {pct(pp)} of previous", va="center", fontsize=8, color=NEUTRAL)
-    ax.set_yticks(pos, t[stage].astype(str))
+    ax.set_yticks(pos, [level_label(v) for v in t[stage]])
     ax.set_xlim(-vmax / 2 * 1.05, vmax / 2 * 1.6)
     ax.set_xticks([])
     ax.spines[["top", "right", "bottom", "left"]].set_visible(False)
@@ -977,7 +976,7 @@ def upset(
         ax_mat.scatter([j] * len(on), on, s=60, color=color, zorder=2)
         if len(on) > 1:
             ax_mat.plot([j, j], [min(on), max(on)], color=color, lw=2, zorder=1)
-    ax_mat.set_yticks(range(k), names)
+    ax_mat.set_yticks(range(k), [level_label(nme) for nme in names])
     ax_mat.tick_params(axis="y", left=False, labelleft=False)
     ax_mat.set_xticks([])
     ax_mat.set_ylim(-0.6, k - 0.4)
@@ -987,7 +986,7 @@ def upset(
     ax_set.barh(range(k), set_sizes, color=NEUTRAL, height=0.5)
     ax_set.invert_xaxis()
     ax_set.yaxis.tick_right()
-    ax_set.set_yticks(range(k), names)
+    ax_set.set_yticks(range(k), [level_label(nme) for nme in names])
     ax_set.tick_params(axis="y", length=0, pad=6)
     ax_set.set_xlabel("Set size")
     ax_set.spines[["top", "left", "right"]].set_visible(False)

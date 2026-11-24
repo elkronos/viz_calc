@@ -578,8 +578,8 @@ def group_mask(values: pd.Series, level: Any) -> pd.Series:
 
 
 def group_label(level: Any) -> str:
-    """:func:`level_label`, except that the level ``None`` reads "(missing)"."""
-    return "(missing)" if level is None else level_label(level)
+    """:func:`level_label`: the level ``None`` (or any other missing value) reads "(missing)"."""
+    return level_label(level)
 
 
 def group_key(values: pd.Series) -> pd.Series:
@@ -618,8 +618,39 @@ def _level_key(value: Any) -> Any:
     return value
 
 
+def _plain(value: Any) -> Any:
+    """*value* with NumPy scalars turned into Python ones, also inside a list or tuple, for an error message.
+
+    NumPy 2 writes ``np.float64(1.5)`` and ``np.str_('a')`` where NumPy 1
+    wrote ``1.5`` and ``'a'``. A float32 or float16 value keeps the digits of
+    its own precision, and a ``numpy.datetime64`` becomes a ``Timestamp``.
+    """
+    if isinstance(value, (list, tuple)):
+        return type(value)(map(_plain, value)) if type(value) in (list, tuple) else value
+    if isinstance(value, (np.datetime64, np.timedelta64)):
+        return _level_key(value)
+    if isinstance(value, np.floating) and value.dtype.itemsize < 8:
+        return float(str(value))
+    if isinstance(value, np.generic) and not isinstance(value, np.longdouble):
+        return value.item()
+    return value
+
+
+#: C0 control characters other than tab and newline, and DEL. They cannot be drawn, and Matplotlib writes them
+#: into SVG files as they are, which XML does not allow.
+_CONTROL = {c: "\ufffd" for c in (*range(0x20), 0x7F) if c not in (0x09, 0x0A)}
+
+
 def level_label(value: Any) -> str:
-    """Text for a category level. A date with no time of day reads ``2024-01-01``, with or without a time zone."""
+    """Text for a category level or a column label.
+
+    A date with no time of day reads ``2024-01-01``, with or without a time
+    zone, and a missing value reads "(missing)". A control character
+    (U+0000 to U+001F other than a tab or a newline, and U+007F) is replaced
+    with U+FFFD.
+    """
+    if pd.api.types.is_scalar(value) and pd.isna(value):
+        return "(missing)"
     value = _level_key(value)
     if isinstance(value, datetime) and not isinstance(value, pd.Timestamp):
         value = pd.Timestamp(value)
@@ -627,7 +658,37 @@ def level_label(value: Any) -> str:
         wall = value.tz_localize(None)  # local clock time; normalizing in the zone could land on a skipped midnight
         if wall == wall.normalize():
             return value.strftime("%Y-%m-%d")
-    return str(value)
+    return str(value).translate(_CONTROL)
+
+
+def abbreviate_axes(*axes: Axis) -> None:
+    """Number the ticks of each of *axes* with :class:`AbbrevFormatter`; an axis on a log or other scale is left alone.
+
+    A caller's *ax* set to a log scale keeps Matplotlib's ``10^n`` labels.
+    """
+    for axis in axes:
+        if axis.get_scale() == "linear":
+            axis.set_major_formatter(AbbrevFormatter())
+
+
+def short_label(text: str, limit: int = 30) -> str:
+    """*text* cut to *limit* characters, the last an ellipsis, for a tick label or title in a small panel.
+
+    Longer text would not fit beside the other panels of a page, and
+    ``tight_layout`` would leave the page unarranged, with labels overlapping
+    the panels around them.
+    """
+    return text if len(text) <= limit else f"{text[:limit - 1]}\u2026"
+
+
+def legend_label(value: Any) -> str:
+    """:func:`group_label`, kept in a legend: Matplotlib leaves out an empty label and one that starts with ``_``.
+
+    Such a label gets a zero-width space in front, which Matplotlib 3.7 and
+    later keep even when the legend's handles are given.
+    """
+    text = group_label(value)
+    return f"\u200b{text}" if not text or text.startswith("_") else text
 
 
 def level_percent(level: Any) -> str:

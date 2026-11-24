@@ -25,6 +25,7 @@ from ._core import (
     check_numeric,
     cleanup_on_error,
     foreground,
+    level_label,
     palette,
     require,
     text_color,
@@ -34,13 +35,13 @@ __all__ = ["network_map", "sankey"]
 
 
 def _plotly_text(value: object) -> str:
-    """*value* as text that Plotly shows as written.
+    """*value* (a node) as text that Plotly shows as written, worded as :func:`level_label` words it.
 
     Plotly reads labels and hover text as a subset of HTML, so a node named
     ``<a href=...>`` would become a link; ``&``, ``<`` and ``>`` are escaped
     and Plotly turns them back into the characters.
     """
-    return html.escape(str(value), quote=False)
+    return html.escape(level_label(value), quote=False)
 
 
 _PRIME = 2**127 - 1  # a Mersenne prime: path lengths are compared exactly through their residues modulo it
@@ -530,7 +531,7 @@ def network_map(
         nx.draw_networkx_edges(G, pos, ax=ax, width=widths, edge_color="#aaaaaa", arrows=False)
     nx.draw_networkx_nodes(G, pos, ax=ax, node_size=sizes, node_color=node_colors, edgecolors="white")
     if labels:
-        texts = nx.draw_networkx_labels(G, pos, ax=ax, font_size=8)
+        texts = nx.draw_networkx_labels(G, pos, labels={n: level_label(n) for n in nodes}, ax=ax, font_size=8)
         # A label that fits inside its node is read against the node's colour; a wider one mostly against the face.
         diameter = dict(zip(nodes, np.sqrt(sizes) * fig.dpi / 72))  # node_size is an area in points²
         fill = dict(zip(nodes, node_colors))

@@ -289,7 +289,7 @@ def estimation_plot(
     comps_df["p_adjusted"] = st.adjust_pvalues(comps_df["p"], p_adjust)
     ax_diff.set_ylabel(f"Difference from\n{level_label(reference)}")
     ax_diff.set_xticks(range(len(groups)), [level_label(g) for g in groups])
-    ax_diff.set_xlabel(x)
+    ax_diff.set_xlabel(level_label(x))
     method = {"bca": "bootstrap {} CI (BCa)", "percentile": "bootstrap {} CI (percentile)", "welch": "Welch t {} CI"}
     title = f"Mean difference with {method[ci].format(level_percent(level))}"
     small_groups = {g: samples[g].size for g in groups if samples[g].size < _SMALL_GROUP}
@@ -429,10 +429,10 @@ def benchmark_bar(
             ax.scatter(p + _jitter(s.size, 0.18, rng), s, s=8, color=foreground(ax), alpha=0.35, lw=0, zorder=4)
     ax.axhline(thr, color=foreground(ax), ls="--", lw=1, zorder=5)
     ax.set_xticks(pos, [level_label(g) for g in table[x]])
-    ax.set_xlabel(x)
-    ax.set_ylabel(f"Mean {y}")
+    ax.set_xlabel(level_label(x))
+    ax.set_ylabel(f"Mean {level_label(y)}")
     shown = _threshold_text(thr, tol, table[["mean", "ci_low", "ci_high"]].to_numpy())
-    ax.set_title(f"Mean {y} by {x} vs benchmark {shown} (bars: {err_text})", loc="left")
+    ax.set_title(f"Mean {level_label(y)} by {level_label(x)} vs benchmark {shown} (bars: {err_text})", loc="left")
     present = [s for s in ("above", "below", "indistinguishable") if s in set(table["status"])]  # "no data" draws nothing
     ax.legend(handles=[Patch(color=color_for[s], label=s) for s in present], frameon=False, loc="upper left",
               bbox_to_anchor=(1.01, 1))
@@ -525,7 +525,7 @@ def lollipop(
                 ax.annotate(abbreviate(v), (p, v), xytext=(0, 8 if v >= 0 else -8), textcoords="offset points",
                             ha="center", va="bottom" if v >= 0 else "top", fontsize=9)
     ticks = ["(missing)" if m else level_label(v) for v, m in zip(table[x], missing)]
-    label = f"{stat} of {y}" if stat != "count" else "count"
+    label = f"{stat} of {level_label(y)}" if stat != "count" else "count"
     fmt = AbbrevFormatter()
     if horizontal:
         ax.set_yticks(pos, ticks)
@@ -618,7 +618,7 @@ def dumbbell(
             ax.annotate(abbreviate(right), (right, p), xytext=(8, 0), textcoords="offset points", ha="left", va="center", fontsize=8)
         ax.margins(x=0.1)
     ax.set_yticks(pos, [level_label(v) for v in table[label]])
-    ax.set_ylabel(label)
+    ax.set_ylabel(level_label(label))
     ax.set_xlabel("Value")
     ax.xaxis.set_major_formatter(AbbrevFormatter())
     ax.legend(frameon=False, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2)
@@ -688,7 +688,7 @@ def divergent_bar(
     ax.xaxis.set_major_formatter(AbbrevFormatter(absolute=True))
     lim = max(table[left].max(), table[right].max()) * 1.1
     ax.set_xlim(-lim, lim)
-    ax.set_ylabel(category)
+    ax.set_ylabel(level_label(category))
     ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=2)
     ax.spines[["top", "right"]].set_visible(False)
     return VizResult(fig, ax, table)
@@ -794,9 +794,9 @@ def centered_bar(
     ax.set_ylim(-1.05, 1.05)
     ax.yaxis.set_major_formatter(FuncFormatter(_abs_share))
     ax.set_xticks(pos, [level_label(g) for g in table[x]])
-    ax.set_xlabel(x)
-    ax.set_ylabel(f"Share of {y}")
-    ax.set_title(f"Share of {y} above/below {shown} (error bars: {level_percent(level)} Wilson CI)", loc="left")
+    ax.set_xlabel(level_label(x))
+    ax.set_ylabel(f"Share of {level_label(y)}")
+    ax.set_title(f"Share of {level_label(y)} above/below {shown} (error bars: {level_percent(level)} Wilson CI)", loc="left")
     ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1, 1))
     ax.spines[["top", "right"]].set_visible(False)
     return VizResult(fig, ax, table, {"threshold": thr, "level": level,
