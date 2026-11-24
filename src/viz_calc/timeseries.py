@@ -584,8 +584,11 @@ def gantt(
     must be two different columns, each different from *task* and *group*
     (which may be the same column, to colour each task by its own name).
     Tasks with a missing *group* are drawn in grey as "(missing)" (all of
-    them, if the *group* column has no values). No column may be named
-    ``"duration_days"``, which names the table's own column.
+    them, if the *group* column has no values). Tasks with a missing
+    *start* or *end* keep their row, with no bar and a missing
+    ``duration_days``; ``info["missing_start_or_end"]`` counts them. No
+    column may be named ``"duration_days"``, which names the table's own
+    column.
     """
     check_dataframe(data, [task, start, end, group])
     _check_distinct(task=task, start=start, end=end)
@@ -639,7 +642,7 @@ def gantt(
     table = d[list(dict.fromkeys([task, start, end, group] if group is not None else [task, start, end]))]
     table = table.reset_index(drop=True)
     table["duration_days"] = (table[end] - table[start]).dt.total_seconds() / 86400
-    return VizResult(fig, ax, table)
+    return VizResult(fig, ax, table, {"missing_start_or_end": int(table["duration_days"].isna().sum())})
 
 
 @cleanup_on_error
@@ -662,10 +665,12 @@ def duration_plot(
     reports both lengths in days and the inner share of the window. Like
     :func:`gantt`, it raises if a window ends before it starts; it also
     raises if an inner window starts before its row's window or ends after
-    it. Rows whose inner window is missing get no inner bar. The date
-    columns must differ from *label*, and each window needs two different
-    columns; an inner window may reuse *start* and *end* (active for the
-    whole period). No column may be named ``"outer_days"``,
+    it. Rows whose inner window is missing get no inner bar. Rows with a
+    missing *start* or *end* keep their row, with no overall bar and a
+    missing ``outer_days``; ``info["missing_start_or_end"]`` counts them.
+    The date columns must differ from *label*, and each window needs two
+    different columns; an inner window may reuse *start* and *end* (active
+    for the whole period). No column may be named ``"outer_days"``,
     ``"inner_days"`` or ``"inner_share"``, which name the table's own
     columns.
 
@@ -713,7 +718,7 @@ def duration_plot(
     table["outer_days"] = (table[end] - table[start]).dt.total_seconds() / 86400
     table["inner_days"] = (table[inner_end] - table[inner_start]).dt.total_seconds() / 86400
     table["inner_share"] = table["inner_days"] / table["outer_days"].replace(0, np.nan)
-    return VizResult(fig, ax, table)
+    return VizResult(fig, ax, table, {"missing_start_or_end": int(table["outer_days"].isna().sum())})
 
 
 def _frames(s: pd.Series, name: str) -> list[Any]:

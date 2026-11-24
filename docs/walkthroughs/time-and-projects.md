@@ -92,7 +92,8 @@ before its row's window or ends after it, or if one of your columns is named
 like a table column they add (`duration_days`, `outer_days`, `inner_days`,
 `inner_share`), which would otherwise be overwritten. `today` takes a date
 or `"now"`; a number such as `2024` raises instead of being read as
-nanoseconds since 1970.
+nanoseconds since 1970. A task with a missing start or end keeps its row,
+with no bar, and `res.info["missing_start_or_end"]` counts such rows.
 
 ## 5. Animated bubbles
 

@@ -178,3 +178,19 @@ def test_duration_plot_accepts_an_inner_window_as_long_as_its_row():
                            inner_end="work_end")
     share = res.table.set_index("task")["inner_share"]
     assert share["Discovery"] == 1 and np.isnan(share["Design"]) and (share.dropna() <= 1).all()
+
+
+def test_rows_missing_a_start_or_an_end_are_kept_and_counted():
+    # they were kept as empty rows with nothing in info to say so
+    proj = datasets.projects()
+    assert vc.gantt(proj, task="task", start="start", end="end").info == {"missing_start_or_end": 0}
+    proj.loc[0, "start"] = pd.NaT
+    proj.loc[2, "end"] = pd.NaT
+    res = vc.gantt(proj, task="task", start="start", end="end", group="team")
+    assert res.info["missing_start_or_end"] == 2
+    assert len(res.table) == 6 and res.table["duration_days"].isna().sum() == 2
+    assert sorted(t.get_text() for t in res.axes.get_yticklabels()) == sorted(proj["task"])
+    res = vc.duration_plot(proj, label="task", start="start", end="end", inner_start="work_start",
+                           inner_end="work_end")
+    assert res.info["missing_start_or_end"] == 2
+    assert len(res.table) == 6 and res.table["outer_days"].isna().sum() == 2
