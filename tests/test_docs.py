@@ -335,6 +335,18 @@ def test_api_page_says_where_each_entry_imports_from():
             assert name in vc.__all__, f"docs/api.md says {name} imports from the top level"
 
 
+def test_okabe_ito_has_a_docstring_the_api_page_shows():
+    # mkdocstrings shows a module constant's description only from a string right after the assignment
+    import ast
+
+    body = ast.parse(Path(inspect.getsourcefile(vc.palette)).read_text(encoding="utf-8")).body
+    i = next(i for i, node in enumerate(body) if isinstance(node, ast.AnnAssign | ast.Assign)
+             and "OKABE_ITO" in ast.unparse(node.target if isinstance(node, ast.AnnAssign) else node.targets[0]))
+    doc = body[i + 1]
+    assert isinstance(doc, ast.Expr) and isinstance(doc.value, ast.Constant) and isinstance(doc.value.value, str)
+    assert "Okabe" in doc.value.value and "colour-vision" in doc.value.value
+
+
 # --- migration page ------------------------------------------------------------------------------------------------
 
 # The scripts that version 1.0 replaced, as they were at the last commit before the rebuild.

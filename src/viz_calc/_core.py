@@ -24,8 +24,6 @@ from matplotlib.text import Text
 from matplotlib.ticker import FixedFormatter, FuncFormatter, ScalarFormatter
 from matplotlib.transforms import Bbox
 
-# Okabe & Ito (2008) "Color Universal Design" palette. The eight colours stay
-# distinguishable under the common forms of colour-vision deficiency.
 OKABE_ITO: tuple[str, ...] = (
     "#0072B2",  # blue
     "#E69F00",  # orange
@@ -36,6 +34,12 @@ OKABE_ITO: tuple[str, ...] = (
     "#F0E442",  # yellow
     "#000000",  # black
 )
+"""Okabe & Ito (2008) "Color Universal Design" palette, the default for categories.
+
+The eight colours stay distinguishable under the common forms of
+colour-vision deficiency. ``palette`` uses them, in this order, for up to
+eight categories.
+"""
 
 #: Neutral grey used for context marks (reference lines, raw data, gridlines).
 NEUTRAL = "#7f7f7f"
