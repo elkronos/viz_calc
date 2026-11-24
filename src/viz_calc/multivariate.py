@@ -10,8 +10,6 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.patches import Ellipse
-from scipy.stats import chi2
-from scipy.stats import f as f_dist
 
 from . import stats as st
 from ._core import (
@@ -98,6 +96,9 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
 
 
 def _ellipse(ax: Axes, pts: np.ndarray, level: float, kind: str, color: str) -> dict[str, float] | None:
+    from scipy.stats import chi2
+    from scipy.stats import f as f_dist
+
     n = len(pts)
     if n < 3:
         return None

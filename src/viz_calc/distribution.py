@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
-from scipy.stats import gaussian_kde
 
 from . import stats as st
 from ._core import (
@@ -50,6 +49,8 @@ def _describe(s: pd.Series) -> dict[str, float]:
 
 
 def _kde(values: np.ndarray, grid: np.ndarray, bw_method: Any = None) -> np.ndarray | None:
+    from scipy.stats import gaussian_kde
+
     values = values[np.isfinite(values)]
     if values.size < 2 or np.ptp(values) == 0:
         return None
