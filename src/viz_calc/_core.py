@@ -180,7 +180,7 @@ def check_finite(data: pd.DataFrame, *columns: str) -> None:
 def check_choice(name: str, value: Any, choices: Sequence[Any]) -> None:
     """Raise unless *value* is one of *choices*."""
     if value not in choices:
-        raise ValueError(f"{name} must be one of {list(choices)}, got {value!r}")
+        raise ValueError(f"{name} must be one of {_plain(list(choices))}, got {_plain(value)!r}")
 
 
 def check_count(name: str, value: Any, minimum: int = 1) -> None:
@@ -192,8 +192,8 @@ def check_count(name: str, value: Any, minimum: int = 1) -> None:
     if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < minimum:
         if isinstance(value, (float, np.floating)) and float(value).is_integer() and value >= minimum:
             raise ValueError(f"{name} must be a whole number of at least {minimum} given as an int, "
-                             f"got the float {value!r}; use {int(value)}")
-        raise ValueError(f"{name} must be a whole number of at least {minimum}, got {value!r}")
+                             f"got the float {_plain(value)!r}; use {int(value)}")
+        raise ValueError(f"{name} must be a whole number of at least {minimum}, got {_plain(value)!r}")
 
 
 def check_range(name: str, value: Any, low: float, high: float, include_high: bool = True) -> float:
@@ -209,7 +209,7 @@ def check_range(name: str, value: Any, low: float, high: float, include_high: bo
             pass
     if not (low <= number <= high) or (number == high and not include_high):
         interval = f"[{low:g}, {high:g}{']' if include_high else ')'}"
-        raise ValueError(f"{name} must be a number in {interval}, got {value!r}")
+        raise ValueError(f"{name} must be a number in {interval}, got {_plain(value)!r}")
     return number
 
 
@@ -435,7 +435,7 @@ def slot_colors(colors: Any, slots: Sequence[str], name: str = "colors") -> list
     """
     layout = f"{len(slots)} colours ({', '.join(slots)})"
     if isinstance(colors, str) or not isinstance(colors, Iterable):
-        raise ValueError(f"{name} must be a tuple of {layout}, got {colors!r}")
+        raise ValueError(f"{name} must be a tuple of {layout}, got {_plain(colors)!r}")
     colors = list(colors)
     if len(colors) != len(slots):
         raise ValueError(f"{name} must be a tuple of {layout}, got {len(colors)}: {colors!r}")

@@ -17,6 +17,7 @@ from . import stats as st
 from ._core import (
     NEUTRAL,
     VizResult,
+    _plain,
     category_order,
     check_choice,
     check_count,
@@ -187,13 +188,13 @@ def pca_plot(
     try:
         ci, cj = components
     except (TypeError, ValueError):
-        raise ValueError(f"components must be a pair of component numbers such as (1, 2), got {components!r}") from None
+        raise ValueError(f"components must be a pair of component numbers such as (1, 2), got {_plain(components)!r}") from None
     for c in (ci, cj):
         check_count("each of components", c)
     res = pca(data, features, scale)
     k = len(res["explained_variance_ratio"])
     if not (ci <= k and cj <= k) or ci == cj:
-        raise ValueError(f"components must be two different numbers between 1 and {k}, got {components!r}")
+        raise ValueError(f"components must be two different numbers between 1 and {k}, got {_plain(components)!r}")
     pc_x, pc_y = f"PC{ci}", f"PC{cj}"
     check_not_reserved([pc_x, pc_y], group=group)
     scores = res["scores"][[pc_x, pc_y]].copy()

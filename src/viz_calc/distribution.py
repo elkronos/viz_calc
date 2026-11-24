@@ -16,6 +16,7 @@ from . import stats as st
 from ._core import (
     NEUTRAL,
     VizResult,
+    _plain,
     category_order,
     check_choice,
     check_count,
@@ -134,7 +135,7 @@ def histogram(
     elif np.ndim(bins) == 0:
         if isinstance(bins, (bool, np.bool_)) or not isinstance(bins, (int, np.integer)) or bins < 1:
             raise ValueError(f"bins must be one of {rules}, a positive int or a sequence of increasing edges, "
-                             f"got {bins!r}")
+                             f"got {_plain(bins)!r}")
     else:
         try:
             given = st._as_float(bins)
@@ -142,11 +143,11 @@ def histogram(
             given = np.array([np.nan])
         if given.ndim != 1 or given.size < 2 or not np.isfinite(given).all() or (np.diff(given) <= 0).any():
             raise ValueError(f"bins must be one of {rules}, a positive int or a sequence of at least two finite, "
-                             f"increasing edges, got {bins!r}")
+                             f"increasing edges, got {_plain(bins)!r}")
     if isinstance(ref_line, str):
         check_choice("ref_line", ref_line, ["mean", "median"])
     elif ref_line is not None and (isinstance(ref_line, bool) or not isinstance(ref_line, Real)):
-        raise ValueError(f"ref_line must be 'mean', 'median', a number or None, got {ref_line!r}")
+        raise ValueError(f"ref_line must be 'mean', 'median', a number or None, got {_plain(ref_line)!r}")
     check_count("col_wrap", col_wrap)
     alpha = check_range("alpha", alpha, 0, 1)
     values = data[x].dropna().to_numpy(float)

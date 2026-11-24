@@ -23,6 +23,7 @@ from ._core import (
     OKABE_ITO,
     AbbrevFormatter,
     VizResult,
+    _plain,
     category_order,
     check_choice,
     check_count,
@@ -293,7 +294,7 @@ def timeseries_fill(
     """
     series = column_list("series", series)
     if len(series) != 2:
-        raise ValueError(f"timeseries_fill needs exactly two series, got {series!r}")
+        raise ValueError(f"timeseries_fill needs exactly two series, got {_plain(series)!r}")
     a, b = series
     check_dataframe(data, [time, a, b])
     if a == b or time in (a, b):
@@ -303,7 +304,7 @@ def timeseries_fill(
     check_numeric(data, a, b)
     check_finite(data, a, b)
     if isinstance(alpha, bool) or not isinstance(alpha, numbers.Real) or not 0 <= alpha <= 1:
-        raise ValueError(f"alpha must be a number from 0 to 1, got {alpha!r}")
+        raise ValueError(f"alpha must be a number from 0 to 1, got {_plain(alpha)!r}")
     if labels is None:
         names = [a, b]
     else:  # a lone string or number is one name, not a list of them
@@ -511,9 +512,9 @@ def gantt(
         try:
             t = pd.Timestamp.now(tz=tz) if isinstance(today, str) and today == "now" else pd.Timestamp(today)
         except (ValueError, TypeError) as exc:
-            raise ValueError(f"today must be a date or 'now', got {today!r}") from exc
+            raise ValueError(f"today must be a date or 'now', got {_plain(today)!r}") from exc
         if pd.isna(t):
-            raise ValueError(f"today must be a date or 'now', got {today!r}")
+            raise ValueError(f"today must be a date or 'now', got {_plain(today)!r}")
         if tz is not None and t.tzinfo is None:
             # a plain date/time means local time in the data's zone; on DST-change days pick a valid instant
             t = t.tz_localize(tz, nonexistent="shift_forward", ambiguous=False)
@@ -737,7 +738,7 @@ def _stamps(frames: list[Any]) -> list[str]:
 def _check_positive(name: str, value: Any) -> None:
     """Raise unless *value* is a finite number above zero."""
     if isinstance(value, bool) or not isinstance(value, numbers.Real) or not 0 < value < np.inf:
-        raise ValueError(f"{name} must be a positive number, got {value!r}")
+        raise ValueError(f"{name} must be a positive number, got {_plain(value)!r}")
 
 
 @cleanup_on_error

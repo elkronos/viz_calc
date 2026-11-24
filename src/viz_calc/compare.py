@@ -19,6 +19,7 @@ from ._core import (
     OKABE_ITO,
     AbbrevFormatter,
     VizResult,
+    _plain,
     abbreviate,
     category_order,
     center_labels,
@@ -62,7 +63,7 @@ def _check_threshold(threshold: Any) -> None:
         return
     if isinstance(threshold, Real) and not isinstance(threshold, bool) and np.isfinite(float(threshold)):
         return
-    raise ValueError(f"threshold must be a finite number, 'mean' or 'median', got {threshold!r}")
+    raise ValueError(f"threshold must be a finite number, 'mean' or 'median', got {_plain(threshold)!r}")
 
 
 def _drawn_rows(values: pd.Series, groups: Sequence[Any]) -> np.ndarray:
@@ -235,13 +236,13 @@ def estimation_plot(
         raise ValueError(f"estimation_plot needs at least two groups{note}")
     reference = groups[0] if reference is None else reference
     if reference not in groups:
-        raise ValueError(f"reference {reference!r} is not one of the groups {groups}")
+        raise ValueError(f"reference {_plain(reference)!r} is not one of the groups {_plain(groups)}")
     # The matching group itself: on NumPy 1.x a numpy.datetime64 and the equal Timestamp hash differently.
     reference = groups[groups.index(reference)]
     samples = {g: data[y][level_mask(data[x], g)].dropna().to_numpy(float) for g in groups}
     small = [g for g, s in samples.items() if s.size < 2]
     if small:
-        raise ValueError(f"groups need at least two observations: {small}")
+        raise ValueError(f"groups need at least two observations: {_plain(small)}")
 
     rng = np.random.default_rng(seed)
     cols = palette(len(groups), colors)
@@ -850,7 +851,7 @@ def likert(
         raise ValueError("levels needs at least two response options")
     repeated = [lv for i, lv in enumerate(levels) if lv in levels[:i]]
     if repeated:
-        raise ValueError(f"levels repeats response option(s): {list(dict.fromkeys(repeated))}")
+        raise ValueError(f"levels repeats response option(s): {_plain(list(dict.fromkeys(repeated)))}")
     reserved = [lv for lv in levels if isinstance(lv, str) and lv in ("item", "n", "net")]
     if reserved:
         raise ValueError(f"rename level(s) {reserved}: 'item', 'n' and 'net' are the names of the table's own columns")

@@ -10,6 +10,7 @@ import pytest
 
 import viz_calc as vc
 from viz_calc import datasets
+from viz_calc import stats as st
 from viz_calc._core import category_order, level_label
 
 
@@ -150,3 +151,22 @@ def test_float32_levels_read_with_their_own_digits():
     assert [t.split(":")[0] for t in _legend(vc.waffle(d, category="b").axes)] == ["0.1", "0.2", "0.3"]
     titles = [ax.get_title(loc="left") for ax in vc.compare_correlations(d.assign(z=d["y"] ** 2), "b", ["y", "z"]).axes.flat]
     assert "r(0.2) \u2212 r(0.1)" in titles
+
+
+# --- NumPy scalars in messages ----------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize(("draw", "text"), [
+    (lambda: vc.lollipop(pd.DataFrame({"g": [1, 2, 3] * 4, "y": np.arange(12.0)}), x="g", y="y",
+                         stat=np.str_("avg")), "got 'avg'"),
+    (lambda: st.mean_ci([1.0, 2.0, 4.0], np.float64(95.0)), "got 95.0"),
+    (lambda: vc.bullet(pd.DataFrame({"l": ["a"], "v": [1.0]}), label="l", value="v",
+                       bands=np.array([2.0, np.nan, 9.0])), "got [2.0, nan, 9.0]"),
+    (lambda: vc.benchmark_bar(pd.DataFrame({"g": [1, 2] * 3, "y": np.arange(6.0)}), x="g", y="y",
+                              order=np.array([1, 2, 9])), "not in the data: [9]"),
+    (lambda: vc.histogram(datasets.trial(), x="score", col_wrap=np.float64(2.0)), "got the float 2.0"),
+    (lambda: vc.histogram(datasets.trial(), x="score", bins=np.float32(0.1)), "got 0.1"),
+])
+def test_messages_show_numpy_scalars_as_python_values(draw, text):
+    with pytest.raises(ValueError) as error:
+        draw()
+    assert text in str(error.value) and "np." not in str(error.value)

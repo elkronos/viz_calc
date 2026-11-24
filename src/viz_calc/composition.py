@@ -22,6 +22,7 @@ from ._core import (
     AbbrevFormatter,
     VizResult,
     _level_key,
+    _plain,
     _scalars,
     abbreviate,
     center_labels,
@@ -62,14 +63,14 @@ __all__ = ["waffle", "percent_grid", "stacked_percentages", "donut_grid", "neste
 def _check_count(name: str, value: Any, minimum: int = 1) -> None:
     """Raise unless *value* is an integer of at least *minimum* (a grid size, a gap)."""
     if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < minimum:
-        raise ValueError(f"{name} must be an integer >= {minimum}, got {value!r}")
+        raise ValueError(f"{name} must be an integer >= {minimum}, got {_plain(value)!r}")
 
 
 def _check_real(name: str, value: Any, minimum: float = -math.inf) -> None:
     """Raise unless *value* is a finite number of at least *minimum* (a label threshold, a radius)."""
     if isinstance(value, bool) or not isinstance(value, numbers.Real) or not minimum <= value < math.inf:
         at_least = f" >= {minimum:g}" if minimum > -math.inf else ""
-        raise ValueError(f"{name} must be a finite number{at_least}, got {value!r}")
+        raise ValueError(f"{name} must be a finite number{at_least}, got {_plain(value)!r}")
 
 
 def _missing_rows(data: pd.DataFrame, columns: Sequence[str], label: str | None = None) -> list[Any]:
@@ -812,9 +813,9 @@ def bullet(
     band_cols = names if len(names) == len(bands) else [b for b in bands if isinstance(b, str)]
     if band_cols and len(band_cols) < len(bands):
         raise ValueError("bands must be a list of column names or a list of numbers, not a mix of both; "
-                         f"got {bands!r}")
+                         f"got {_plain(bands)!r}")
     if not band_cols and not all(isinstance(b, numbers.Real) and math.isfinite(b) for b in bands):
-        raise ValueError(f"bands must be a list of column names or of finite numbers, got {bands!r}")
+        raise ValueError(f"bands must be a list of column names or of finite numbers, got {_plain(bands)!r}")
     column_list("bands", band_cols, distinct=True)  # a column named twice would draw an empty band
     check_dataframe(data, [label, value, target, *band_cols])
     reserved = ["value"] + (["target", "pct_of_target"] if target is not None else [])
@@ -922,7 +923,7 @@ def upset(
     """
     check_choice("sort_by", sort_by, ["size", "degree"])
     if not (isinstance(min_size, numbers.Real) and math.isfinite(min_size)):
-        raise ValueError(f"min_size must be a finite number, got {min_size!r}")
+        raise ValueError(f"min_size must be a finite number, got {_plain(min_size)!r}")
     if max_intersections is not None:
         _check_count("max_intersections", max_intersections)
     if isinstance(sets, pd.DataFrame):

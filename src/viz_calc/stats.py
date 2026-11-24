@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats as _st
 
-from ._core import check_count
+from ._core import _plain, check_count
 
 __all__ = [
     "wilson_ci",
@@ -69,7 +69,7 @@ def _check_level(level: Any, name: str = "level", example: str = "0.95 for a 95%
         except (TypeError, ValueError):
             pass
     if not 0 < value < 1:
-        raise ValueError(f"{name} must be strictly between 0 and 1 (e.g. {example}), got {level!r}")
+        raise ValueError(f"{name} must be strictly between 0 and 1 (e.g. {example}), got {_plain(level)!r}")
     return value
 
 
@@ -339,7 +339,7 @@ def bootstrap_ci(
     check_count("n_resamples", n_resamples)
     methods = ("BCa", "percentile", "basic")
     if not isinstance(method, str) or method.lower() not in [m.lower() for m in methods]:
-        raise ValueError(f"method must be one of {list(methods)}, got {method!r}")
+        raise ValueError(f"method must be one of {list(methods)}, got {_plain(method)!r}")
     if seed is not None and not isinstance(seed, (np.random.Generator, np.random.BitGenerator, np.random.SeedSequence)):
         check_count("seed", seed, minimum=0)
     estimate, lo, hi, _ = _bootstrap(samples, statistic, level, n_resamples, method, seed)
@@ -448,7 +448,7 @@ def adjust_pvalues(p: Sequence[float], method: Literal["holm", "fdr_bh", "bonfer
     """
     methods = ("holm", "fdr_bh", "bonferroni", "none")
     if method not in methods:  # checked first, so an all-missing input cannot hide a typo
-        raise ValueError(f"method must be one of {list(methods)}, got {method!r}")
+        raise ValueError(f"method must be one of {list(methods)}, got {_plain(method)!r}")
     p = _as_float(p)
     out = np.full_like(p, np.nan)
     mask = ~np.isnan(p)
@@ -486,7 +486,7 @@ def _fisher_se(n: np.ndarray | float, method: str) -> np.ndarray | float:
 
 def _check_method(method: str) -> None:
     if method not in ("pearson", "spearman"):
-        raise ValueError(f"method must be one of ['pearson', 'spearman'], got {method!r}")
+        raise ValueError(f"method must be one of ['pearson', 'spearman'], got {_plain(method)!r}")
 
 
 # Largest n for which Spearman's p-value comes from the exact permutation distribution
@@ -658,7 +658,7 @@ def _bin_edges(x: Sequence[float], rule: str) -> tuple[np.ndarray, str]:
     if x.size == 0:
         raise ValueError("no non-missing values")
     if rule not in ("fd", "sturges", "scott", "auto"):
-        raise ValueError(f"rule must be 'fd', 'sturges', 'scott' or 'auto', got {rule!r}")
+        raise ValueError(f"rule must be 'fd', 'sturges', 'scott' or 'auto', got {_plain(rule)!r}")
     if rule in ("fd", "auto") and np.ptp(x) == 0:  # one distinct value: the IQR is 0 as well
         return np.histogram_bin_edges(x, bins="sturges"), "sturges (IQR is 0, so FD is undefined)"
     if rule in ("fd", "auto") and np.ptp(x) > 0:
@@ -699,7 +699,7 @@ def largest_remainder(values: Sequence[float], total: int) -> np.ndarray:
     """
     # A fractional total cannot be met by whole counts, and a negative one would give negative counts.
     if isinstance(total, bool) or not isinstance(total, numbers.Integral) or total < 0:
-        raise ValueError(f"total must be a non-negative integer, got {total!r}")
+        raise ValueError(f"total must be a non-negative integer, got {_plain(total)!r}")
     v = _as_float(values)
     if not np.all(np.isfinite(v)) or np.any(v < 0):
         raise ValueError("values must be finite, non-negative and not missing")
