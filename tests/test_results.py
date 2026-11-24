@@ -260,3 +260,30 @@ def test_a_failed_call_removes_its_colour_bar_and_gives_the_room_back(where, mon
         vc.correlogram(datasets.measurements(), ax=ax)
     assert len(fig.axes) == 1 and ax.get_position().bounds == position
     assert np.array_equal(_pixels(fig), before)
+
+
+# --- VizResult.save paths -------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("pages", [False, True], ids=["one figure", "pages"])
+def test_save_rejects_a_path_that_does_not_name_a_file(pages, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    meas = datasets.measurements()
+    res = vc.profile_boxes(meas, per_page=2) if pages else vc.histogram(meas, "length")
+    (tmp_path / "pages").mkdir()
+    with pytest.raises(ValueError, match="path is empty"):
+        res.save("")
+    for path in ("pages", "pages/", tmp_path / "pages", str(tmp_path / "missing") + "/"):
+        with pytest.raises(ValueError, match="is a directory, not a file; give a file in it, such as .*chart.png"):
+            res.save(path)
+    assert sorted(p.name for p in tmp_path.rglob("*")) == ["pages"]  # nothing was written
+
+
+def test_save_of_pages_returns_one_path_per_page_of_this_result(tmp_path):
+    meas = datasets.measurements()
+    four = vc.profile_boxes(meas, per_page=1)
+    assert len(four.figure) > 2
+    four.save(tmp_path / "boxes.png")
+    two = vc.VizResult(four.figure[:2])
+    assert two.save(tmp_path / "boxes.png") == [str(tmp_path / "boxes_1.png"), str(tmp_path / "boxes_2.png")]
+    assert (tmp_path / "boxes_3.png").exists()  # left from the longer save, as the docstring says

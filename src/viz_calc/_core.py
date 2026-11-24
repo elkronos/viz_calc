@@ -86,16 +86,27 @@ class VizResult:
         """Save the figure to *path* (PNG/SVG/PDF for Matplotlib, HTML for Plotly).
 
         Multi-page results (a list of figures) are saved as ``name_1.png``,
-        ``name_2.png``, … and the list of paths is returned. A path without an
-        extension gets Matplotlib's default format (``.html`` for Plotly), and
-        the returned path includes it. File-like objects are passed through;
-        a multi-page result can be written to one only as a multi-page PDF
+        ``name_2.png``, … and the list of paths is returned. Files of the same
+        names are overwritten, and pages left over from an earlier save with
+        more pages (``name_5.png`` after a 4-page save) stay on disk. A path
+        without an extension gets Matplotlib's default format (``.html`` for
+        Plotly), and the returned path includes it. A path must name a file:
+        an empty path, an existing directory or a path ending in a separator
+        raises ``ValueError``. File-like objects are passed through; a
+        multi-page result can be written to one only as a multi-page PDF
         (``format="pdf"``).
         """
         import os
         from pathlib import Path
 
         is_path = isinstance(path, (str, os.PathLike))
+        if is_path:  # Path("") and Path("pages/") lose what made them unusable, so check the text
+            text = os.fsdecode(os.fspath(path))
+            if not text:
+                raise ValueError("path is empty; give a file name such as 'chart.png'")
+            if text.endswith(("/", os.sep)) or os.path.isdir(text):
+                raise ValueError(f"path {text!r} is a directory, not a file; give a file in it, such as "
+                                 f"{os.path.join(text, 'chart.png')!r}")
         if isinstance(self.figure, list):
             if not is_path:
                 return self._save_pages_pdf(path, **kwargs)
