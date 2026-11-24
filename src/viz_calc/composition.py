@@ -919,7 +919,10 @@ def upset(
         ``None`` shows all).
     sort_by
         Display order: ``"size"`` (largest first) or ``"degree"`` (number of
-        sets involved, then size).
+        sets involved, then size). Intersections with the same size and
+        degree are ordered by their sets, in the order the sets are given
+        (``A`` and ``B`` before ``A`` and ``C``, before ``B`` and ``C``), and
+        *max_intersections* keeps the first of them in that order.
     color
         Colour of the intersection bars and of the member dots and their
         links. ``None`` is ``"#333333"`` on a light axes face and
@@ -966,11 +969,15 @@ def upset(
     table["size"] = counts.to_numpy()
     table["degree"] = select_columns(table, names).sum(axis=1)  # by label: False/True set names are not a mask
     table = table[table["size"] >= min_size]
-    table = table.sort_values(["size", "degree"], ascending=[False, False], ignore_index=True)
+    # Ties in size and degree are broken by the positions of the member sets, so the intersections kept and their
+    # order do not depend on the order of the rows (value_counts lists ties in order of first appearance).
+    members = [tuple(np.flatnonzero(row)) for row in select_columns(table, names).to_numpy(dtype=bool)]
+    rank = sorted(range(len(table)), key=lambda j: (-table["size"].iat[j], -table["degree"].iat[j], members[j]))
+    table = table.iloc[rank].reset_index(drop=True)
     if max_intersections is not None:  # keep the largest intersections, then apply the requested display order
         table = table.head(max_intersections)
     if sort_by == "degree":
-        table = table.sort_values(["degree", "size"], ascending=[True, False], ignore_index=True)
+        table = table.sort_values(["degree", "size"], ascending=[True, False], ignore_index=True, kind="stable")
     set_sizes = membership.sum().reindex(names)
 
     k, m = len(names), len(table)

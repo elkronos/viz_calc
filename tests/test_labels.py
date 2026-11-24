@@ -344,3 +344,18 @@ def test_likert_matches_numpy_datetime_levels_to_timestamps():
 def test_upset_counts_a_numpy_datetime_and_the_equal_timestamp_as_one_member():
     res = vc.upset({"A": [np.datetime64("2024-01-01T00:00:00", "ns")], "B": [pd.Timestamp("2024-01-01")]})
     assert res.table[["A", "B", "size"]].values.tolist() == [[True, True, 1]]
+
+
+# --- upset ties -------------------------------------------------------------------------------------------------------
+
+def test_upset_keeps_the_same_intersections_whatever_the_row_order():
+    sets = datasets.memberships()
+    users = sorted(set().union(*sets.values()))
+    d = pd.DataFrame({k: [u in s for u in users] for k, s in sets.items()})
+    tables = [vc.upset(d.sample(frac=1, random_state=k)).table for k in (0, 5, 9)]
+    for table in tables[1:]:
+        pd.testing.assert_frame_equal(table, tables[0])
+    for sort_by in ("size", "degree"):
+        a = vc.upset(d, sort_by=sort_by, max_intersections=None).table
+        b = vc.upset(d[::-1], sort_by=sort_by, max_intersections=None).table
+        pd.testing.assert_frame_equal(a, b)
