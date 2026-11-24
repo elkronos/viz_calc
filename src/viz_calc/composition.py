@@ -909,12 +909,12 @@ def upset(
     ----------
     sets
         A mapping ``{name: iterable of members}`` (a text value is one
-        member, so ``{"A": ["abc"]}``, not ``{"A": "abc"}``) or a DataFrame of
-        boolean membership columns (one row per element). Missing values (``None``,
-        ``NaN``, ``NaT``, ``pd.NA``) are not members, in either form. One set
-        or more, with at least one member between them; ``"size"`` and
-        ``"degree"`` cannot be set names, as they name the table's count
-        columns.
+        member, so ``{"A": ["abc"]}``, not ``{"A": "abc"}``) or a DataFrame
+        of boolean membership columns (one row per element). Missing values
+        (``None``, ``NaN``, ``NaT``, ``pd.NA``) are not members, in either
+        form. One set or more, with at least one member between them;
+        ``"size"`` and ``"degree"`` cannot be set names, as they name the
+        table's count columns.
     min_size
         Hide intersections smaller than this (a number, not a bool). Above
         the largest intersection it hides them all, leaving the bars and the

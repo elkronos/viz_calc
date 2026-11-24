@@ -305,8 +305,8 @@ def network_map(
     implementation. Node size encodes *size_by* (``"degree"``, ``"strength"``
     or ``"betweenness"``); colour encodes community.
     The layout is seeded so it is reproducible (*seed* is ``None`` or an
-    ``int`` from 0 to 2**32 - 1, as networkx takes it). Rows missing *source* or
-    *target* are left out, whatever their weight. Repeated edges (including
+    ``int`` from 0 to 2**32 - 1, as networkx takes it). Rows missing *source*
+    or *target* are left out, whatever their weight. Repeated edges (including
     B→A after A→B in an undirected graph) are merged, summing their weights;
     missing weights raise an error. Weighted betweenness uses 1/weight as edge
     length. Weights that cannot have been rounded when stored (integers, or
@@ -580,7 +580,7 @@ def sankey(
             raise ValueError(f"{missing} row(s) have no {column!r} value; drop or fill them first")
     if data[value].isna().any():
         raise ValueError(f"flow values in {value!r} contain missing values; drop or fill them first")
-    if np.isinf(data[value].to_numpy(dtype=float, na_value=np.nan)).any():  # before the sign, so -inf reads so
+    if np.isinf(data[value].to_numpy(dtype=float, na_value=np.nan)).any():  # first, so -inf is reported as infinite
         raise ValueError(f"flow values in {value!r} must be finite")
     if (data[value] < 0).any():
         raise ValueError(f"flow values in {value!r} must be non-negative")

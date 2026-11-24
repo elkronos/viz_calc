@@ -50,8 +50,8 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     identical cannot be standardized and raises ``ValueError``; unscaled, it
     adds a component with zero variance, and if every feature is constant
     there is no variance to analyse, which raises ``ValueError`` too. A
-    feature holding an infinite value
-    raises ``ValueError`` either way. Component signs are fixed so that the
+    feature holding an infinite value raises ``ValueError`` either way.
+    Component signs are fixed so that the
     largest-magnitude loading of each component is positive, making results
     reproducible.
 
@@ -300,9 +300,9 @@ def radar(
     grey, as "(missing)", and their row of the table has a missing *group*.
     *group* and each metric need at least one non-missing value, and
     *group* cannot be one of the *metrics*. A group with no data on a metric
-    is left as a gap on that axis. Raw and scaled values are in the returned table. Radar charts are
-    best for spotting profile *shapes*; the enclosed area depends on the
-    order of the metrics and should not be compared.
+    is left as a gap on that axis. Raw and scaled values are in the returned
+    table. Radar charts are best for spotting profile *shapes*; the enclosed
+    area depends on the order of the metrics and should not be compared.
 
     An *ax* passed in must be a polar Axes, for example from
     ``plt.subplots(subplot_kw={"projection": "polar"})`` or

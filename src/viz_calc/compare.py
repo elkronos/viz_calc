@@ -471,8 +471,8 @@ def lollipop(
     Dot plots are read more accurately than bars for comparing values on a
     common scale, and horizontal labels stay legible (Cleveland & McGill,
     1984). Stems start at zero so lengths stay honest. Values below
-    *threshold* (a finite number) are faded. *sort* is ``"descending"``, ``"ascending"`` or
-    ``None`` (keep the order of the categories).
+    *threshold* (a finite number) are faded. *sort* is ``"descending"``,
+    ``"ascending"`` or ``None`` (keep the order of the categories).
 
     ``stat="count"`` counts the non-missing values of *y* in each category,
     or the rows when *y* is not given. The aggregated values are in the
