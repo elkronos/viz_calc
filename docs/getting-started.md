@@ -97,7 +97,7 @@ vc.centered_bar(trial, x="arm", y="score", threshold=55, ax=right)
 fig.tight_layout()
 ```
 
-`radar` and `circular_bar` draw on a **polar** Axes, so create that panel with
+`radar` and `circular_bar` draw on a polar Axes, so create that panel with
 `projection="polar"` (or `plt.subplots(subplot_kw={"projection": "polar"})`);
 an ordinary Axes raises `ValueError`:
 
@@ -183,7 +183,7 @@ depends on what it colours:
 | `cmap=` | a colormap name; by default `"RdBu_r"` in `correlogram` (negative correlations blue, positive red), `"PuOr_r"` in `compare_correlations` (negative differences purple, positive orange) and `"viridis"` in `calendar_heatmap` | `correlogram`, `compare_correlations`, `calendar_heatmap` (plus `missing_color=` for days without data) |
 | none | the default palette | `network_map` (one colour per community), `sankey`, `profile_boxes`, `profile_scatters` |
 
-In `animated_bubble`, `color=` names the **column** whose categories set the
+In `animated_bubble`, `color=` names the *column* whose categories set the
 bubble colours; the colours themselves go in `colors=`.
 
 viz_calc leaves the Matplotlib style to you. Marks drawn straight on the axes

@@ -215,7 +215,7 @@ def mean_ci(x: Sequence[float], level: float = 0.95) -> tuple[float, float, floa
         return (m, np.nan, np.nan)
     t = _st.t.ppf(1 - (1 - level) / 2, n - 1)
     half = t * np.sqrt(_var(x)) / np.sqrt(n)
-    with np.errstate(over="ignore"):  # a limit beyond the largest float is honestly infinite
+    with np.errstate(over="ignore"):  # a limit beyond the largest float is infinite
         return (m, (_mean(x) - half) * s, (_mean(x) + half) * s)
 
 
@@ -619,7 +619,7 @@ def compare_correlations_test(r1: float | np.ndarray, n1: int | np.ndarray, r2: 
 def histogram_bins(x: Sequence[float], rule: Literal["fd", "sturges", "scott", "auto"] = "fd") -> np.ndarray:
     """Bin edges from a published bin-width rule.
 
-    * ``"fd"`` – Freedman & Diaconis (1981): width ``2·IQR·n^(-1/3)``; robust
+    * ``"fd"`` – Freedman & Diaconis (1981): width ``2·IQR·n^(-1/3)``; resistant
       to outliers.
     * ``"scott"`` – Scott (1979): width ``3.49·σ·n^(-1/3)``.
     * ``"sturges"`` – Sturges (1926): ``log2(n) + 1`` bins; only for small,

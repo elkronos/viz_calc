@@ -75,8 +75,8 @@ def histogram(
 ) -> VizResult:
     """Histogram with principled, shared bins, optionally by group and facet.
 
-    Bin edges come from a published rule — Freedman–Diaconis by default,
-    which is robust to outliers — and are computed once on all of *x*, so
+    Bin edges come from a published rule (Freedman–Diaconis by default,
+    which is resistant to outliers) and are computed once on all of *x*, so
     every group and facet uses the same bins and can be compared directly.
     Use ``stat="density"`` or ``"percent"`` when groups differ in size.
 

@@ -548,6 +548,43 @@ def test_readme_lints_what_ci_lints():
     assert f"\n{command}" in _read("README.md"), f"README.md does not run {command!r}"
 
 
+# --- voice ---------------------------------------------------------------------------------------------------------
+
+VOICE_PAGES = ["README.md", *sorted(str(p.relative_to(ROOT)) for p in (ROOT / "docs").rglob("*.md"))]
+BANNED_WORDS = ("delve", "foster", "leverage", "utilize", "facilitate", "empower", "streamline", "robust",
+                "cutting-edge", "paradigm shift", "game changer", "tapestry", "realm", "beacon", "multifaceted",
+                "meticulous", "intricate", "paramount", "transformative", "elevate", "embark", "supercharge",
+                "harness", "ever-evolving", "seamless", "comprehensive", "holistic", "synergy", "unlock")
+# bold that names a term or a panel as it is introduced; any other bold inside a sentence is emphasis
+DEFINED_TERMS = {"Wilson score interval", "η²", "top panel", "bottom panel", "none"}
+
+
+def _prose() -> dict[str, str]:
+    """{where: text} for the docs pages and the API docstrings, without reference lists (titles keep their words)."""
+    texts = {page: _read(page).split("\n## References\n")[0] for page in VOICE_PAGES}
+    for name, obj in {**_api_objects(), "viz_calc": vc}.items():
+        texts[f"docstring of {name}"] = (inspect.getdoc(obj) or "").split("References\n----------")[0]
+    return texts
+
+
+def test_docs_and_docstrings_avoid_banned_words_and_emphasis():
+    for where, text in _prose().items():
+        for word in BANNED_WORDS:
+            assert not re.search(rf"\b{word}\b", text, re.I), f"{where}: {word!r}"
+        assert not re.search(r"\bhonest(ly)?\b|\bNote:", text), f"{where}: 'honest' or 'Note:'"
+        assert not [c for c in text if ord(c) >= 0x1F000], f"{where}: emoji"
+        if where in VOICE_PAGES:
+            prose = re.sub(r"^```.*?^```", "", text, flags=re.S | re.M)
+            for line in prose.splitlines():
+                for m in re.finditer(r"\*\*([^*]+)\*\*", line):
+                    lead = line[:m.start()].strip()
+                    if line.lstrip().startswith("|") or re.fullmatch(r"[*\-]?|\d+\.", lead):
+                        continue  # a table cell, or a label at the start of a line or list item
+                    assert m[1] in DEFINED_TERMS, f"{where}: bold inside a sentence: {m[0]}"
+    for page in ("README.md", "docs/index.md"):  # a bold run across two lines
+        assert "**getting the statistics" not in _read(page), page
+
+
 # --- methodology and citations -------------------------------------------------------------------------------------
 
 _NAME = r"[A-Z][\w\-]*"

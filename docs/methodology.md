@@ -151,7 +151,7 @@ Used by `compare_correlations`.
 
 ### Histogram bin width
 Freedman–Diaconis by default: width $= 2\,\mathrm{IQR}\,n^{-1/3}$, which is
-robust to outliers (Freedman & Diaconis, 1981). On heavily tied or
+resistant to outliers (Freedman & Diaconis, 1981). On heavily tied or
 zero-inflated data the IQR can be zero (or zero up to a few ulps of
 floating-point noise in the quartiles),
 which would give one bin or billions; then, or if FD would need more than

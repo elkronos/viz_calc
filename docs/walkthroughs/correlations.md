@@ -49,8 +49,8 @@ Options worth knowing:
   strength both read correctly.
 
 !!! warning "Pooled correlations can mislead"
-    The pooled width–length correlation above is **negative** (−0.36). The
-    next section shows it is **positive** within the alpha group. Pooling
+    The pooled width–length correlation above is *negative* (−0.36). The
+    next section shows it is *positive* within the alpha group. Pooling
     groups with different means can reverse a relationship (Simpson's
     paradox), so check within groups.
 
@@ -59,7 +59,7 @@ Options worth knowing:
 Two heatmaps that "look different" are not evidence of a difference: sample
 correlations are noisy. `compare_correlations` computes, for every pair of
 groups and every pair of variables, the difference r(B) − r(A) and tests it
-with Fisher's r-to-z test for **independent** correlations (Fisher, 1921;
+with Fisher's r-to-z test for *independent* correlations (Fisher, 1921;
 Cohen et al., 2003). p-values are adjusted within each group
 comparison.
 

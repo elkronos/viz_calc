@@ -201,8 +201,9 @@ def period_bars(
 
     Bars show *stat* of *value* per period; the line is the trailing moving
     average of the bars over *trend_window* periods. Periods with no data are
-    kept (as zero for sums/counts, a gap otherwise), so the time axis is
-    honest. Calendar periods are used (a month is a month, not 30 days).
+    kept (as zero for sums/counts, a gap otherwise), so every period has a
+    slot and the axis spacing follows time. Calendar periods are used (a
+    month is a month, not 30 days).
 
     The table has one row per period: ``value`` (the statistic), ``n`` (the
     number of non-missing values behind it, which is what ``count`` counts),

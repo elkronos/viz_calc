@@ -87,7 +87,7 @@ defects. Use the library directly:
   wedges were dropped, colours no longer matched the legend.
 * `create_waterfallchart`: treated the final "End" row as another increment
   instead of a total, and labelled bars with names instead of values.
-* `create_histogram`: passed a bin **width** as a bin **count** to Plotly.
+* `create_histogram`: passed a bin *width* as a bin *count* to Plotly.
 * `compare_correlations`: showed unsigned differences with no test of
   whether they exceed sampling noise.
 * `correlogram`: starred raw p-values without multiple-comparison correction.

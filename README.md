@@ -6,7 +6,7 @@ Welch tests and bootstrap effect sizes, Wilson intervals for percentages,
 multiplicity-adjusted correlation matrices, Fisher z-tests for group
 differences in correlation, and more.
 
-📖 **Documentation, walkthroughs and gallery:** https://elkronos.github.io/viz_calc/
+Documentation, walkthroughs and gallery: https://elkronos.github.io/viz_calc/
 
 ```python
 import viz_calc as vc

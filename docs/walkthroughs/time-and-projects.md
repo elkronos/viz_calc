@@ -31,7 +31,7 @@ res.table.head(3)
 | 2023-02 | 23,306 | 28 | 23,240 |
 | 2023-03 | 30,086 | 31 | 25,522 |
 
-* Periods are **calendar** periods (`day`, `week`, `month`, `quarter`,
+* Periods are calendar periods (`day`, `week`, `month`, `quarter`,
   `year`), so February is 28 or 29 days, not "30".
 * Periods with no data are kept: zero for `sum`/`count`, a gap for other
   statistics. The time axis is never silently compressed.
@@ -125,8 +125,8 @@ res.table                                   # one row per frame: the mean of x, 
 | 2015 | 23.3 | 71.9 | 77.4 |
 | 2020 | 28.3 | 73.2 | 81.3 |
 
-Two details keep frames comparable: bubble **area** is proportional to
-`size` on **one scale for the whole animation**, and the axis limits are fixed
+Two details keep frames comparable: bubble area is proportional to
+`size` on one scale for the whole animation, and the axis limits are fixed
 across frames. The original script rescaled sizes within every frame and
 colour group, and let the axes rescale each frame, so the same bubble size
 or position meant different values in different frames.

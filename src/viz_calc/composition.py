@@ -365,7 +365,7 @@ def donut_grid(
     or drop missing cells first); an all-zero row is drawn as an empty grey
     ring. *col_wrap* (donuts per row) must be a positive integer.
 
-    Note: people compare angles less accurately than lengths (Cleveland &
+    People compare angles less accurately than lengths (Cleveland &
     McGill, 1984); for precise comparisons use [`stacked_percentages`][viz_calc.stacked_percentages].
     """
     columns = None if columns is None else column_list("columns", columns, distinct=True)

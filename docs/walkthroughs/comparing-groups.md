@@ -31,8 +31,8 @@ res.table
 | low dose | 40 | 52.3 | 52.9 | 16.1 |
 | high dose | 40 | 53.5 | 53.4 | 10.9 |
 
-The low-dose arm is visibly more spread out (SD 16 vs 9). That matters for
-the test we choose next.
+The low-dose arm is more spread out (SD 16 vs 9), so a test that assumes
+equal variances does not fit.
 
 ## 2. Estimate the effect with an estimation plot
 
@@ -44,9 +44,9 @@ res.info["comparisons"]
 ![Estimation plot](../images/estimation_plot.png)
 
 The **top panel** shows every observation, with each group's mean and 95%
-t-interval. The **bottom panel** shows what you actually want to know, the
-**difference from control**: its bootstrap sampling distribution (the shaded
-curve) and its 95% bias-corrected and accelerated (BCa) bootstrap interval
+t-interval. The **bottom panel** shows the difference from control: its
+bootstrap sampling distribution (the shaded curve) and its 95%
+bias-corrected and accelerated (BCa) bootstrap interval
 (Efron, 1987; Ho et al., 2019).
 
 | group | difference | 95% CI | Hedges' g [95% CI] | Welch p | Holm-adjusted p |
@@ -66,8 +66,9 @@ bootstrap interval.
   cannot tell them apart.
 * **High dose:** the estimate is +4.6 points (about half a standard
   deviation). The 95% interval just excludes zero, but after adjusting for the
-  two comparisons against control (Holm, 1979) the p-value is 0.086. So there
-  is **suggestive, not conclusive**, evidence of a benefit.
+  two comparisons against control (Holm, 1979) the p-value is 0.086. So the
+  evidence of a benefit is suggestive but falls short of the adjusted 0.05
+  level.
 
 !!! note "Why the CI and the p-value can disagree"
     Confidence intervals are reported per comparison and are not adjusted

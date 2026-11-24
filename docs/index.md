@@ -21,8 +21,8 @@ res.save("effect.png")
 ## Why another plotting package?
 
 Matplotlib, seaborn and Plotly already draw charts well. viz_calc focuses on
-what they leave to you: **getting the statistics behind a chart right, and
-handing them back.**
+what they leave to you: getting the statistics behind a chart right, and
+handing them back.
 
 | Common practice | What viz_calc does instead |
 |---|---|

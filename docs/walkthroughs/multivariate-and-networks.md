@@ -30,7 +30,7 @@ What the function does, and why:
   √χ²₂(0.95) along the eigenvectors of the group's covariance. With 50 points
   per group it holds about 95% of each group's population; a small group's
   own points nearly all fall inside it. `ellipse="confidence"` draws a 95%
-  confidence region for the group **mean** (Hotelling's T²), which is much
+  confidence region for the group *mean* (Hotelling's T²), which is much
   smaller. The original script took the square root of the eigenvalues twice
   and used an unexplained 68% level, so its "circles" had no interpretable
   size.
@@ -53,12 +53,12 @@ res = vc.radar(meas, metrics=features, group="group")   # normalize="data" by de
 ![Radar](../images/radar.png)
 
 Groups are summarized first (mean by default). Axes are rescaled so 0 is
-the smallest and 1 the largest **observed** value of each metric, so the
+the smallest and 1 the largest *observed* value of each metric, so the
 group profiles sit inside the range of the data. `normalize="groups"`
 stretches each axis between the lowest and highest group instead, which
 exaggerates differences and always puts one group at the centre.
 
-Read radar charts for **shape** (alpha is wide but small; gamma is large
+Read radar charts for shape (alpha is wide but small; gamma is large
 except in width). Do not compare enclosed areas, which change when you
 reorder the axes.
 

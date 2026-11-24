@@ -12,7 +12,7 @@ df = datasets.measurements()   # 'group' and 'grade' are categorical; four numer
 ```
 
 The three `profile_*` functions return pages of small multiples. `res.figure`
-is a **list** of figures (12 panels per page by default), and `res.table`
+is a list of figures (12 panels per page by default), and `res.table`
 summarizes every panel, so you can sort, filter or export it.
 
 ## 1. Value counts for every low-cardinality column

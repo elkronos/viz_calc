@@ -79,7 +79,7 @@ res.table[["item", "n", "net"]]
 table runs from least to most agreement; the chart puts the most agreed-with
 item at the top.
 
-`levels` must list **every** response option from most negative to most
+`levels` must list every response option from most negative to most
 positive. Unlisted responses raise an error instead of being silently
 dropped.
 
@@ -117,5 +117,5 @@ res = vc.upset(datasets.memberships(), max_intersections=15)
 
 ![UpSet](../images/upset.png)
 
-The largest group is people who use **only** Search (88), then Search +
+The largest group is people who use only Search (88), then Search +
 Sharing (47). The bars at the bottom left give each set's total size.
