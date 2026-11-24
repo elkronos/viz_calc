@@ -68,8 +68,8 @@ res = vc.waffle(datasets.survey(), category="team")
 plt.show()
 ```
 
-Each chart registers its figure with pyplot, which keeps it open, and in
-memory, until it is closed; Matplotlib warns once more than 20 are open. A
+Each Matplotlib chart registers its figure with pyplot, which keeps it open,
+and in memory, until it is closed; Matplotlib warns once more than 20 are open. A
 script, batch job or server that makes many charts closes each one after
 saving it:
 
@@ -83,6 +83,8 @@ for arm in ["control", "low dose", "high dose"]:
 The `profile_*` functions return a list of pages in `res.figure`, so close
 each page (`for page in res.figure: plt.close(page)`), or every open figure
 with `plt.close("all")`. `to_pptx` leaves the figures it is given open.
+The Plotly figures of `sankey` and `network_map(interactive=True)` are not
+registered with pyplot, and `plt.close` rejects them.
 
 ## Putting charts into your own layouts
 

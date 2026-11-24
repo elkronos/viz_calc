@@ -229,6 +229,16 @@ def test_showing_figures_says_how_to_close_them():
     for page in pages:
         plt.close(page)
     assert set(plt.get_fignums()) == open_before
+    # the Plotly results are not pyplot figures, so the advice to close is limited to Matplotlib charts
+    text = " ".join(section.split())
+    assert "Each Matplotlib chart registers its figure" in text
+    assert "`sankey` and `network_map(interactive=True)` are not registered" in text
+    if importlib.util.find_spec("plotly") is not None:
+        flows = pd.DataFrame({"a": ["x", "x"], "b": ["y", "z"], "v": [1, 2]})
+        res = vc.sankey(flows, source="a", target="b", value="v")
+        assert set(plt.get_fignums()) == open_before
+        with pytest.raises(TypeError):
+            plt.close(res.figure)
 
 
 def test_getting_started_describes_info_as_the_charts_fill_it():
