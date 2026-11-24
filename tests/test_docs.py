@@ -367,6 +367,36 @@ def test_mkdocs_edit_uri_only_with_page_actions():
         assert re.search(r"^\s+- content\.action\.(edit|view)$", config, re.M), "edit_uri is set but has no effect"
 
 
+# --- methodology and citations -------------------------------------------------------------------------------------
+
+_NAME = r"[A-Z][\w\-]*"
+# (first author, year) of an author-year citation: "Welch, 1947", "Delacre, Lakens & Leys, 2017", "Ho et al., 2019",
+# "Scott (1979)", "Steiger's (1980)", "**Benjamini–Hochberg** (1995)"; names may wrap onto the next line
+CITATION = re.compile(rf"\b({_NAME})(?:–{_NAME})?(?:\s+et\s+al\.|(?:,\s+{_NAME})*,?\s+&\s+{_NAME}|(?:,\s+{_NAME})*)?"
+                      rf"(?:,\s+|(?:'s)?(?:\*\*)?\s+\()(\d{{4}})\b")
+
+
+def _references() -> set[tuple[str, str]]:
+    """(first author, year) of each entry in the methodology page's reference list."""
+    refs = _read("docs/methodology.md").split("\n## References\n")[1]
+    return set(re.findall(r"^\* ([^,( ]+)[^\n]*?\((\d{4})\)", refs, re.M))
+
+
+def test_every_citation_in_the_docs_is_in_the_reference_list():
+    entries = _references()
+    for page in ["docs/methodology.md", *PAGES]:
+        cited = set(CITATION.findall(_read(page).split("\n## References\n")[0]))
+        assert cited <= entries, f"{page} cites {sorted(cited - entries)}, which the methodology references lack"
+
+
+def test_design_decisions_cite_a_published_source():
+    section = _section(_read("docs/methodology.md"), "## Visual design decisions")
+    rows = [ln.strip("|").split("|") for ln in section.splitlines() if ln.startswith("| ")][1:]
+    assert rows
+    for decision, _reason, source in rows:
+        assert CITATION.search(source), f"design decision {decision.strip()!r}: {source.strip()!r} is not a citation"
+
+
 # --- migration page ------------------------------------------------------------------------------------------------
 
 # The scripts that version 1.0 replaced, as they were at the last commit before the rebuild.

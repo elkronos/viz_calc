@@ -263,8 +263,8 @@ record which comparison was used.
 | UpSet plots instead of Venn diagrams | Venn diagrams do not scale beyond three sets | Lex et al., 2014 |
 | Bullet graphs in greyscale bands | Compact target comparison readable without colour | Few, 2013 |
 | Bubble **area** ∝ value, one scale and fixed axes per animation | Area is the size cue readers use; per-frame rescaling breaks comparison between frames | Cleveland & McGill, 1984 |
-| Label text colour chosen by contrast | Keeps labels legible on light and dark fills | WCAG 2.x contrast ratio |
-| Reference lines, error bars and labels on the axes background follow its lightness | They stay visible under a dark Matplotlib style, which viz_calc leaves to the user | WCAG 2.x contrast ratio |
+| Label text colour chosen by contrast | Keeps labels legible on light and dark fills | W3C, 2018 |
+| Reference lines, error bars and labels on the axes background follow its lightness | They stay visible under a dark Matplotlib style, which viz_calc leaves to the user | W3C, 2018 |
 
 ## References
 
@@ -300,3 +300,5 @@ record which comparison was used.
 * Sturges, H. A. (1926). The choice of a class interval. *Journal of the American Statistical Association*, 21(153), 65–66.
 * Weissgerber, T. L., Milic, N. M., Winham, S. J., & Garovic, V. D. (2015). Beyond bar and line graphs: time for a new data presentation paradigm. *PLoS Biology*, 13(4), e1002128.
 * Welch, B. L. (1947). The generalization of "Student's" problem when several different population variances are involved. *Biometrika*, 34(1–2), 28–35.
+* Wilson, E. B. (1927). Probable inference, the law of succession, and statistical inference. *Journal of the American Statistical Association*, 22(158), 209–212.
+* W3C (2018). *Web Content Accessibility Guidelines (WCAG) 2.1*. W3C Recommendation. Definitions of contrast ratio and relative luminance.
