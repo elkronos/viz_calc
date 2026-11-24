@@ -1,8 +1,10 @@
 """Time charts: reading date columns, the range of dates they can draw, date windows and date axes."""
 
+import io
 import re
 import warnings
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -18,6 +20,9 @@ _DATE_CALLS = {
     "duration_plot": lambda d: vc.duration_plot(d.assign(t=range(len(d)), e=d["d"]), label="t", start="d", end="e",
                                                 inner_start="d", inner_end="e"),
 }
+
+
+PANDAS_2 = int(pd.__version__.split(".")[0]) < 3  # dates in nanoseconds: 1677-09-21 to 2262-04-11 only
 
 
 def _frame(dates, index=None):
@@ -100,3 +105,39 @@ def test_iso_dates_in_year_1_name_their_year():
         assert "is outside the dates pandas" in str(exc)
     else:
         assert out.dt.strftime("%Y-%m-%d").tolist() == ["0001-01-05", "0001-02-05"]
+
+
+# --- periods and dates outside 1677-2262 ------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("call", list(_DATE_CALLS.values()), ids=list(_DATE_CALLS))
+def test_a_period_column_is_named_with_the_way_to_convert_it(call):
+    # the message asked for "one consistent format, ideally ISO 8601"
+    with pytest.raises(ValueError, match=re.escape("column 'd' holds periods (period[M]), not dates; convert them "
+                                                   "first, e.g. data['d'].dt.to_timestamp()")):
+        call(_frame(pd.period_range("2024-01", periods=3, freq="M")))
+
+
+@pytest.mark.parametrize("dates,periods,years", [
+    (["1500-01-05", "1500-02-10", "1500-03-15"], ["1500-01", "1500-02", "1500-03"], "1500 to 1500"),
+    (["2262-03-05", "2262-04-10"], ["2262-03", "2262-04"], "2262 to 2262"),  # April 2262 ends past the limit
+])
+def test_dates_outside_1677_to_2262_draw_on_pandas_3_and_raise_a_clear_error_on_pandas_2(dates, periods, years):
+    # period_bars raised OutOfBoundsDatetime or OverflowError on every pandas, calendar_heatmap on pandas 2
+    d = _frame(np.array(dates, dtype="datetime64[s]"))
+    if PANDAS_2:
+        with pytest.raises(ValueError, match=re.escape(
+                f"column 'd' has months from {periods[0]} to {periods[-1]}, but with pandas {pd.__version__} "
+                "period_bars draws only months within 1677-09-21 to 2262-04-11")):
+            vc.period_bars(d, date="d", value="v")
+        with pytest.raises(ValueError, match=re.escape(
+                f"column 'd' has dates in the years {years}, but with pandas {pd.__version__} calendar_heatmap "
+                "draws only the years 1678 to 2261")):
+            vc.calendar_heatmap(d, date="d", value="v")
+        return
+    res = vc.period_bars(d, date="d", value="v")
+    res.figure.savefig(io.BytesIO())
+    assert [str(p) for p in res.table["period"]] == periods
+    assert res.table["period_start"].dt.strftime("%Y-%m-%d").tolist() == [f"{p}-01" for p in periods]
+    res = vc.calendar_heatmap(d, date="d", value="v")
+    assert res.table["date"].dt.strftime("%Y-%m-%d").tolist() == dates

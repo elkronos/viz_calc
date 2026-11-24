@@ -120,7 +120,10 @@ def _unparsed(s: pd.Series, values: Any, name: str, dayfirst: bool) -> str:
     *values* is *s*, or its categories for a Categorical.
     """
     kind = pd.api.types.infer_dtype(values, skipna=True)
-    if kind in ("boolean", "timedelta", "timedelta64", "period", "interval", "time"):
+    if kind == "period":
+        return (f"column {name!r} holds periods ({values.dtype}), not dates; convert them first, e.g. "
+                f"data[{name!r}].dt.to_timestamp() for the start of each period")
+    if kind in ("boolean", "timedelta", "timedelta64", "interval", "time"):
         return f"column {name!r} holds {kind} values ({values.dtype}), which cannot be read as dates"
     present = s.notna().to_numpy()
     bad = None
@@ -301,6 +304,13 @@ def period_bars(
                       "v": _numpy_numbers(data[value])}).dropna(subset=["period"])  # empty periods: NaN, not pd.NA
     if not d["v"].notna().any():
         raise ValueError(f"no row has both a date in {date!r} and a value in {value!r}")
+    first, last = d["period"].min(), d["period"].max()
+    try:  # pandas 2 times periods in nanoseconds, so the first start and the last end must lie in its range
+        _ = first.start_time, last.end_time
+    except pd.errors.OutOfBoundsDatetime as exc:
+        raise ValueError(f"column {date!r} has {freq}s from {first} to {last}, but with pandas {pd.__version__} "
+                         f"period_bars draws only {freq}s within {pd.Timestamp.min:%Y-%m-%d} to "
+                         f"{pd.Timestamp.max:%Y-%m-%d}") from exc
     grouped = d.groupby("period")["v"]
     agg = pd.DataFrame({"value": _sum_by(d["v"], d["period"]) if stat == "sum" else grouped.agg(stat),
                         "n": grouped.count()})
@@ -317,7 +327,7 @@ def period_bars(
     fig, ax = get_ax(ax, figsize=(10, 4.5))
     ax.bar(starts, agg["value"], width=widths, align="edge", color=color, alpha=0.85, label=f"{stat} per {freq}")
     if trend_window:
-        mids = starts + pd.to_timedelta(widths / 2, unit="D")
+        mids = starts + pd.to_timedelta(widths / 2, unit="D").as_unit(starts.unit)  # pandas 3 periods reach past 2262
         ax.plot(mids, agg["trend"], color=OKABE_ITO[5], lw=2, label=f"{trend_window}-{freq} moving average")
     _date_axis(ax)
     ax.yaxis.set_major_formatter(AbbrevFormatter())
@@ -479,6 +489,11 @@ def calendar_heatmap(
     if daily.empty or daily.isna().all():
         raise ValueError("no dated rows with data")
     years = sorted(daily.index.year.unique())
+    try:  # pandas 2 builds each year's days in nanoseconds
+        pd.date_range(f"{years[0]}-01-01", periods=1), pd.date_range(f"{years[-1]}-12-31", periods=1)
+    except pd.errors.OutOfBoundsDatetime as exc:
+        raise ValueError(f"column {date!r} has dates in the years {years[0]} to {years[-1]}, but with pandas "
+                         f"{pd.__version__} calendar_heatmap draws only the years 1678 to 2261") from exc
     vmin, vmax = float(np.nanmin(daily)), float(np.nanmax(daily))
     fig, axes = plt.subplots(len(years), 1, figsize=(12, 2.1 * len(years) + 0.4), squeeze=False)
     for ax, year in zip(axes[:, 0], years):
