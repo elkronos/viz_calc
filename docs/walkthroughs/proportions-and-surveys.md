@@ -106,7 +106,10 @@ res.table   # Engineering 115 (38.3%, 39 tiles), Sales 67 (22 tiles), Data 66 (2
 ## 5. Overlapping memberships
 
 For "who uses which features", Venn diagrams stop working beyond three sets.
-`upset` shows every **exclusive** intersection as a column (Lex et al., 2014):
+`upset` draws each exclusive intersection (the people in exactly those sets)
+as a column, largest first (Lex et al., 2014). `max_intersections` keeps the
+largest ones: here 15 of the 26 intersections, holding 309 of the 328 people
+who use at least one feature. `res.table` lists the columns drawn.
 
 ```python
 res = vc.upset(datasets.memberships(), max_intersections=15)

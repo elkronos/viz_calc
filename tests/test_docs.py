@@ -182,6 +182,17 @@ def test_correlogram_spearman_ci_and_percent_grid_facet_column():
     assert "| facet | n | successes | percent | ci_low | ci_high |" in _read("docs/walkthroughs/proportions-and-surveys.md")
 
 
+def test_upset_walkthrough_counts_the_intersections_it_leaves_out():
+    section = _section(_read("docs/walkthroughs/proportions-and-surveys.md"), "## 5. Overlapping memberships")
+    text = " ".join(section.split())
+    assert "every exclusive intersection" not in text.replace("*", "")
+    sets = datasets.memberships()
+    shown, every = vc.upset(sets, max_intersections=15).table, vc.upset(sets, max_intersections=None).table
+    claim = (f"here {len(shown)} of the {len(every)} intersections, holding {shown['size'].sum()} of the "
+             f"{every['size'].sum()} people")
+    assert claim in text, claim
+
+
 def test_compare_correlations_every_pair_row():
     # "| beta | gamma | *every pair* | | | within ±0.23 | | 1.00 |"
     t = vc.compare_correlations(datasets.measurements(), group="group").table
