@@ -241,6 +241,19 @@ def test_colour_table_matches_signatures():
             assert not isinstance(params["colors"].default, tuple), name
 
 
+def test_colours_section_names_each_default_colormap():
+    # a chart whose default is a colormap rather than the Okabe-Ito palette says so next to its name
+    section = _section(_read("docs/getting-started.md"), "## Colours")
+    units = [ln for ln in section.splitlines() if ln.startswith("|")]
+    units += [par for par in section.split("\n\n") if not par.startswith("|")]
+    for name in CHARTS:
+        for param in ("colors", "cmap"):
+            default = _params(name)[param].default if param in _params(name) else None
+            if isinstance(default, str):
+                assert any(f"`{name}`" in u and f'`"{default}"`' in u and "default" in u for u in units), \
+                    f"the Colours section does not say that {name}'s {param}= defaults to {default!r}"
+
+
 def test_colormap_names_work_where_the_docs_say_so():
     trial, meas = datasets.trial(), datasets.measurements()
     vc.raincloud(trial, x="arm", y="score", colors="viridis")

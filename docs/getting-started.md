@@ -149,17 +149,19 @@ stats.compare_correlations_test(0.5, 100, 0.3, 100)  # z ≈ 1.67, p ≈ .095
 
 The default categorical palette is Okabe–Ito, designed to stay distinct for
 colour-blind readers. For more than eight categories viz_calc switches to
-`viridis`. `vc.palette(n, colors)` gives you the same colours for your own
-additions. How you change a chart's colours depends on what it colours:
+`viridis`. The exception is `ridgeplot`, which by default shades its rows
+along `"viridis"` whatever their number. `vc.palette(n, colors)` gives you
+the same colours for your own additions. How you change a chart's colours
+depends on what it colours:
 
 | Argument | Takes | Functions |
 |---|---|---|
 | `colors=` | a Matplotlib colormap name (e.g. `"viridis"`) or a list of colours, cycled if short; one colour per group or category | `estimation_plot`, `histogram`, `ridgeplot`, `raincloud`, `waffle`, `stacked_percentages`, `donut_grid`, `nested_pie`, `circular_bar`, `gantt`, `animated_bubble`, `pca_plot`, `radar` |
-| `colors=` | a diverging colormap name (default `"RdBu"`) or a list of exactly one colour per level, most negative first | `likert` |
+| `colors=` | a diverging colormap name (default `"RdBu"`: the most negative level red, the most positive blue) or a list of exactly one colour per level, most negative first | `likert` |
 | `colors=` | a tuple with one colour per role, in this order (not a colormap name) | `benchmark_bar` (below, above, indistinguishable), `waterfall` (increase, decrease, total), `dumbbell` (start, end), `divergent_bar` (left, right), `centered_bar` (at or above, below), `percent_grid` (success, other), `timeseries_fill` (first series, second series), `duration_plot` (outer, inner) |
 | `color=` | one colour | `lollipop`, `quadrant_plot`, `funnel`, `upset`, `period_bars`, `profile_bars` |
 | `bar_color=` | one colour for the measure; the bands are shades of grey | `bullet` |
-| `cmap=` | a colormap name | `correlogram`, `compare_correlations`, `calendar_heatmap` (plus `missing_color=` for days without data) |
+| `cmap=` | a colormap name; by default `"RdBu_r"` in `correlogram` (negative correlations blue, positive red), `"PuOr_r"` in `compare_correlations` (negative differences purple, positive orange) and `"viridis"` in `calendar_heatmap` | `correlogram`, `compare_correlations`, `calendar_heatmap` (plus `missing_color=` for days without data) |
 | none | the default palette | `network_map` (one colour per community), `sankey`, `profile_boxes`, `profile_scatters` |
 
 In `animated_bubble`, `color=` names the **column** whose categories set the

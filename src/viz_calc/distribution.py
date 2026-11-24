@@ -242,6 +242,10 @@ def ridgeplot(
     overlap
         How far each curve reaches into the row above, as a share of the
         tallest peak: from 0 (no overlap) up to, but not including, 1.
+    colors
+        A colormap name (default ``"viridis"``, shaded in row order) or a
+        list of colours, one per group (a shorter list is cycled). The
+        "(missing)" row is grey.
     """
     check_dataframe(data, [x, group])
     check_distinct(x=x, group=group)
