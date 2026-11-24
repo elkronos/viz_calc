@@ -563,14 +563,15 @@ def category_order(values: pd.Series, order: Sequence[Any] | None = None, comple
 
 
 def _scalars(values: pd.Series | pd.Index) -> list[Any]:
-    """*values* as a list of pandas or Python scalars; float32 and float16 values stay NumPy scalars.
+    """*values* (none missing) as pandas or Python scalars; float32 and float16 values stay NumPy scalars.
 
     ``tolist`` would turn a float32 0.1 into the Python float
     0.10000000149011612, which prints every digit of the widened value.
+    Nullable and Arrow-backed float32 columns are read the same way.
     """
-    dtype = values.dtype
+    dtype = getattr(values.dtype, "numpy_dtype", values.dtype)
     if isinstance(dtype, np.dtype) and dtype.kind == "f" and dtype.itemsize < 8:
-        return list(values.to_numpy())
+        return list(values.to_numpy(dtype=dtype))
     return values.tolist()
 
 

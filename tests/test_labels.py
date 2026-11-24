@@ -370,9 +370,18 @@ def test_profile_bars_sorts_levels_that_cannot_be_compared_by_type_whatever_the_
 
 
 def test_profile_bars_labels_float32_and_float16_levels_with_their_own_digits():
-    for dtype in (np.float32, np.float16):
-        d = pd.DataFrame({"b": np.array([0.1, 0.2, 0.1, 0.3] * 15, dtype=dtype)})
+    for dtype in (np.float32, np.float16, "Float32"):
+        d = pd.DataFrame({"b": pd.Series([0.1, 0.2, 0.1, 0.3] * 15, dtype=dtype)})
         assert vc.profile_bars(d).table["level"].tolist() == ["0.1", "0.2", "0.3"]
+
+
+def test_nullable_and_arrow_float32_levels_read_with_their_own_digits():
+    d = pd.DataFrame({"b": pd.Series([0.1, None, 0.2, 0.1], dtype="Float32"), "y": [1.0, 2.0, 3.0, 4.0]})
+    assert [level_label(v) for v in category_order(d["b"])] == ["0.1", "0.2"]
+    assert vc.benchmark_bar(d, x="b", y="y").table["b"].tolist() == [np.float32(0.1), np.float32(0.2)]
+    pa = pytest.importorskip("pyarrow")
+    arrow = d["b"].astype(pd.ArrowDtype(pa.float32()))
+    assert [level_label(v) for v in category_order(arrow)] == ["0.1", "0.2"]
 
 
 def test_profile_bars_counts_none_and_nan_as_one_missing_bar():
