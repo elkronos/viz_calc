@@ -378,3 +378,38 @@ def test_compare_correlations_draws_under_a_constrained_layout_setting():
     boxes = [ax.get_window_extent() for ax in res.figure.axes]
     assert all(0 <= b.x0 and b.x1 <= width for b in boxes)  # every heatmap and colour bar inside the figure
     assert not any(a.overlaps(b) for i, a in enumerate(boxes) for b in boxes[i + 1:])
+
+
+# --- the VizResult docstring matches the results --------------------------------------------------------------------
+
+
+def test_vizresult_docstring_describes_figure_axes_and_info_as_returned():
+    import re
+
+    import numpy as np
+
+    doc = " ".join(vc.VizResult.__doc__.split())
+    one_d = re.search(r"a 1-D array for (.*?), a 2-D grid for (.*?)\. ", doc)
+    assert one_d, doc
+    runs = {
+        "estimation_plot": lambda: vc.estimation_plot(datasets.trial(), x="arm", y="score", n_resamples=200),
+        "upset": lambda: vc.upset(pd.DataFrame({"A": [1, 1, 0], "B": [0, 1, 1]}).astype(bool)),
+        "bullet": lambda: vc.bullet(SMALL.head(1), label="k", value="a", ax=plt.figure().subplots()),
+        "calendar_heatmap": lambda: vc.calendar_heatmap(datasets.sales().head(30), date="date", value="online"),
+        "histogram": lambda: vc.histogram(datasets.trial(), x="score"),
+        "percent_grid": lambda: vc.percent_grid(datasets.trial(), column="improved"),
+        "donut_grid": lambda: vc.donut_grid(SMALL.head(1).set_index("k")),
+        "compare_correlations": lambda: vc.compare_correlations(datasets.measurements(), group="group"),
+    }
+    for listed, ndim in ((one_d.group(1), 1), (one_d.group(2), 2)):
+        names = re.findall(r"``(\w+)``", listed)
+        assert names and set(names) <= set(runs)
+        for name in names:
+            axes = runs[name]().axes
+            assert isinstance(axes, np.ndarray) and axes.ndim == ndim, name
+    pages = vc.profile_boxes(datasets.measurements())
+    assert isinstance(pages.figure, list) and pages.axes is None
+    assert "a list of them for the multi-page results" in doc and "``None`` for Plotly output and for multi-page" in doc
+    info = vc.pca_plot(datasets.measurements(), features=METRICS).info
+    assert isinstance(info["scores"], pd.DataFrame) and isinstance(info["eigenvalues"], pd.Series)
+    assert "tables (``DataFrame`` and ``Series``)" in doc and "scalar" not in doc

@@ -57,14 +57,23 @@ class VizResult:
     Attributes
     ----------
     figure
-        The Matplotlib ``Figure`` (or a Plotly ``Figure`` for the interactive
-        functions).
+        The Matplotlib ``Figure``; a list of them for the multi-page results
+        of ``profile_bars``, ``profile_boxes`` and ``profile_scatters``; or a
+        Plotly ``Figure`` for ``sankey`` and ``network_map(interactive=True)``.
+        A chart drawn into an *ax* of a subfigure holds the whole figure.
     axes
-        The main ``Axes`` or an array of them. ``None`` for Plotly output.
+        The ``Axes`` of a single-panel chart. Charts made of panels hold a
+        NumPy array of them, also when there is only one panel: a 1-D array
+        for ``estimation_plot``, ``upset``, ``bullet`` and
+        ``calendar_heatmap``, a 2-D grid for ``histogram``, ``percent_grid``,
+        ``donut_grid`` and ``compare_correlations``. ``None`` for Plotly
+        output and for multi-page results.
     table
         A tidy ``DataFrame`` holding the values that were drawn.
     info
-        Extra scalar results (test statistics, parameters used, notes).
+        Extra results: tables (``DataFrame`` and ``Series``), test
+        statistics, the settings used, and objects such as the graph of
+        ``network_map`` or the animation of ``animated_bubble``.
 
     A result can be pickled, figure included (for a cache or a process
     pool), with two exceptions: ``animated_bubble``'s ``info["animation"]``,
