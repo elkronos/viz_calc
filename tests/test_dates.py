@@ -58,20 +58,21 @@ def test_dates_beyond_the_range_of_pandas_2_are_named(call):
         call(_frame(["2024-01-01", "9999-12-31"]))
 
 
-@pytest.mark.parametrize("name", list(_DATE_CALLS))
-@pytest.mark.parametrize("dates,kind", [
-    ([True, False], "boolean values (bool)"),
-    (pd.to_timedelta([1, 2], unit="D"), "timedelta64 values (timedelta64["),
+_NOT_TEXT = [("bool", [True, False], "boolean values (bool)"),
+             ("timedelta", pd.to_timedelta([1, 2], unit="D"), "timedelta64 values (timedelta64[")]
+
+
+@pytest.mark.parametrize("name,dates,kind", [
+    pytest.param(name, dates, kind, id=f"{name}-{what}") for name in _DATE_CALLS for what, dates, kind in _NOT_TEXT
+    if not (name == "timeseries_fill" and what == "bool")  # timeseries_fill draws a bool time column as numbers
 ])
 def test_a_column_that_is_not_text_is_named_by_its_type(name, dates, kind):
-    if name == "timeseries_fill" and kind.startswith("boolean"):
-        return  # timeseries_fill draws a bool time column as numbers
     with pytest.raises(ValueError, match=re.escape(f"column 'd' holds {kind}")) as info:
         _DATE_CALLS[name](_frame(dates))
     assert "ISO 8601" not in str(info.value)
 
 
-# --- text without a year ----------------------------------------------------------------------------------------------
+# --- text without a year --------------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("call", list(_DATE_CALLS.values()), ids=list(_DATE_CALLS))
@@ -109,7 +110,7 @@ def test_iso_dates_in_year_1_name_their_year():
         assert out.dt.strftime("%Y-%m-%d").tolist() == ["0001-01-05", "0001-02-05"]
 
 
-# --- periods and dates outside 1677-2262 ------------------------------------------------------------------------------
+# --- periods and dates outside 1677-2262 ----------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("call", list(_DATE_CALLS.values()), ids=list(_DATE_CALLS))
