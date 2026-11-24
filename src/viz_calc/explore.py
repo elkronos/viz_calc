@@ -24,6 +24,7 @@ from ._core import (
     check_numeric,
     check_range,
     cleanup_on_error,
+    column_items,
     column_list,
     level_label,
     level_mask,
@@ -37,8 +38,7 @@ __all__ = ["profile_bars", "profile_boxes", "profile_scatters", "to_pptx"]
 def _split(data: pd.DataFrame, max_levels: int) -> tuple[list[str], list[str]]:
     """Columns treated as categorical (few levels) and as continuous numeric; empty columns are neither."""
     cat, num = [], []
-    for c in data.columns:
-        s = data[c]
+    for c, s in column_items(data):
         if not s.notna().any():
             continue
         is_num = pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s)
@@ -97,7 +97,8 @@ def profile_bars(
     check_count("per_page", per_page)
     check_count("ncols", ncols)
     if cols is None:
-        cols = [c for c in data.columns if data[c].nunique() <= max_levels]
+        cols = [c for c, s in column_items(data) if s.nunique() <= max_levels]
+        check_dataframe(data, cols)  # a column picked by default may have a repeated label
     if not cols:
         raise ValueError(f"no columns with at most {max_levels} distinct values")
     figs, rows = [], []
@@ -227,8 +228,9 @@ def profile_scatters(
         check_count(name, value)
     check_count("min_levels", min_levels, minimum=0)
     if columns is None:
-        columns = [c for c in data.columns if pd.api.types.is_numeric_dtype(data[c])
-                   and not pd.api.types.is_bool_dtype(data[c]) and data[c].nunique() >= min_levels]
+        columns = [c for c, s in column_items(data) if pd.api.types.is_numeric_dtype(s)
+                   and not pd.api.types.is_bool_dtype(s) and s.nunique() >= min_levels]
+        check_dataframe(data, columns)  # a column picked by default may have a repeated label
     check_numeric(data, *columns)
     check_finite(data, *columns)
     pairs = list(combinations(columns, 2))

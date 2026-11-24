@@ -32,6 +32,7 @@ from ._core import (
     check_not_reserved,
     check_numeric,
     cleanup_on_error,
+    column_items,
     column_list,
     foreground,
     get_ax,
@@ -365,7 +366,8 @@ def donut_grid(
     _check_count("col_wrap", col_wrap)
     _check_real("min_label", min_label)
     columns = columns if columns is not None else [
-        c for c in data.columns if pd.api.types.is_numeric_dtype(data[c]) and not pd.api.types.is_bool_dtype(data[c])]
+        c for c, s in column_items(data) if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s)]
+    check_dataframe(data, columns)  # a column picked by default may have a repeated label
     if not columns:
         raise ValueError("donut_grid needs at least one category column: columns= is empty or data has no "
                          "numeric (non-boolean) columns")
@@ -804,7 +806,7 @@ def bullet(
     ----------
     Few, S. (2013). *Bullet Graph Design Specification*. Perceptual Edge.
     """
-    bands = [] if bands is None else column_list("bands", bands)  # also accepts NumPy arrays and Series
+    bands = [] if bands is None else column_list("bands", bands, allow_none=True)  # also NumPy arrays and Series
     data = check_dataframe(data)
     names = [b for b in bands if isinstance(b, str) or b in data.columns]  # numbers may label columns too
     band_cols = names if len(names) == len(bands) else [b for b in bands if isinstance(b, str)]

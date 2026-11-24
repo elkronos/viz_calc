@@ -26,6 +26,7 @@ from ._core import (
     check_has_values,
     check_numeric,
     cleanup_on_error,
+    column_items,
     column_list,
     exact_mean,
     foreground,
@@ -44,11 +45,11 @@ Adjust = Literal["holm", "fdr_bh", "bonferroni", "none"]
 
 def _numeric_columns(data: pd.DataFrame, columns: Sequence[str] | None) -> list[str]:
     if columns is None:
-        columns = [c for c in data.columns if pd.api.types.is_numeric_dtype(data[c]) and not pd.api.types.is_bool_dtype(data[c])]
+        columns = [c for c, s in column_items(data) if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s)]
     else:
         columns = column_list("columns", columns, distinct=True)
-        check_dataframe(data, columns)
-        check_numeric(data, *columns)
+    check_dataframe(data, columns)
+    check_numeric(data, *columns)
     if len(columns) < 2:
         raise ValueError("need at least two numeric columns")
     check_finite(data, *columns)

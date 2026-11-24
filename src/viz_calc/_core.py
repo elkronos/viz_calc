@@ -139,15 +139,44 @@ class VizResult:
 
 
 def check_dataframe(data: Any, columns: Iterable[str | None] = ()) -> pd.DataFrame:
-    """Raise a clear error unless *data* is a DataFrame containing *columns*."""
+    """Raise a clear error unless *data* is a DataFrame containing *columns*, each as one column.
+
+    A label that selects more than one column (a repeated label, or 0 next
+    to False and 1 next to True, which pandas treats as one label) is
+    rejected, since ``data[label]`` would then be a frame.
+    """
     if not isinstance(data, pd.DataFrame):
-        raise TypeError(f"data must be a pandas DataFrame, got {type(data).__name__}")
-    missing = [c for c in columns if c is not None and c not in data.columns]
+        kind = type(data)
+        name = kind.__qualname__ if kind.__module__ == "builtins" else f"{kind.__module__}.{kind.__qualname__}"
+        hint = "; convert it first with .to_pandas()" if hasattr(data, "to_pandas") else ""
+        raise TypeError(f"data must be a pandas DataFrame, got {name}{hint}")
+    columns = [c for c in columns if c is not None]
+    missing = [c for c in columns if c not in data.columns]
     if missing:
         raise KeyError(f"column(s) not found in data: {missing}. Available: {list(data.columns)}")
+    check_unique_labels(data, columns)
     if data.empty:
         raise ValueError("data has no rows")
     return data
+
+
+def check_unique_labels(data: pd.DataFrame, columns: Iterable[Any]) -> None:
+    """Raise if a label in *columns* selects more than one column of *data*; ``None`` entries are skipped."""
+    for c in columns:
+        if c is None or data.columns.is_unique and not isinstance(data.columns, pd.MultiIndex):
+            continue
+        loc = data.columns.get_loc(c)
+        if isinstance(loc, (int, np.integer)):
+            continue
+        labels = list(data.columns[loc])
+        if isinstance(data.columns, pd.MultiIndex):
+            raise ValueError(f"column {c!r} matches {len(labels)} columns in data, {labels}; "
+                             "name one of them by its full label")
+        if len({str(lab) for lab in labels}) == 1:
+            raise ValueError(f"column {c!r} appears {len(labels)} times in data; give each column its own label")
+        raise ValueError(f"column {c!r} matches {len(labels)} columns in data, {labels}: pandas treats these labels "
+                         "as one (as it does 0 and False, and 1 and True), so they cannot be used as different "
+                         "columns; rename one of them")
 
 
 def check_numeric(data: pd.DataFrame, *columns: str) -> None:
@@ -245,12 +274,14 @@ def check_distinct(**roles: str | None) -> None:
         seen[column] = role
 
 
-def column_list(name: str, columns: Any, distinct: bool = False) -> list[Any]:
+def column_list(name: str, columns: Any, distinct: bool = False, allow_none: bool = False) -> list[Any]:
     """*columns* (any iterable of column names) as a list.
 
     A lone string is rejected rather than split into its characters, which
-    could silently pick single-letter columns. With ``distinct=True`` a
-    repeated column is rejected too, rather than used twice.
+    could silently pick single-letter columns, and so is a ``None`` entry,
+    which means "no column" (``allow_none=True`` keeps it, for a list that
+    may hold numbers instead of names). With ``distinct=True`` a repeated
+    column is rejected too, rather than used twice.
     """
     if isinstance(columns, str):
         raise TypeError(f"{name} must be a list of column names, not a str; use [{columns!r}] for one column")
@@ -258,10 +289,18 @@ def column_list(name: str, columns: Any, distinct: bool = False) -> list[Any]:
         columns = list(columns)
     except TypeError:
         raise TypeError(f"{name} must be a list of column names, got {type(columns).__name__}") from None
+    if not allow_none and any(c is None for c in columns):
+        raise ValueError(f"{name} contains None, which names no column; give column names only")
     repeated = [c for i, c in enumerate(columns) if c in columns[:i]] if distinct else []
     if repeated:
         raise ValueError(f"{name} repeats column(s): {list(dict.fromkeys(repeated))}")
     return columns
+
+
+def column_items(data: pd.DataFrame) -> Iterator[tuple[Any, pd.Series]]:
+    """Each column of *data* with its label, taken by position, so a repeated label gives each of its columns."""
+    for i, label in enumerate(data.columns):
+        yield label, data.iloc[:, i]
 
 
 def select_columns(data: pd.DataFrame, columns: Iterable[Any]) -> pd.DataFrame:

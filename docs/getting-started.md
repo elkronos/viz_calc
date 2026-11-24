@@ -25,8 +25,9 @@ Matplotlib already install.
 
 ## The one pattern to learn
 
-Every chart function takes a DataFrame first (`upset` also accepts a dict of
-sets) and column names as keywords, and returns a
+Every chart function takes a pandas DataFrame first (`upset` also accepts a
+dict of sets; convert a polars DataFrame or a pyarrow Table with
+`.to_pandas()`) and column names as keywords, and returns a
 [`VizResult`](api.md#viz_calc.VizResult):
 
 ```python
@@ -283,8 +284,12 @@ same thing everywhere. The exceptions are listed here.
   selected as a column. One known limitation comes from pandas itself, which
   treats the labels 0 and False, and 1 and True, as the same key: in a frame
   with both 0 and False (or 1 and True) as column labels, selecting either
-  label returns both columns, and viz_calc treats them as one column passed
-  twice. Rename one of them first.
+  label returns both columns, so a chart given either label raises an error
+  that names both. Rename one of them first. A label that appears twice in
+  the frame (`pd.concat(..., axis=1)` can give one) raises an error too when
+  a chart uses that column or would pick it by default; repeated labels a
+  chart does not use are ignored. A list of columns may not hold `None`,
+  which means "no column".
 
 ## Example datasets
 

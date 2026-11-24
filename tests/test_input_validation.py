@@ -295,3 +295,118 @@ def test_safe_sum_groups_by_several_keys_and_keeps_missing_keys():
     assert kept.dtype == np.int64 and kept.sum() == 7 and len(kept) == 4
     dropped = safe_sum(v, [a, b])
     assert dropped.dtype == np.int64 and dropped.to_dict() == {("x", "p"): 1, ("x", "q"): 2}
+
+
+# --- a label that selects more than one column ---------------------------------------------------------------------
+
+LIKERT_LEVELS = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"]
+REPEATED_CALLS = {
+    "waffle": ("survey", "team", lambda d: vc.waffle(d, category="team")),
+    "percent_grid": ("trial", "arm", lambda d: vc.percent_grid(d, column="improved", facet="arm")),
+    "stacked_percentages": ("trial", "site", lambda d: vc.stacked_percentages(d, group="arm", category="site")),
+    "donut_grid default columns": ("small", "a", lambda d: vc.donut_grid(d)),
+    "nested_pie": ("small", "a", lambda d: vc.nested_pie(d, outer="o", inner="k", value="a")),
+    "circular_bar": ("small", "k", lambda d: vc.circular_bar(d, label="k", value="a")),
+    "waterfall": ("small", "a", lambda d: vc.waterfall(d, label="k", value="a")),
+    "funnel": ("small", "k", lambda d: vc.funnel(d, stage="k", value="a")),
+    "bullet": ("small", "b", lambda d: vc.bullet(d, label="k", value="a", target="b")),
+    "estimation_plot": ("trial", "score", lambda d: vc.estimation_plot(d, x="arm", y="score", n_resamples=50)),
+    "benchmark_bar": ("trial", "arm", lambda d: vc.benchmark_bar(d, x="arm", y="score", threshold=50)),
+    "lollipop": ("trial", "arm", lambda d: vc.lollipop(d, x="arm", y="score")),
+    "dumbbell": ("small", "k", lambda d: vc.dumbbell(d, label="k", start="a", end="b")),
+    "divergent_bar": ("small", "b", lambda d: vc.divergent_bar(d, category="k", left="a", right="b")),
+    "centered_bar": ("trial", "score", lambda d: vc.centered_bar(d, x="arm", y="score")),
+    "likert": ("survey", "Tools are adequate",
+               lambda d: vc.likert(d, items=["Tools are adequate"], levels=LIKERT_LEVELS)),
+    "correlogram default columns": ("measurements", "length", lambda d: vc.correlogram(d)),
+    "compare_correlations default columns": ("measurements", "length",
+                                             lambda d: vc.compare_correlations(d, group="group")),
+    "quadrant_plot": ("trial", "score", lambda d: vc.quadrant_plot(d, x="baseline", y="score")),
+    "histogram": ("trial", "score", lambda d: vc.histogram(d, x="score")),
+    "ridgeplot": ("trial", "arm", lambda d: vc.ridgeplot(d, x="score", group="arm")),
+    "raincloud": ("trial", "score", lambda d: vc.raincloud(d, x="arm", y="score")),
+    "profile_bars default columns": ("survey", "team", lambda d: vc.profile_bars(d)),
+    "profile_boxes default columns": ("trial", "arm", lambda d: vc.profile_boxes(d)),
+    "profile_scatters default columns": ("measurements", "length", lambda d: vc.profile_scatters(d)),
+    "pca": ("measurements", "width", lambda d: vc.pca(d, features=["length", "width", "depth"])),
+    "pca_plot": ("measurements", "group", lambda d: vc.pca_plot(d, features=["length", "width"], group="group")),
+    "radar": ("measurements", "group", lambda d: vc.radar(d, metrics=["length", "width", "depth"], group="group")),
+    "sankey": ("network", "strength", lambda d: vc.sankey(d, source="source", target="target", value="strength")),
+    "period_bars": ("sales", "online", lambda d: vc.period_bars(d, date="date", value="online")),
+    "timeseries_fill": ("sales", "date", lambda d: vc.timeseries_fill(d, time="date", series=["online", "store"])),
+    "calendar_heatmap": ("sales", "date", lambda d: vc.calendar_heatmap(d, date="date", value="online")),
+    "gantt": ("projects", "start", lambda d: vc.gantt(d, task="task", start="start", end="end")),
+    "duration_plot": ("projects", "end", lambda d: vc.duration_plot(d, label="task", start="start", end="end",
+                                                                    inner_start="work_start", inner_end="work_end")),
+    "animated_bubble": ("trial", "score", lambda d: vc.animated_bubble(d, time="site", x="baseline", y="score",
+                                                                      size="baseline")),
+}
+
+
+def _repeat(data, column):
+    return pd.concat([data, data[[column]]], axis=1)
+
+
+@pytest.mark.parametrize("name", list(REPEATED_CALLS))
+def test_a_repeated_label_in_a_role_raises_naming_it(name):
+    source, column, call = REPEATED_CALLS[name]
+    if name == "sankey":
+        pytest.importorskip("plotly")
+    with pytest.raises(ValueError, match=rf"column '{column}' appears 2 times in data; give each column its own label"):
+        call(_repeat(_frame(source), column))
+    assert plt.get_fignums() == []
+
+
+def test_network_map_rejects_a_repeated_label():
+    pytest.importorskip("networkx")
+    d = _repeat(datasets.network(), "strength")
+    with pytest.raises(ValueError, match="column 'strength' appears 2 times"):
+        vc.network_map(d, source="source", target="target", weight="strength")
+
+
+@pytest.mark.parametrize("call", [
+    lambda d: vc.benchmark_bar(d, x="arm", y="score"),
+    lambda d: vc.profile_boxes(d, categorical=["arm"], numeric=["score"]),  # profile_boxes scans every column
+    lambda d: vc.correlogram(d, columns=["baseline", "score"]),
+], ids=["benchmark_bar", "profile_boxes", "correlogram"])
+def test_a_repeated_label_the_chart_does_not_use_is_ignored(trial, call):
+    expected = call(trial).table
+    pd.testing.assert_frame_equal(call(_repeat(trial, "site")).table, expected)
+
+
+def test_a_role_label_with_a_zero_false_twin_raises_naming_both(trial):
+    d = pd.DataFrame({"arm": trial["arm"], "score": trial["score"], "flat": 1000.0})
+    d.columns = pd.Index(["arm", 0, False], dtype=object)
+    for y in (0, False):
+        with pytest.raises(ValueError, match=r"column \w+ matches 2 columns in data, \[0, False\]: pandas treats"):
+            vc.estimation_plot(d, x="arm", y=y)  # read column False's values for y=0 before
+    assert vc.estimation_plot(d.iloc[:, :2], x="arm", y=0).table["mean"].tolist() == pytest.approx(
+        trial.groupby("arm", observed=True)["score"].mean().tolist())
+
+
+@pytest.mark.parametrize("call, name", [
+    (lambda d: vc.profile_boxes(d, categorical=[None], numeric=["width"]), "categorical"),
+    (lambda d: vc.correlogram(d, columns=["length", None]), "columns"),
+    (lambda d: vc.pca(d, features=["length", "width", None]), "features"),
+    (lambda d: vc.radar(d, metrics=[None, "width"], group="group"), "metrics"),
+], ids=["profile_boxes", "correlogram", "pca", "radar"])
+def test_none_in_a_list_of_columns_is_rejected(call, name):
+    with pytest.raises(ValueError, match=f"{name} contains None, which names no column"):
+        call(datasets.measurements())
+
+
+class _Frame:
+    """Stands in for a polars DataFrame or a pyarrow Table: not pandas, but convertible with ``to_pandas``."""
+
+    def to_pandas(self):
+        return datasets.trial()
+
+
+def test_a_frame_from_another_library_gets_a_conversion_hint():
+    with pytest.raises(TypeError, match=r"got test_input_validation\._Frame; convert it first with \.to_pandas\(\)"):
+        vc.lollipop(_Frame(), x="arm", y="score")
+    with pytest.raises(TypeError, match=r"data must be a pandas DataFrame, got list$"):
+        vc.lollipop([1, 2], x="arm", y="score")
+    pa = pytest.importorskip("pyarrow")
+    with pytest.raises(TypeError, match=r"got pyarrow\.lib\.Table; convert it first with \.to_pandas\(\)"):
+        vc.lollipop(pa.table({"arm": ["a"], "score": [1.0]}), x="arm", y="score")
