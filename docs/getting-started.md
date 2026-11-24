@@ -91,6 +91,12 @@ vc.lollipop(meas, x="group", y="mass", ax=bars)
 vc.radar(meas, metrics=["length", "width", "depth", "mass"], group="group", ax=spider)
 ```
 
+The other charts need an ordinary (Cartesian) Axes; a polar one raises
+`ValueError`. `ax=` takes one Axes: a figure, or the whole array that
+`plt.subplots` returns, raises `TypeError`. Both are checked before anything is
+drawn. An Axes in a subfigure (`fig.subfigures`) works too, and `res.figure` is
+then the whole figure, which `res.save` and `to_pptx` write.
+
 `bullet` draws one panel per row, so it takes `ax=` only for a single row.
 
 These functions have no `ax=` and always create their own figure:

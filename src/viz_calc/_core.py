@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import functools
+import inspect
 import math
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
@@ -378,9 +379,18 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
     pyplot, which Jupyter or ``plt.show()`` would then display. Figures that
     existed before the call (such as the one holding a caller's *ax*) are
     left open.
+
+    An *ax* argument that is not one Matplotlib Axes (a figure, or the whole
+    array from ``plt.subplots``) raises ``TypeError`` before the call starts.
     """
+    names = list(inspect.signature(func).parameters)
+    ax_at = names.index("ax") if "ax" in names else None
+
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        if ax_at is not None:  # before anything is validated or drawn
+            ax = kwargs["ax"] if "ax" in kwargs else args[ax_at] if len(args) > ax_at else None
+            _check_ax_type(func.__name__, ax)
         before = set(plt.get_fignums())
         axes = [a for a in (*args, *kwargs.values()) if isinstance(a, Axes)]
         text = _Text(axes)
@@ -399,9 +409,28 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
     return wrapper
 
 
+def _check_ax_type(name: str, ax: Any) -> None:
+    """Raise unless *ax* is ``None`` or one Matplotlib Axes (not a figure, or an array or list of Axes)."""
+    if ax is not None and not isinstance(ax, Axes):
+        raise TypeError(f"{name} needs ax to be one Matplotlib Axes, got {type(ax).__name__}; pass a single Axes, "
+                        "e.g. ax from fig, ax = plt.subplots() or axes[0] from a grid of them")
+
+
+def check_cartesian(ax: Axes | None) -> None:
+    """Raise unless *ax* is ``None`` or an ordinary Cartesian Axes (Matplotlib's ``"rectilinear"`` projection).
+
+    A chart drawn on a polar, map or 3D Axes would put its bars and points in
+    the wrong coordinates, or fail after drawing part of itself.
+    """
+    if ax is not None and ax.name != "rectilinear":
+        raise ValueError(f"this chart needs an ordinary (Cartesian) Axes, got a {ax.name!r} one; only radar and "
+                         "circular_bar draw on a polar Axes")
+
+
 def get_ax(ax: Axes | None = None, figsize: tuple[float, float] = (8, 5), **subplot_kw: Any) -> tuple[Any, Axes]:
-    """Return ``(figure, axes)``, creating a new figure only if *ax* is ``None``."""
+    """Return ``(figure, axes)``, creating a new figure only if *ax* is ``None``; a given *ax* must be Cartesian."""
     if ax is not None:
+        check_cartesian(ax)
         return ax.figure, ax
     fig, ax = plt.subplots(figsize=figsize, subplot_kw=subplot_kw or None)
     return fig, ax

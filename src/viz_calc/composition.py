@@ -838,7 +838,7 @@ def bullet(
         fig, axes = plt.subplots(n, 1, figsize=(8, 0.9 * n + 0.6), squeeze=False)
         axes = axes[:, 0]
     else:
-        fig, axes = ax.figure, np.array([ax])
+        fig, axes = get_ax(ax)[0], np.array([ax])  # get_ax checks that ax is Cartesian
     rows = []
     for i, (ax, (_, row)) in enumerate(zip(axes, data.iterrows())):
         limits = [lim for lim in limit_rows[i].tolist() if not math.isnan(lim)]  # a missing limit: no band

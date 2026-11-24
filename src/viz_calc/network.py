@@ -18,6 +18,7 @@ from matplotlib.patches import Patch
 from ._core import (
     NEUTRAL,
     VizResult,
+    check_cartesian,
     check_choice,
     check_dataframe,
     check_distinct,
@@ -335,6 +336,8 @@ def network_map(
     colour; a label wider than its node is drawn in the axes foreground.
     Set ``interactive=True`` for a Plotly figure with hover details. Node
     names are shown there as written, not read as Plotly's HTML markup.
+    An *ax* to draw into must be an ordinary (Cartesian) Axes, and cannot be
+    combined with ``interactive=True``.
 
     References
     ----------
@@ -347,6 +350,10 @@ def network_map(
     check_dataframe(data, [source, target, weight])
     check_distinct(source=source, target=target, weight=weight)
     check_choice("size_by", size_by, ["degree", "strength", "betweenness"])
+    if interactive and ax is not None:
+        raise ValueError("network_map(interactive=True) returns a Plotly figure, which cannot be drawn into ax; "
+                         "leave out ax, or draw with interactive=False")
+    check_cartesian(ax)
     weighted = weight is not None  # a column may legitimately be labelled 0
     if weighted:
         check_numeric(data, weight)
