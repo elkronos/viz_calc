@@ -33,6 +33,7 @@ from ._core import (
     get_ax,
     group_label,
     group_mask,
+    legend_label,
     level_label,
     level_mask,
     palette,
@@ -187,7 +188,7 @@ def histogram(
                        edgecolor="white", lw=0.5)
             else:  # outlined steps keep overlapping groups readable
                 ax.stairs(heights, edges, fill=True, color=col, alpha=alpha * 0.4)
-                ax.stairs(heights, edges, color=col, lw=1.8, label=group_label(h))
+                ax.stairs(heights, edges, color=col, lw=1.8, label=legend_label(h))
             if density_curve and counts.sum():
                 dens = _kde(s, grid)
                 if dens is not None:

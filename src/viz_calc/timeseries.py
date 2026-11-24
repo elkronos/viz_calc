@@ -37,6 +37,7 @@ from ._core import (
     column_list,
     foreground,
     get_ax,
+    legend_label,
     level_codes,
     level_label,
     palette,
@@ -342,8 +343,9 @@ def timeseries_fill(
     ya = d[a].to_numpy(dtype=float, na_value=np.nan)  # nullable dtypes with NA on pandas 2.0
     yb = d[b].to_numpy(dtype=float, na_value=np.nan)
     fig, ax = get_ax(ax, figsize=(10, 4.5))
-    ax.plot(x, ya, color=colors[0], lw=1.8, label=names[0])
-    ax.plot(x, yb, color=colors[1], lw=1.8, label=names[1])
+    shown = names if labels is not None else [legend_label(a), legend_label(b)]
+    ax.plot(x, ya, color=colors[0], lw=1.8, label=shown[0])
+    ax.plot(x, yb, color=colors[1], lw=1.8, label=shown[1])
     ax.fill_between(x, ya, yb, where=ya >= yb, interpolate=True, color=colors[0], alpha=alpha, lw=0)
     ax.fill_between(x, ya, yb, where=ya < yb, interpolate=True, color=colors[1], alpha=alpha, lw=0)
     if tz is not None:
@@ -543,7 +545,7 @@ def gantt(
     if today is not None:
         ax.axvline(mdates.date2num(_instant(t)), color=OKABE_ITO[5], lw=1.5, ls="--")
     if group is not None:
-        handles = [Patch(color=c, label=level_label(g)) for g, c in zip(groups, cols)]
+        handles = [Patch(color=c, label=legend_label(g)) for g, c in zip(groups, cols)]
         if (codes < 0).any():
             handles.append(Patch(color=NEUTRAL, label="(missing)"))
         ax.legend(handles=handles, title=level_label(group), frameon=False,
@@ -837,7 +839,7 @@ def animated_bubble(
             elif c is None:
                 sub, name = cur[cur[color].isna()], "(missing)"
             else:
-                sub, name = cur[cur[color] == c], level_label(c)
+                sub, name = cur[cur[color] == c], legend_label(c)
             # A bubble without a position or size is not drawn: a scatter whose sizes are all missing fails when the
             # figure is rendered. An empty scatter still draws, and keeps the group's legend entry in every frame.
             sub = sub.dropna(subset=list(dict.fromkeys([x, y, size])))

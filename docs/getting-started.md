@@ -276,6 +276,17 @@ same thing everywhere. The exceptions are listed here.
   result's info, under "dropped_missing_group". In `benchmark_bar` and
   `centered_bar`, a `threshold` of "mean" or "median" is taken from the rows
   in the groups drawn.
+* **Labels.** A missing label reads "(missing)" in the charts that draw one
+  bar or row per label (`dumbbell`, `circular_bar`, `waterfall`, `funnel`,
+  `bullet`, `gantt`, `duration_plot`); `quadrant_plot` and
+  `animated_bubble` leave a point without a label unannotated. Two levels
+  that would read the same, such as 1 and "1", raise an error, and so does
+  a level "(missing)" in a column whose missing values are drawn as
+  "(missing)". A level that is empty or starts with an underscore, which
+  Matplotlib would leave out of a legend, keeps its legend entry. Control
+  characters in column names and values (other than tab and newline)
+  cannot be drawn and are not allowed in SVG files, so they are drawn as
+  U+FFFD (�); text passed as a label or title is drawn as given.
 * **Grid width** of multi-panel figures is `col_wrap` in `histogram`,
   `percent_grid` and `donut_grid`, and `ncols` in the `profile_*` functions.
 * **Column labels** need not be strings: a column labelled 0 (from a

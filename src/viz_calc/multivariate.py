@@ -24,12 +24,14 @@ from ._core import (
     check_dataframe,
     check_distinct,
     check_finite,
+    check_labels,
     check_not_reserved,
     check_numeric,
     cleanup_on_error,
     column_list,
     foreground,
     get_ax,
+    legend_label,
     level_label,
     level_percent,
     palette,
@@ -209,7 +211,7 @@ def pca_plot(
     ellipses = {}
     for g, c in zip(groups, cols):
         sub = scores if g is None else scores[scores[group] == g]
-        ax.scatter(sub[pc_x], sub[pc_y], s=22, color=c, alpha=0.75, lw=0, label=None if g is None else level_label(g))
+        ax.scatter(sub[pc_x], sub[pc_y], s=22, color=c, alpha=0.75, lw=0, label=None if g is None else legend_label(g))
         if ellipse:
             ellipses[g] = _ellipse(ax, sub[[pc_x, pc_y]].to_numpy(float), coverage, ellipse, c)
     if group is not None and scores[group].isna().any():
@@ -338,7 +340,8 @@ def radar(
             scaled[m] = raw[m].where(raw[m].isna(), 0.5)  # a group with no data stays missing (a gap)
     angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False)
     closed = np.r_[angles, angles[0]]
-    names, cols = [level_label(g) for g in groups], palette(len(groups), colors)
+    check_labels(group, groups, missing=missing.any())
+    names, cols = [legend_label(g) for g in groups], palette(len(groups), colors)
     if missing.any():
         names, cols = names + ["(missing)"], cols + [NEUTRAL]
     if ax is None:

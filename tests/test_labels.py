@@ -201,3 +201,39 @@ def test_waterfall_rejects_a_total_named_like_a_step(kwargs):
 def test_timeseries_fill_rejects_labels_that_do_not_tell_the_series_apart(labels):
     with pytest.raises(ValueError, match="two different names"):
         vc.timeseries_fill(datasets.sales().head(60), time="date", series=["online", "store"], labels=labels)
+
+
+# --- legends ----------------------------------------------------------------------------------------------------------
+
+HIDDEN = ["_hidden", "", "shown"]
+
+
+def _hidden_frame(n=60):
+    rng = np.random.default_rng(0)
+    return pd.DataFrame({"g": (HIDDEN * n)[:n], "c": (["p", "q"] * n)[:n], "x": rng.normal(size=n),
+                         "y": rng.normal(size=n), "z": rng.normal(size=n), "w": rng.normal(size=n)})
+
+
+@pytest.mark.parametrize("name", ["stacked_percentages", "histogram", "radar", "pca_plot", "animated_bubble", "gantt",
+                                  "waffle", "likert"])
+def test_legends_keep_levels_that_are_empty_or_start_with_an_underscore(name):
+    d = _hidden_frame()
+    if name == "stacked_percentages":
+        ax = vc.stacked_percentages(d, group="c", category="g").axes
+    elif name == "histogram":
+        ax = vc.histogram(d, x="x", hue="g").axes.flat[0]
+    elif name == "radar":
+        ax = vc.radar(d, ["x", "y", "z"], "g").axes
+    elif name == "pca_plot":
+        ax = vc.pca_plot(d, ["x", "y", "z", "w"], "g").axes
+    elif name == "animated_bubble":
+        ax = vc.animated_bubble(d.assign(t=[1, 2] * 30, s=1.0), x="x", y="y", size="s", time="t", color="g").axes
+    elif name == "gantt":
+        ax = vc.gantt(d.head(3).assign(task=["t1", "t2", "t3"], s=pd.Timestamp("2024-01-01"),
+                                       e=pd.Timestamp("2024-02-01")), task="task", start="s", end="e", group="g").axes
+    elif name == "waffle":
+        ax = vc.waffle(d, category="g").axes
+    else:
+        ax = vc.likert(d.assign(q=d["g"]), items=["q"], levels=HIDDEN).axes
+    texts = [t.split(":")[0] for t in _legend(ax)]
+    assert sorted(texts) == sorted(HIDDEN)

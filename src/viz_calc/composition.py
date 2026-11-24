@@ -41,6 +41,7 @@ from ._core import (
     group_key,
     group_label,
     group_mask,
+    legend_label,
     level_codes,
     level_label,
     level_mask,
@@ -133,7 +134,7 @@ def waffle(
     check_labels(category, levels, missing=unknown.any())
     values = totals.reindex(levels).fillna(0).to_numpy()
     cols = palette(len(levels), colors)
-    names = [level_label(lvl) for lvl in levels]
+    names = [legend_label(lvl) for lvl in levels]
     if unknown.any():
         levels, names, cols = levels + [np.nan], names + ["(missing)"], cols + [NEUTRAL]
         values = np.append(values, unknown_total)
@@ -317,8 +318,8 @@ def stacked_percentages(
     base = np.zeros(len(groups))
     for c, col in zip(cats, cols):
         vals = pct[c].to_numpy()
-        bars = (ax.barh(pos, vals, left=base, color=col, label=level_label(c), edgecolor="white")
-                if horizontal else ax.bar(pos, vals, bottom=base, color=col, label=level_label(c), edgecolor="white"))
+        bars = (ax.barh(pos, vals, left=base, color=col, label=legend_label(c), edgecolor="white")
+                if horizontal else ax.bar(pos, vals, bottom=base, color=col, label=legend_label(c), edgecolor="white"))
         center_labels(ax, bars, [f"{v:.0f}%" if v >= min_label else "" for v in vals], fontsize=8,
                       color=text_color(col))
         base += vals
@@ -402,7 +403,7 @@ def donut_grid(
         ax.set_title(level_label(idx), fontsize="medium")
     for ax in list(axes.flat)[n:]:
         ax.set_visible(False)
-    fig.legend(handles=[Patch(color=c, label=level_label(k)) for k, c in zip(columns, cols)], frameon=False,
+    fig.legend(handles=[Patch(color=c, label=legend_label(k)) for k, c in zip(columns, cols)], frameon=False,
                loc="center left", bbox_to_anchor=(1.0, 0.5))
     fig.tight_layout()
     totals = values.sum(axis=1)

@@ -38,6 +38,7 @@ from ._core import (
     foreground,
     get_ax,
     group_key,
+    legend_label,
     level_label,
     level_mask,
     level_percent,
@@ -612,8 +613,8 @@ def dumbbell(
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.45 * len(table) + 1)))
     pos = np.arange(len(table))
     ax.hlines(pos, table[start], table[end], color="#c7c7c7", lw=3, zorder=1)
-    ax.scatter(table[start], pos, s=80, color=colors[0], label=start_label or start, zorder=2)
-    ax.scatter(table[end], pos, s=80, color=colors[1], label=end_label or end, zorder=3)
+    ax.scatter(table[start], pos, s=80, color=colors[0], label=start_label or legend_label(start), zorder=2)
+    ax.scatter(table[end], pos, s=80, color=colors[1], label=end_label or legend_label(end), zorder=3)
     if show_values:
         for p, a, b in zip(pos, table[start], table[end]):
             left, right = (a, b) if a <= b else (b, a)
@@ -685,8 +686,8 @@ def divergent_bar(
     left_colors, right_colors = ([NEUTRAL if m else c for m in missing] if missing.any() else c for c in colors)
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)))
     pos = np.arange(len(table))
-    ax.barh(pos, -table[left], color=left_colors, label=left_label or left)
-    ax.barh(pos, table[right], color=right_colors, label=right_label or right)
+    ax.barh(pos, -table[left], color=left_colors, label=left_label or legend_label(left))
+    ax.barh(pos, table[right], color=right_colors, label=right_label or legend_label(right))
     ax.axvline(0, color=foreground(ax), lw=0.8)
     ax.set_yticks(pos, ["(missing)" if m else level_label(v) for v, m in zip(table[category], missing)])
     ax.xaxis.set_major_formatter(AbbrevFormatter(absolute=True))
@@ -888,7 +889,7 @@ def likert(
     left = start.to_numpy(dtype=float).copy()
     for lvl, col in zip(levels, cols):
         width = table[lvl].to_numpy(float)
-        bars = ax.barh(ypos, width, left=left, color=col, label=level_label(lvl), edgecolor="white", lw=0.5)
+        bars = ax.barh(ypos, width, left=left, color=col, label=legend_label(lvl), edgecolor="white", lw=0.5)
         if labels:
             center_labels(ax, bars, [f"{w:.0f}" if w >= 6 else "" for w in width], fontsize=8, color=text_color(col))
         left += width
