@@ -683,6 +683,15 @@ def abbreviate(num: float, digits: int = 1) -> str:
     return f"{sign}{_strip(f'{num / unit:.{digits}f}')}{suffix}"
 
 
+def fixed(value: float, decimals: int = 2, plus: bool = False) -> str:
+    """*value* with *decimals* decimals, unsigned when it rounds to zero: ``-0.001`` reads ``0.00``, not ``-0.00``.
+
+    With *plus*, a value that does not round to zero gets its sign either way (``+0.12``, ``-0.12``).
+    """
+    text = f"{value:{'+' if plus else ''}.{decimals}f}"
+    return text.lstrip("+-") if float(text) == 0 else text
+
+
 def exact_mean(values: Any) -> float:
     """Mean of *values*, correctly rounded (missing values are not skipped).
 

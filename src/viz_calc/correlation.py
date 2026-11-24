@@ -28,6 +28,7 @@ from ._core import (
     cleanup_on_error,
     column_list,
     exact_mean,
+    fixed,
     foreground,
     get_ax,
     level_label,
@@ -178,7 +179,7 @@ def correlogram(
                 if np.isnan(mat[i, j]) or (hide_nonsignificant and not sig[i, j]):
                     text[i, j] = ""
                 else:
-                    text[i, j] = f"{mat[i, j]:.{decimals}f}" + ("*" if sig[i, j] else "")
+                    text[i, j] = fixed(mat[i, j], decimals) + ("*" if sig[i, j] else "")
     full = mat.copy()
     if hide_nonsignificant:  # blank the drawn cells only; info["matrix"] keeps every coefficient
         mat = np.where(sig | np.eye(k, dtype=bool), mat, 0.0)
@@ -273,7 +274,7 @@ def compare_correlations(
         for row in sub.itertuples():
             i, j = idx[row.var1], idx[row.var2]
             mat[i, j] = mat[j, i] = row.difference
-            text[i, j] = text[j, i] = "" if np.isnan(row.difference) else f"{row.difference:+.{decimals}f}" + ("*" if row.significant else "")
+            text[i, j] = text[j, i] = "" if np.isnan(row.difference) else fixed(row.difference, decimals, plus=True) + ("*" if row.significant else "")
         _draw_matrix(ax, mat, cols, "lower", vlim, cmap, text, "Δr")
         ax.set_title(f"r({level_label(gb)}) − r({level_label(ga)})", loc="left", fontsize="medium")
     for ax in list(axes.flat)[len(pairs):]:
@@ -311,7 +312,8 @@ def quadrant_plot(
 
     With ``standardize=True`` both axes are z-scores, so the quadrants read as
     "above/below average on x and y". Each quadrant is labelled with its share
-    of points, and the correlation is reported with a Fisher-z CI.
+    of points, and the correlation is reported with a Fisher-z CI, which the
+    title shows as "n/a" where it is undefined (3 points, or ``|r| = 1``).
 
     Parameters
     ----------
@@ -380,8 +382,11 @@ def quadrant_plot(
 
     cor = st.correlation_test(d[x], d[y], method)
     sym = "r" if method == "pearson" else "ρ"
-    ax.set_title(f"{sym} = {cor['r']:.2f}  [95% CI {cor['ci_low']:.2f}, {cor['ci_high']:.2f}],  n = {cor['n']}",
-                 loc="left", fontsize="medium")
+    if np.isnan(cor["ci_low"]):  # the Fisher-z interval needs n > 3 and |r| < 1
+        interval = f"95% CI n/a: {'needs n > 3' if cor['n'] <= 3 else f'|{sym}| = 1'}"
+    else:
+        interval = f"95% CI {fixed(cor['ci_low'])}, {fixed(cor['ci_high'])}"
+    ax.set_title(f"{sym} = {fixed(cor['r'])}  [{interval}],  n = {cor['n']}", loc="left", fontsize="medium")
     ax.set_xlabel(f"{x} (z-score)" if standardize else x)
     ax.set_ylabel(f"{y} (z-score)" if standardize else y)
     ax.spines[["top", "right"]].set_visible(False)

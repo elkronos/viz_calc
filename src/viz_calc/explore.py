@@ -25,6 +25,7 @@ from ._core import (
     check_range,
     cleanup_on_error,
     column_list,
+    fixed,
     level_label,
     level_mask,
     require,
@@ -257,7 +258,7 @@ def profile_scatters(
                 ax.plot(gx, icpt + slope * gx, color=OKABE_ITO[5], lw=1.2)
             ax.set_xlabel(r.x, fontsize=8)
             ax.set_ylabel(r.y, fontsize=8)
-            ax.set_title(f"r={r.r:.2f}, p_adj={r.p_adjusted:.2g}", fontsize="small", loc="left")
+            ax.set_title(f"r={fixed(r.r)}, p_adj={r.p_adjusted:.2g}", fontsize="small", loc="left")
             ax.spines[["top", "right"]].set_visible(False)
         fig.tight_layout()
         figs.append(fig)

@@ -291,3 +291,39 @@ def test_animated_bubble_table_means_do_not_depend_on_row_order():
     d = pd.DataFrame({"t": [1, 1, 1, 2, 2, 2], "x": [0.1, 0.2, 0.3, 0.3, 0.2, 0.1], "y": [1.0] * 6, "s": [1.0] * 6})
     t = vc.animated_bubble(d, time="t", x="x", y="y", size="s").table
     assert t["x"].tolist() == [0.2, 0.2]
+
+
+# --- printed numbers ----------------------------------------------------------------------------------------------
+
+
+def test_fixed_drops_the_sign_of_a_value_that_rounds_to_zero():
+    from viz_calc._core import fixed
+
+    assert [fixed(-0.001), fixed(-0.001, plus=True), fixed(0.001, plus=True)] == ["0.00", "0.00", "0.00"]
+    assert [fixed(0.123, plus=True), fixed(-0.126), fixed(-0.126, plus=True), fixed(np.nan)] == \
+        ["+0.12", "-0.13", "-0.13", "nan"]
+
+
+def _tiny_negative_r():
+    x = np.arange(47.0)
+    return pd.DataFrame({"x": x, "y": np.sin(x)})  # r = -0.0013
+
+
+def test_correlation_labels_never_read_minus_zero():
+    d = _tiny_negative_r()
+    cells = [t.get_text() for t in vc.correlogram(d, triangle="full").axes.texts]
+    assert "0.00" in cells and "-0.00" not in cells
+    assert vc.quadrant_plot(d, x="x", y="y").axes.get_title(loc="left").startswith("r = 0.00  [95% CI -0.29, 0.29]")
+    titles = [ax.get_title(loc="left") for ax in vc.profile_scatters(d, min_levels=2).figure[0].axes]
+    assert titles[0].startswith("r=0.00,")
+    res = vc.compare_correlations(datasets.measurements(), group="group")  # beta vs gamma: -0.0012
+    texts = [t.get_text() for ax in np.ravel(res.axes) for t in ax.texts]
+    assert "0.00" in texts and not any(t.startswith(("-0.00", "+0.00")) for t in texts)
+
+
+@pytest.mark.parametrize("x, y, why", [([1.0, 2, 3, 4, 5], [2.0, 4, 6, 8, 10], "|r| = 1"),
+                                       ([1.0, 2, 3.5], [2.0, 1, 6], "needs n > 3")])
+def test_quadrant_plot_explains_an_undefined_interval(x, y, why):
+    res = vc.quadrant_plot(pd.DataFrame({"x": x, "y": y}), x="x", y="y")
+    assert f"[95% CI n/a: {why}]" in res.axes.get_title(loc="left")  # "[95% CI nan, nan]" before
+    assert np.isnan(res.info["correlation"]["ci_low"])
