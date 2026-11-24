@@ -225,7 +225,8 @@ def percent_grid(
     facets = with_missing(_levels(data[facet], facet_order), data[facet]) if facet is not None else [None]
     ncol = min(col_wrap, len(facets))
     nrow = int(np.ceil(len(facets) / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(3.2 * ncol, 3.6 * nrow), squeeze=False)
+    # layout="none": tight_layout below lays it out, and it warns if rcParams gave the figure constrained layout
+    fig, axes = plt.subplots(nrow, ncol, figsize=(3.2 * ncol, 3.6 * nrow), squeeze=False, layout="none")
     rows = []
     for ax, f in zip(axes.flat, facets):
         s = (data if facet is None else data[group_mask(data[facet], f)])[column].dropna()
@@ -382,7 +383,8 @@ def donut_grid(
     n = len(data)
     ncol = min(col_wrap, n)
     nrow = int(np.ceil(n / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(3.3 * ncol + 1.5, 3.3 * nrow), squeeze=False)
+    # layout="none": tight_layout below lays it out, and it warns if rcParams gave the figure constrained layout
+    fig, axes = plt.subplots(nrow, ncol, figsize=(3.3 * ncol + 1.5, 3.3 * nrow), squeeze=False, layout="none")
     for ax, idx, vals in zip(axes.flat, data.index, values):
         total = vals.sum()
         share = vals / total * 100 if total else vals
@@ -835,7 +837,8 @@ def bullet(
                   else np.tile(np.asarray(bands, dtype=float), (n, 1)))
     own_figure = ax is None
     if own_figure:
-        fig, axes = plt.subplots(n, 1, figsize=(8, 0.9 * n + 0.6), squeeze=False)
+        # layout="none": tight_layout below lays it out, and it warns if rcParams gave the figure constrained layout
+        fig, axes = plt.subplots(n, 1, figsize=(8, 0.9 * n + 0.6), squeeze=False, layout="none")
         axes = axes[:, 0]
     else:
         fig, axes = get_ax(ax)[0], np.array([ax])  # get_ax checks that ax is Cartesian

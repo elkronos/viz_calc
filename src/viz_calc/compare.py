@@ -245,7 +245,9 @@ def estimation_plot(
 
     rng = np.random.default_rng(seed)
     cols = palette(len(groups), colors)
-    fig, (ax_raw, ax_diff) = plt.subplots(2, 1, figsize=figsize, sharex=True, gridspec_kw={"height_ratios": [3, 2]})
+    # layout="none": tight_layout below lays it out, and it warns if rcParams gave the figure constrained layout
+    fig, (ax_raw, ax_diff) = plt.subplots(2, 1, figsize=figsize, sharex=True, gridspec_kw={"height_ratios": [3, 2]},
+                                       layout="none")
 
     rows = []
     for i, g in enumerate(groups):

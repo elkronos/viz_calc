@@ -163,7 +163,9 @@ def histogram(
         hues, cols = hues + [None], cols + [NEUTRAL]
     ncol = min(col_wrap, len(facets))
     nrow = int(np.ceil(len(facets) / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(5 * ncol, 3.6 * nrow), squeeze=False, sharex=True, sharey=True)
+    # layout="none": tight_layout below lays it out, and it warns if rcParams gave the figure constrained layout
+    fig, axes = plt.subplots(nrow, ncol, figsize=(5 * ncol, 3.6 * nrow), squeeze=False, sharex=True, sharey=True,
+                             layout="none")
     grid = np.linspace(edges[0], edges[-1], 256)
     width = np.diff(edges)
     rows = []

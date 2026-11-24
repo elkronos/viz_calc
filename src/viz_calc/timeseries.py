@@ -813,7 +813,8 @@ def animated_bubble(
     if color is not None and data[color].isna().any():  # rows without a colour category are drawn grey, not dropped
         cats, cols = cats + [None], cols + [NEUTRAL]
     smax = float(data[size].max()) or 1.0
-    fig, ax = plt.subplots(figsize=(9, 6))
+    # layout="none": tight_layout below lays it out, and it warns if rcParams gave the figure constrained layout
+    fig, ax = plt.subplots(figsize=(9, 6), layout="none")
     # Missing values are skipped (pandas min/max ignore NaN) so the fixed limits stay finite.
     pad_x = 0.08 * ((data[x].max() - data[x].min()) or 1)
     pad_y = 0.08 * ((data[y].max() - data[y].min()) or 1)

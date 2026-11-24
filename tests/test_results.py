@@ -391,6 +391,44 @@ def test_compare_correlations_draws_under_a_constrained_layout_setting():
     assert not any(a.overlaps(b) for i, a in enumerate(boxes) for b in boxes[i + 1:])
 
 
+def _own_layout_calls():
+    """``name: (function, data, keyword arguments)`` for the charts that lay out their own figure with tight_layout."""
+    trial, meas, sales = datasets.trial(), datasets.measurements(), datasets.sales()
+    bubbles = sales.head(20).melt(id_vars="date", value_vars=["online", "store"]).assign(size=lambda d: d["value"])
+    return {
+        "estimation_plot": (vc.estimation_plot, trial, dict(x="arm", y="score", n_resamples=200)),
+        "histogram": (vc.histogram, trial, dict(x="score", facet="arm")),
+        "percent_grid": (vc.percent_grid, trial, dict(column="improved")),
+        "donut_grid": (vc.donut_grid, SMALL.set_index("k"), dict()),
+        "bullet": (vc.bullet, SMALL, dict(label="k", value="a", target="b")),
+        "animated_bubble": (vc.animated_bubble, bubbles, dict(time="date", x="value", y="size", size="size",
+                                                              color="variable")),
+        "profile_bars": (vc.profile_bars, meas, dict()),
+        "profile_boxes": (vc.profile_boxes, meas, dict()),
+        "profile_scatters": (vc.profile_scatters, meas, dict()),
+    }
+
+
+OWN_LAYOUT = _own_layout_calls()
+
+
+@pytest.mark.parametrize("name", list(OWN_LAYOUT))
+def test_a_chart_keeps_its_layout_without_a_warning_under_a_constrained_layout_setting(name):
+    import warnings
+
+    func, data, kwargs = OWN_LAYOUT[name]
+
+    def positions():
+        res = func(data, **kwargs)
+        return [ax.get_position().bounds for fig in (res.figure if isinstance(res.figure, list) else [res.figure])
+                for ax in fig.axes]
+
+    usual = positions()
+    with plt.rc_context({"figure.constrained_layout.use": True}), warnings.catch_warnings():
+        warnings.simplefilter("error")  # Matplotlib's "The figure layout has changed to tight"
+        assert positions() == usual
+
+
 # --- the VizResult docstring matches the results --------------------------------------------------------------------
 
 

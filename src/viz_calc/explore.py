@@ -55,7 +55,9 @@ def _pages(n: int, per_page: int, ncols: int):
         count = min(per_page, n - start)
         nc = min(ncols, count)
         nr = int(np.ceil(count / nc))
-        fig, axes = plt.subplots(nr, nc, figsize=(4 * nc, 3.2 * nr), squeeze=False)
+        # layout="none": the profile functions lay each page out with tight_layout, which warns if rcParams
+        # gave the figure constrained layout
+        fig, axes = plt.subplots(nr, nc, figsize=(4 * nc, 3.2 * nr), squeeze=False, layout="none")
         for ax in axes.flat[count:]:
             ax.set_visible(False)
         yield start, fig, list(axes.flat[:count])
