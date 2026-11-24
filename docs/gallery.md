@@ -298,7 +298,7 @@ res = vc.network_map(edges, source="source", target="target", weight="strength",
 ### `profile_boxes`
 
 ```python
-res = vc.profile_boxes(meas, per_page=6, ncols=3)
+res = vc.profile_boxes(meas, max_levels=10)
 ```
 
 ![profile_boxes](images/profile_boxes.png)

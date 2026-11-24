@@ -483,6 +483,18 @@ def test_full_gallery_run_removes_images_of_removed_examples(tmp_path, monkeypat
     assert "### `funnel`" in (tmp_path / "gallery.md").read_text(encoding="utf-8")
 
 
+def test_gallery_shows_every_page_of_its_examples(tmp_path, monkeypatch):
+    gallery = _gallery()
+    for name, make in gallery.EXAMPLES.items():
+        if name.startswith("profile_"):  # the functions that page their panels
+            assert len(make().figure) == 1, f"the {name} example draws more than the one page the gallery shows"
+            plt.close("all")
+    monkeypatch.setattr(gallery, "OUT", tmp_path)
+    monkeypatch.setattr(gallery, "EXAMPLES", {"paged": lambda: vc.profile_boxes(datasets.measurements(), per_page=6)})
+    with pytest.raises(SystemExit, match="2 pages"):
+        gallery.main(["paged"])
+
+
 def test_gallery_reads_and_writes_text_as_utf8():
     import ast
 

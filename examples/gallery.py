@@ -87,7 +87,7 @@ EXAMPLES = {
     # network
     "network_map": lambda: vc.network_map(edges, source="source", target="target", weight="strength", size_by="betweenness"),
     # explore
-    "profile_boxes": lambda: vc.profile_boxes(meas, per_page=6, ncols=3),
+    "profile_boxes": lambda: vc.profile_boxes(meas, max_levels=10),
 }
 
 
@@ -148,8 +148,10 @@ def main(names: list[str]) -> None:
         if names and name not in names:
             continue
         res = make()
-        fig = res.figure[0] if isinstance(res.figure, list) else res.figure
-        fig.savefig(OUT / f"{name}.png", dpi=110, bbox_inches="tight")
+        pages = res.figure if isinstance(res.figure, list) else [res.figure]
+        if len(pages) > 1:  # one image per chart: an example must fit on one page
+            raise SystemExit(f"{name}: the example draws {len(pages)} pages; the gallery shows one")
+        pages[0].savefig(OUT / f"{name}.png", dpi=110, bbox_inches="tight")
         plt.close("all")
         print(f"wrote {name}.png")
 
