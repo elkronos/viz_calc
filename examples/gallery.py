@@ -1,7 +1,10 @@
 """Render every chart in the documentation gallery to docs/images/.
 
-Run from the repository root:  python examples/gallery.py
+Run from the repository root:  python examples/gallery.py [name ...]
 Each entry is also a minimal, copy-pasteable example of one function.
+Given names, only those charts are rendered. Without names, every chart is
+rendered, docs/gallery.md is rewritten and images of removed examples are
+deleted.
 """
 
 from __future__ import annotations
@@ -106,7 +109,7 @@ def write_markdown() -> None:
     import ast
     import textwrap
 
-    src = Path(__file__).read_text()
+    src = Path(__file__).read_text(encoding="utf-8")
     tree = ast.parse(src)
     snippets = {}
     for node in ast.walk(tree):
@@ -126,14 +129,21 @@ def write_markdown() -> None:
         for name in names:
             lines += [f"### `{name}`", "", "```python", f"res = {snippets[name]}", "```", "",
                       f"![{name}](images/{name}.png)", ""]
-    (OUT.parent / "gallery.md").write_text("\n".join(lines))
+    (OUT.parent / "gallery.md").write_text("\n".join(lines), encoding="utf-8")
     print("wrote gallery.md")
 
 
 def main(names: list[str]) -> None:
+    unknown = sorted(set(names) - set(EXAMPLES))
+    if unknown:
+        raise SystemExit(f"unknown example(s) {unknown}; choose from {sorted(EXAMPLES)}")
     OUT.mkdir(parents=True, exist_ok=True)
     if not names:
         write_markdown()
+        for stale in sorted(OUT.glob("*.png")):
+            if stale.stem not in EXAMPLES:
+                stale.unlink()
+                print(f"removed {stale.name}")
     for name, make in EXAMPLES.items():
         if names and name not in names:
             continue

@@ -6,6 +6,7 @@ table shown after a block is compared with what that block computes.
 
 import fnmatch
 import functools
+import importlib.util
 import inspect
 import os
 import re
@@ -445,6 +446,61 @@ def test_mkdocs_edit_uri_only_with_page_actions():
     config = _read("mkdocs.yml")
     if re.search(r"^edit_uri:", config, re.M):
         assert re.search(r"^\s+- content\.action\.(edit|view)$", config, re.M), "edit_uri is set but has no effect"
+
+
+# --- gallery -------------------------------------------------------------------------------------------------------
+
+
+def _gallery():
+    """examples/gallery.py as a module, without running its main()."""
+    path = ROOT / "examples" / "gallery.py"
+    if not path.is_file():
+        pytest.skip("examples/gallery.py is not next to the tests")
+    spec = importlib.util.spec_from_file_location("gallery", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_gallery_rejects_unknown_names(tmp_path, monkeypatch):
+    gallery = _gallery()
+    monkeypatch.setattr(gallery, "OUT", tmp_path / "images")
+    with pytest.raises(SystemExit, match="lolipop"):
+        gallery.main(["estimation_plot", "lolipop"])
+    assert not list(tmp_path.rglob("*.png"))  # nothing is rendered before the error
+
+
+def test_full_gallery_run_removes_images_of_removed_examples(tmp_path, monkeypatch):
+    gallery = _gallery()
+    out = tmp_path / "images"
+    out.mkdir()
+    (out / "retired.png").write_bytes(b"")
+    monkeypatch.setattr(gallery, "OUT", out)
+    monkeypatch.setattr(gallery, "EXAMPLES", {name: gallery.EXAMPLES[name] for name in ("waffle", "funnel")})
+    monkeypatch.setattr(gallery, "SECTIONS", {"Part-to-whole": ["waffle", "funnel"]})
+    gallery.main([])
+    assert sorted(p.name for p in out.iterdir()) == ["funnel.png", "waffle.png"]
+    assert "### `funnel`" in (tmp_path / "gallery.md").read_text(encoding="utf-8")
+
+
+def test_gallery_reads_and_writes_text_as_utf8():
+    import ast
+
+    path = ROOT / "examples" / "gallery.py"
+    if not path.is_file():
+        pytest.skip("examples/gallery.py is not next to the tests")
+    calls = [node for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))) if isinstance(node, ast.Call)
+             and getattr(node.func, "attr", getattr(node.func, "id", None)) in ("read_text", "write_text", "open")]
+    assert calls
+    for call in calls:  # the locale's encoding differs between systems (cp1252 on many Windows installs)
+        assert any(kw.arg == "encoding" for kw in call.keywords), f"line {call.lineno} has no encoding="
+
+
+def test_docs_images_are_the_gallery_examples():
+    gallery = _gallery()
+    images = {p.stem for p in (ROOT / "docs" / "images").glob("*.png")}
+    assert images == set(gallery.EXAMPLES), "run python examples/gallery.py"
+    assert sorted(n for names in gallery.SECTIONS.values() for n in names) == sorted(gallery.EXAMPLES)
 
 
 # --- repository hygiene --------------------------------------------------------------------------------------------
