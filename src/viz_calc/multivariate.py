@@ -97,7 +97,7 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     eig = S**2 / (len(X) - 1)
     back = 1.0 if scale else factors[0]
     names = [f"PC{i + 1}" for i in range(len(S))]
-    with np.errstate(over="ignore"):  # an unscaled variance beyond the largest float is honestly infinite
+    with np.errstate(over="ignore"):  # an unscaled variance beyond the largest float is infinite
         return {
             "scores": pd.DataFrame(U * S * back, index=X.index, columns=names),
             "loadings": pd.DataFrame(Vt.T, index=features, columns=names),
