@@ -368,7 +368,7 @@ def network_map(
     if weighted and np.isinf(wts[keep]).any():
         raise ValueError(f"edge weights in {weight!r} must be finite")
     if weighted and (wts[keep] < 0).any():
-        raise ValueError("edge weights must be non-negative")
+        raise ValueError(f"edge weights in {weight!r} must be non-negative")
     # Repeated edges are combined (weights summed) instead of letting the last row win; each edge keeps the
     # orientation it was first seen with. Sums are exact when the weights are (see _exact_weights), otherwise
     # correctly rounded (math.fsum, so 9 x 73/9 == 73).
@@ -580,10 +580,10 @@ def sankey(
             raise ValueError(f"{missing} row(s) have no {column!r} value; drop or fill them first")
     if data[value].isna().any():
         raise ValueError(f"flow values in {value!r} contain missing values; drop or fill them first")
-    if (data[value] < 0).any():
-        raise ValueError("flows must be non-negative")
-    if np.isinf(data[value].to_numpy(dtype=float, na_value=np.nan)).any():
+    if np.isinf(data[value].to_numpy(dtype=float, na_value=np.nan)).any():  # before the sign, so -inf reads so
         raise ValueError(f"flow values in {value!r} must be finite")
+    if (data[value] < 0).any():
+        raise ValueError(f"flow values in {value!r} must be non-negative")
     flows = data[value].groupby([data[source], data[target]], sort=False, observed=True).sum().reset_index()
     nodes = list(pd.unique(pd.concat([flows[source], flows[target]])))
     index = {n: i for i, n in enumerate(nodes)}

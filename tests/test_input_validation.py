@@ -963,3 +963,22 @@ def test_upset_accepts_a_series_of_sets_and_rejects_a_bool_min_size():
         vc.upset({"A": [1, 2], "B": [2, 3]}, min_size=True)
     with pytest.raises(ValueError, match="column 'A' appears 2 times in sets"):
         vc.upset(pd.DataFrame([[True, False, True]], columns=["A", "B", "A"]))
+
+
+# --- negative flows and weights -------------------------------------------------------------------------------------
+
+FLOWS = pd.DataFrame({"from": ["a", "b"], "to": ["b", "c"], "amount": [1.0, -1.0]})
+
+
+def test_sankey_names_the_column_with_a_negative_flow():
+    pytest.importorskip("plotly")
+    with pytest.raises(ValueError, match="flow values in 'amount' must be non-negative"):
+        vc.sankey(FLOWS, "from", "to", "amount")
+    with pytest.raises(ValueError, match="flow values in 'amount' must be finite"):  # not "non-negative" for -inf
+        vc.sankey(FLOWS.assign(amount=[1.0, -np.inf]), "from", "to", "amount")
+
+
+def test_network_map_names_the_column_with_a_negative_weight():
+    pytest.importorskip("networkx")
+    with pytest.raises(ValueError, match="edge weights in 'amount' must be non-negative"):
+        vc.network_map(FLOWS, "from", "to", "amount")
