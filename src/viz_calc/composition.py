@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 import numbers
 from collections.abc import Iterable, Mapping, Sequence
@@ -621,7 +622,9 @@ def waterfall(
         Column naming each step; it needs at least one non-missing value.
     value
         Numeric column; every row needs a value, since one gap would make
-        every later running total unknown.
+        every later running total unknown. An integer column gives exact
+        int64 changes and running totals, unless one of them could leave the
+        int64 range; then they are floats.
     values_are
         ``"changes"``: each row is an increment (the first row may be the
         starting value, see *start_label*). ``"levels"``: each row is a running
@@ -646,22 +649,29 @@ def waterfall(
         raise ValueError(f"{value!r} is missing for {missing}; a waterfall needs every step "
                          "(fill or drop those rows first)")
     labels = data[label].astype(str).tolist()
-    vals = data[value].to_numpy(dtype=float)
-    if values_are == "levels":
-        changes = np.r_[vals[0], np.diff(vals)]
-        if start_label is None:
-            start_label = labels[0]
+    column = data[value]
+    if pd.api.types.is_integer_dtype(column) and not pd.api.types.is_bool_dtype(column):
+        # Python ints: exact above 2**53, where floats drop whole units, and no int64 wrap-around
+        vals = [int(v) for v in column.tolist()]
+        changes = [vals[0], *(b - a for a, b in zip(vals, vals[1:]))] if values_are == "levels" else vals
+        ends = list(itertools.accumulate(changes))
+        exact = max(abs(v) for v in changes + ends) < 2**62  # then int64, else floats as before
+        changes, ends = (np.array(a, dtype=np.int64 if exact else float) for a in (changes, ends))
     else:
-        changes = vals.copy()
+        vals = column.to_numpy(dtype=float)
+        changes = np.r_[vals[0], np.diff(vals)] if values_are == "levels" else vals.copy()
+        ends = np.cumsum(changes)
+    if values_are == "levels" and start_label is None:
+        start_label = labels[0]
     if start_label is not None:
         labels[0] = str(start_label)
     kinds = ["total" if (i == 0 and start_label is not None) else "change" for i in range(len(changes))]
-    ends = np.cumsum(changes)
-    starts = np.r_[0, ends[:-1]]
-    rows = [{"label": lab, "kind": k, "change": c, "start": 0.0 if k == "total" else s, "end": e}
+    starts = np.r_[ends.dtype.type(0), ends[:-1]]
+    rows = [{"label": lab, "kind": k, "change": c, "start": ends.dtype.type(0) if k == "total" else s, "end": e}
             for lab, k, c, s, e in zip(labels, kinds, changes, starts, ends)]
     if total_label is not None:
-        rows.append({"label": total_label, "kind": "total", "change": ends[-1], "start": 0.0, "end": ends[-1]})
+        rows.append({"label": total_label, "kind": "total", "change": ends[-1], "start": ends.dtype.type(0),
+                     "end": ends[-1]})
     table = pd.DataFrame(rows)
 
     fig, ax = get_ax(ax, figsize=(max(6, 0.8 * len(table) + 2), 5))
@@ -695,10 +705,11 @@ def funnel(
     """Conversion funnel with step-to-step and overall conversion rates.
 
     Stages are drawn in row order. The table reports ``pct_of_first`` and
-    ``pct_of_previous`` (step conversion) and the ``drop_off`` count, so
-    *stage* and *value* may not use those names; they must also be different
-    columns. Every stage needs a non-negative, non-missing value, and *stage*
-    needs at least one non-missing name. A rate after a zero stage is
+    ``pct_of_previous`` (step conversion) and the ``drop_off`` count (exact
+    int64 for an integer *value*), so *stage* and *value* may not use those
+    names; they must also be different columns. Every stage needs a
+    non-negative, non-missing value, and *stage* needs at least one
+    non-missing name. A rate after a zero stage is
     undefined: it is ``NaN`` in the table and shown as "–" on the chart.
     The chart labels rates in whole percent, with more digits where that
     would show a non-zero rate as 0 % or a rate short of 100 % as 100 %.
@@ -722,7 +733,13 @@ def funnel(
     v = t[value].to_numpy(dtype=float)
     t["pct_of_first"] = v / v[0] * 100 if len(v) and v[0] else np.nan
     t["pct_of_previous"] = np.r_[100.0, v[1:] / np.where(v[:-1] == 0, np.nan, v[:-1]) * 100] if len(v) else []
-    t["drop_off"] = np.r_[0.0, v[:-1] - v[1:]] if len(v) else []
+    counts = t[value]
+    if (pd.api.types.is_integer_dtype(counts) and not pd.api.types.is_bool_dtype(counts)
+            and int(counts.max()) < 2**63):  # exact: floats drop whole units above 2**53
+        whole = counts.to_numpy(dtype=np.int64)  # non-negative, so the differences cannot wrap around
+        t["drop_off"] = np.r_[np.int64(0), whole[:-1] - whole[1:]]
+    else:
+        t["drop_off"] = np.r_[0.0, v[:-1] - v[1:]] if len(v) else []
     vmax = float(v.max()) or 1.0  # all-zero stages still get a usable axis
     fig, ax = get_ax(ax, figsize=(8, 0.7 * len(t) + 1.5))
     pos = np.arange(len(t))[::-1]

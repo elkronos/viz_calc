@@ -177,6 +177,13 @@ def test_funnel_nullable_integers_without_gaps():
     assert t["pct_of_first"].tolist() == pytest.approx([100.0, 50.0, 10.0])
 
 
+@pytest.mark.parametrize("dtype", ["int64", "Int64", "uint64"])
+def test_funnel_drop_off_is_exact_for_integer_counts(dtype):
+    # Read as floats, 2**53 + 1 and 2**53 are equal, and the drop of 1 read 0.
+    t = vc.funnel(pd.DataFrame({"s": ["a", "b"], "n": pd.array([2**53 + 1, 2**53], dtype=dtype)}), "s", "n").table
+    assert t["drop_off"].dtype == np.int64 and t["drop_off"].tolist() == [0, 1]
+
+
 # --- waterfall ----------------------------------------------------------------------------------------------------
 
 
@@ -185,6 +192,23 @@ def test_funnel_nullable_integers_without_gaps():
 def test_waterfall_rejects_missing_values_instead_of_a_nan_total(values):
     with pytest.raises(ValueError, match=r"missing for \['c'\]"):
         vc.waterfall(pd.DataFrame({"lab": list("abcd"), "v": values}), "lab", "v")
+
+
+@pytest.mark.parametrize("values_are, values", [("changes", [2**53, 1, 1, 1]),
+                                                ("levels", [2**53, 2**53 + 1, 2**53 + 2, 2**53 + 3])])
+def test_waterfall_running_totals_of_integers_are_exact(values_are, values):
+    # In float every step of 1 past 2**53 was lost, and all five ends read 2**53.
+    res = vc.waterfall(pd.DataFrame({"k": list("abcd"), "v": values}), "k", "v", values_are=values_are)
+    t = res.table
+    assert t["end"].tolist() == [2**53, 2**53 + 1, 2**53 + 2, 2**53 + 3, 2**53 + 3]
+    assert t["change"].tolist()[1:4] == [1, 1, 1]
+    assert (t[["change", "start", "end"]].dtypes == np.int64).all()
+    _render(res)
+
+
+def test_waterfall_integer_totals_beyond_int64_are_floats():
+    t = vc.waterfall(pd.DataFrame({"k": list("abc"), "v": [2**62, 2**62, -2**62]}), "k", "v").table
+    assert t["end"].dtype == float and t["end"].tolist() == [2.0**62, 2.0**63, 2.0**62, 2.0**62]
 
 
 def test_waterfall_values_are_checked_before_drawing():
