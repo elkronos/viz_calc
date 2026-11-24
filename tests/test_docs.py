@@ -203,6 +203,21 @@ def test_getting_started_statistics_comments():
     assert "[0.03, 0.06, 0.06]" in text
 
 
+def test_showing_figures_says_how_to_close_them():
+    section = _section(_read("docs/getting-started.md"), "## Showing figures")
+    open_before = set(plt.get_fignums())
+    res = vc.waffle(datasets.survey(), category="team")
+    assert set(plt.get_fignums()) > open_before  # pyplot keeps every chart's figure until it is closed
+    assert "plt.close(res.figure)" in section
+    plt.close(res.figure)
+    pages = vc.profile_boxes(datasets.measurements(), per_page=6).figure
+    assert isinstance(pages, list) and len(pages) == 2  # plt.close(pages) would raise TypeError
+    assert "for page in res.figure: plt.close(page)" in section
+    for page in pages:
+        plt.close(page)
+    assert set(plt.get_fignums()) == open_before
+
+
 def test_getting_started_describes_info_as_the_charts_fill_it():
     pattern = _section(_read("docs/getting-started.md"), "## The one pattern to learn")
     comment = next(ln for ln in pattern.splitlines() if ln.startswith("res.info"))

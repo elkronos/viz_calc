@@ -68,6 +68,22 @@ res = vc.waffle(datasets.survey(), category="team")
 plt.show()
 ```
 
+Each chart registers its figure with pyplot, which keeps it open, and in
+memory, until it is closed; Matplotlib warns once more than 20 are open. A
+script, batch job or server that makes many charts closes each one after
+saving it:
+
+```python
+for arm in ["control", "low dose", "high dose"]:
+    res = vc.raincloud(trial[trial["arm"] == arm], x="site", y="score")
+    res.save(f"{arm}.png")
+    plt.close(res.figure)
+```
+
+The `profile_*` functions return a list of pages in `res.figure`, so close
+each page (`for page in res.figure: plt.close(page)`), or every open figure
+with `plt.close("all")`. `to_pptx` leaves the figures it is given open.
+
 ## Putting charts into your own layouts
 
 Functions that draw a single chart accept `ax=`, so several can share one
