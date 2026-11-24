@@ -10,7 +10,7 @@ import pytest
 
 import viz_calc as vc
 from viz_calc import datasets
-from viz_calc._core import level_label
+from viz_calc._core import category_order, level_label
 
 
 def _ticks(ax, axis="x"):
@@ -117,3 +117,36 @@ def test_time_zone_aware_steps_and_set_names_read_as_dates():
     assert _ticks(vc.funnel(d, stage="k", value="v").axes, "y") == ["2024-01-01", "2024-02-01", "2024-03-01"]
     res = vc.upset({pd.Timestamp("2024-01-01"): [1, 2], pd.Timestamp("2024-02-01"): [2, 3]})
     assert _ticks(res.axes[2], "y") == ["2024-01-01", "2024-02-01"]
+
+
+# --- category_order ---------------------------------------------------------------------------------------------------
+
+def test_order_entries_come_back_as_the_datas_own_levels():
+    d = pd.DataFrame({"g": [1, 2] * 6, "y": np.arange(12.0)})
+    assert vc.benchmark_bar(d, x="g", y="y", order=[True, 2]).table["g"].tolist() == [1, 2]
+    table = vc.benchmark_bar(d, x="g", y="y", order=[2.0, 1.0]).table
+    assert table["g"].tolist() == [2, 1] and table["g"].dtype.kind == "i"
+    m = datasets.measurements()
+    m = m.assign(group=m["group"].map({"alpha": 1, "beta": 2, "gamma": 3}))
+    res = vc.radar(m, ["length", "width", "depth"], "group", order=[True, 2, 3])
+    assert res.table["group"].tolist() == [1, 2, 3]
+
+
+def test_levels_that_cannot_be_compared_are_sorted_by_type_whatever_the_row_order():
+    values = pd.Series([2020, "2019", 2018, 2.5, "2017", 2020], dtype=object)
+    assert category_order(values) == category_order(values[::-1]) == [2.5, 2018, 2020, "2017", "2019"]
+    d = pd.DataFrame({"g": values, "y": np.arange(6.0)})
+    for frame in (d, d[::-1]):
+        assert vc.raincloud(frame, x="g", y="y").table["g"].tolist() == [2.5, 2018, 2020, "2017", "2019"]
+    trial = datasets.trial().assign(year=lambda t: pd.Series([2020, "2019", 2018] * 40, dtype=object, index=t.index))
+    res = vc.estimation_plot(trial.sample(frac=1, random_state=0), x="year", y="score", n_resamples=200)
+    assert res.info["reference"] == 2018
+
+
+def test_float32_levels_read_with_their_own_digits():
+    d = pd.DataFrame({"b": np.array([0.1, 0.2, 0.1, 0.3] * 15, dtype=np.float32), "y": np.arange(60.0)})
+    assert category_order(d["b"]) == [np.float32(0.1), np.float32(0.2), np.float32(0.3)]
+    assert _ticks(vc.profile_boxes(d, categorical=["b"], numeric=["y"]).figure[0].axes[0]) == ["0.1", "0.2", "0.3"]
+    assert [t.split(":")[0] for t in _legend(vc.waffle(d, category="b").axes)] == ["0.1", "0.2", "0.3"]
+    titles = [ax.get_title(loc="left") for ax in vc.compare_correlations(d.assign(z=d["y"] ** 2), "b", ["y", "z"]).axes.flat]
+    assert "r(0.2) \u2212 r(0.1)" in titles

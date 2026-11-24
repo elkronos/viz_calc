@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import functools
 import math
+import numbers
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -507,43 +508,105 @@ def category_order(values: pd.Series, order: Sequence[Any] | None = None, comple
     """Levels of a categorical series in a stable order.
 
     Uses *order* if given (every entry must exist), the categorical order for
-    ``Categorical`` data, and sorted order otherwise. With ``complete=True``
+    ``Categorical`` data, and sorted order otherwise. Levels that cannot be
+    compared with each other, such as numbers next to text, are sorted one
+    type at a time: numbers first, then the other types in alphabetical
+    order of their names. With ``complete=True``
     the *order* must also list every level present, for charts whose shares
     would otherwise be silently renormalized over a subset. With
     ``allow_absent=True`` the *order* may name levels that do not occur (for
     example the unused points of a response scale); they are drawn as zero.
 
-    Levels taken from the data come back as pandas or Python scalars (a
-    ``Timestamp``, not a ``numpy.datetime64``). An *order* is returned as
-    given and matched to the data by value, so it may hold either kind.
+    Levels come back as the data holds them, as pandas or Python scalars (a
+    ``Timestamp``, not a ``numpy.datetime64``); a float32 or float16 level
+    stays a NumPy scalar, so it is labelled with the digits of its own
+    precision. An *order* is matched to the data by value, so it may hold
+    either kind, and an entry that matches a level is returned as that level
+    (``1.0`` or ``True`` for the level ``1``). Two levels that would be
+    labelled alike, such as ``1`` and ``"1"``, raise an error.
     """
     if isinstance(order, str):
         raise TypeError(f"order for {values.name!r} must be a list of levels, not a str")
-    present = values.dropna().drop_duplicates().tolist()
+    present = _scalars(values.dropna().drop_duplicates())
     if not present:
         raise ValueError(f"column {values.name!r} has no non-missing values")
-    known = {_level_key(p) for p in present}
+    own = {_level_key(p): p for p in present}
     if order is not None:
         order = list(order)
         duplicated = sorted({str(o) for o in order if order.count(o) > 1})
         if duplicated:
             raise ValueError(f"order for {values.name!r} repeats level(s): {duplicated}")
-        unknown = [o for o in order if _level_key(o) not in known]
+        unknown = [o for o in order if _level_key(o) not in own]
         if unknown and not allow_absent:
-            raise ValueError(f"order for {values.name!r} contains levels not in the data: {unknown}")
+            raise ValueError(f"order for {values.name!r} contains levels not in the data: {_plain(unknown)}")
         if complete:
             listed = {_level_key(o) for o in order}
             left_out = [p for p in present if _level_key(p) not in listed]
             if left_out:
-                hint = f"; listed but not in the data (a typo?): {unknown}" if unknown else ""
-                raise ValueError(f"order for {values.name!r} must list every level; missing: {left_out}{hint}")
-        return order
-    if isinstance(values.dtype, pd.CategoricalDtype):
-        return [c for c in values.cat.categories if _level_key(c) in known]
+                hint = f"; listed but not in the data (a typo?): {_plain(unknown)}" if unknown else ""
+                raise ValueError(f"order for {values.name!r} must list every level; missing: {_plain(left_out)}{hint}")
+        levels = [own.get(_level_key(o), o) for o in order]
+    elif isinstance(values.dtype, pd.CategoricalDtype):
+        levels = [c for c in _scalars(values.cat.categories) if _level_key(c) in own]
+    else:
+        levels = _sorted(present)
+    check_labels(values.name, levels)
+    return levels
+
+
+def _scalars(values: pd.Series | pd.Index) -> list[Any]:
+    """*values* as a list of pandas or Python scalars; float32 and float16 values stay NumPy scalars.
+
+    ``tolist`` would turn a float32 0.1 into the Python float
+    0.10000000149011612, which prints every digit of the widened value.
+    """
+    dtype = values.dtype
+    if isinstance(dtype, np.dtype) and dtype.kind == "f" and dtype.itemsize < 8:
+        return list(values.to_numpy())
+    return values.tolist()
+
+
+def _sorted(levels: Sequence[Any]) -> list[Any]:
+    """*levels* sorted; levels that cannot be compared are sorted one type at a time (numbers first).
+
+    The order does not depend on the order in which the levels occur.
+    """
     try:
-        return sorted(present)
+        return sorted(levels)
     except TypeError:
-        return present
+        pass
+    kinds: dict[tuple[bool, str], list[Any]] = {}
+    for v in levels:
+        number = isinstance(v, (numbers.Real, np.number)) and not isinstance(v, np.timedelta64)
+        kinds.setdefault((not number, "" if number else type(v).__name__.lower()), []).append(v)
+    result = []
+    for kind in sorted(kinds):
+        try:
+            result += sorted(kinds[kind])
+        except TypeError:  # one type whose values cannot be compared, such as tuples of mixed types
+            result += sorted(kinds[kind], key=str)
+    return result
+
+
+def check_labels(name: Any, levels: Sequence[Any], missing: bool = False) -> None:
+    """Raise if two of *levels* of the column *name* would be labelled alike.
+
+    Such levels, for example ``1`` and ``"1"``, could not be told apart on
+    the chart. With ``missing=True`` the column's missing values are drawn as
+    a group named "(missing)", so a level labelled "(missing)" is rejected
+    too.
+    """
+    seen: dict[str, Any] = {}
+    for level in levels:
+        text = group_label(level)
+        if text in seen:
+            raise ValueError(f"levels {_plain(seen[text])!r} and {_plain(level)!r} of column {_plain(name)!r} would "
+                             f"both be labelled {text!r}; convert the column to one type first, e.g. "
+                             f"data[{_plain(name)!r}].astype(str)")
+        seen[text] = level
+    if missing and "(missing)" in seen:
+        raise ValueError(f"column {_plain(name)!r} has a level {_plain(seen['(missing)'])!r} and missing values, "
+                         "which are drawn as \"(missing)\"; rename that level or fill the missing values")
 
 
 def level_mask(values: pd.Series, level: Any) -> pd.Series:

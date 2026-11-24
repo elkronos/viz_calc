@@ -22,6 +22,7 @@ from ._core import (
     AbbrevFormatter,
     VizResult,
     _level_key,
+    _scalars,
     abbreviate,
     center_labels,
     check_choice,
@@ -29,6 +30,7 @@ from ._core import (
     check_distinct,
     check_finite,
     check_has_values,
+    check_labels,
     check_not_reserved,
     check_numeric,
     cleanup_on_error,
@@ -126,7 +128,8 @@ def waffle(
     if order is not None:  # must list every category, or the shares would be renormalized over a subset
         levels = _levels(data[category], order, complete=True, allow_absent=True)
     else:
-        levels = list(totals.sort_values(ascending=False, kind="stable").index)
+        levels = _scalars(totals.sort_values(ascending=False, kind="stable").index)
+    check_labels(category, levels, missing=unknown.any())
     values = totals.reindex(levels).fillna(0).to_numpy()
     cols = palette(len(levels), colors)
     names = [level_label(lvl) for lvl in levels]
