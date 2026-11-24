@@ -255,6 +255,35 @@ def check_range(name: str, value: Any, low: float, high: float, include_high: bo
     return number
 
 
+def float_eps(values: Any) -> float:
+    """Machine epsilon of the float type *values* are stored in (nullable and Arrow ones too); float64's otherwise.
+
+    float32 and float16 values carry more rounding than float64 ones
+    (``float32(0.7)`` is 0.699999988), so a tolerance for rounding error in
+    them is wider.
+    """
+    dtype = getattr(values, "dtype", None)
+    dtype = getattr(dtype, "numpy_dtype", dtype)
+    if isinstance(dtype, np.dtype) and dtype.kind == "f":
+        return float(np.finfo(dtype).eps)
+    return float(np.finfo(float).eps)
+
+
+def stored_threshold(threshold: float, values: Any) -> float:
+    """*threshold* rounded to the float type of *values*, as pandas compares ``values >= threshold``.
+
+    For float32 or float16 values that is the threshold in their own
+    precision, so float32 0.7 counts as at or above 0.7; other values compare
+    with *threshold* itself.
+    """
+    dtype = getattr(values, "dtype", None)
+    dtype = getattr(dtype, "numpy_dtype", dtype)
+    if isinstance(dtype, np.dtype) and dtype.kind == "f" and dtype.itemsize < 8:
+        with np.errstate(over="ignore"):  # beyond float16's range the threshold is infinite there too
+            return float(dtype.type(threshold))
+    return float(threshold)
+
+
 def check_has_values(data: pd.DataFrame, *columns: str | None) -> None:
     """Raise unless every column in *columns* has at least one non-missing value."""
     for c in columns:

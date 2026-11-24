@@ -31,6 +31,7 @@ from ._core import (
     column_items,
     column_list,
     exact_mean,
+    float_eps,
     foreground,
     get_ax,
     is_number_column,
@@ -74,15 +75,18 @@ def _check_pairs(table: pd.DataFrame, cols: list[Any]) -> None:
         raise ValueError(f"no row has a value in two of the columns {cols}, so there is no pair to correlate")
 
 
-def _at_or_above(values: np.ndarray, centre: float, kind: str) -> np.ndarray:
+def _at_or_above(values: np.ndarray, centre: float, kind: str, eps: float = np.finfo(float).eps) -> np.ndarray:
     """Which *values* are at or above *centre* (their ``"mean"`` or ``"median"``, per *kind*), rounding included.
 
     A value equal to the mean in decimal can differ from it by the rounding of
     every value, so for the mean the tolerance follows the data's scale, not the
-    mean's (which may be near zero); a median carries only its own rounding.
+    mean's (which may be near zero), and *eps*, the machine epsilon of the type
+    the values are stored in (wider for float32); a median carries only its
+    own rounding.
     """
     scale = float(np.mean(np.abs(values))) if kind == "mean" else abs(centre)
-    return values >= centre - (4 * np.finfo(float).eps * scale if np.isfinite(scale) else 0.0)
+    eps = eps if kind == "mean" else np.finfo(float).eps  # a median of float32 values is exact in float64
+    return values >= centre - (4 * eps * scale if np.isfinite(scale) else 0.0)
 
 
 def _draw_matrix(ax: Axes, mat: np.ndarray, labels: list[str], triangle: str, vlim: float, cmap: str,
@@ -333,7 +337,8 @@ def quadrant_plot(
         Split at the ``"mean"`` or ``"median"``. The median gives quadrants
         that are balanced on each axis when the data are skewed. Points at the
         centre count as "high", including values that differ from the mean
-        only by floating-point rounding.
+        only by floating-point rounding, that of float32 or float16 storage
+        included.
     label
         Optional column whose values annotate each point; a point with a
         missing label gets none. It may be *x* or *y* itself.
@@ -360,7 +365,8 @@ def quadrant_plot(
     ry = exact_mean(yr) if center == "mean" else float(np.median(yr))
     # Classify on the raw values: standardizing cannot change which side a point is on, but its rounding
     # error can move a point that sits exactly on the mean across the line.
-    right, top = _at_or_above(xr, rx, center), _at_or_above(yr, ry, center)  # points at the centre count as "high"
+    # Points at the centre count as "high"; the tolerance follows the precision the values are stored in.
+    right, top = _at_or_above(xr, rx, center, float_eps(d[x])), _at_or_above(yr, ry, center, float_eps(d[y]))
     for name, side in ((x, right), (y, top)):
         if side.all() or not side.any():
             hint = " (heavy ties); try center='mean'" if center == "median" else ""

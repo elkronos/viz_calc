@@ -34,6 +34,7 @@ from ._core import (
     cleanup_on_error,
     column_list,
     exact_mean,
+    float_eps,
     foreground,
     get_ax,
     group_key,
@@ -44,6 +45,7 @@ from ._core import (
     safe_sum,
     select_columns,
     slot_colors,
+    stored_threshold,
     text_color,
 )
 
@@ -82,7 +84,8 @@ def _threshold(values: pd.Series, threshold: Any) -> tuple[float, float]:
     not pushed to one side of it by floating-point arithmetic.
     """
     if not isinstance(threshold, str):
-        return float(threshold), 0.0
+        # A threshold that rounds down in float32 or float16 values still has them at or above it, as in pandas.
+        return float(threshold), max(float(threshold) - stored_threshold(threshold, values), 0.0)
     v = values.to_numpy(dtype=float, na_value=np.nan)
     v = v[~np.isnan(v)]
     if v.size == 0:
@@ -90,7 +93,8 @@ def _threshold(values: pd.Series, threshold: Any) -> tuple[float, float]:
     if threshold == "median":
         return float(np.median(v)), 0.0
     thr, scale = exact_mean(v), float(np.mean(np.abs(v)))
-    return thr, (_TIE * scale if np.isfinite(thr) and np.isfinite(scale) else 0.0)
+    tie = 4 * float_eps(values)  # _TIE for float64 values; float32 or float16 ones carry more rounding
+    return thr, (tie * scale if np.isfinite(thr) and np.isfinite(scale) else 0.0)
 
 
 def _threshold_text(thr: float, tol: float, compared: Any) -> str:
@@ -358,7 +362,9 @@ def benchmark_bar(
         are drawn: those in the groups on the axis, so a group left out of
         *order* does not count either. ``"mean"`` is correctly rounded, and
         group means or CI limits that differ from the threshold only by
-        floating-point rounding count as equal to it.
+        floating-point rounding count as equal to it. For float32 or float16
+        values that includes the rounding of their storage, so they are
+        classified as the same values in float64 are.
     error
         What the error bars show: ``"ci"``, ``"se"`` or ``"sd"``.
     classify
@@ -392,6 +398,7 @@ def benchmark_bar(
     groups = category_order(data[x], order)
     thr, tol = _threshold(data[y][_drawn_rows(data[x], groups)], threshold)
     rows = []
+    group_tie = 4 * float_eps(data[y])  # _TIE for float64 values
     for g in groups:
         s = data[y][level_mask(data[x], g)].dropna().to_numpy(float)
         m, lo, hi = st.mean_ci(s, level)
@@ -401,7 +408,7 @@ def benchmark_bar(
         else:
             # A group mean carries its own rounding error, so widen the tie tolerance by the group's scale.
             scale = float(np.mean(np.abs(s)))
-            tie = tol + (_TIE * scale if np.isfinite(scale) else 0.0)
+            tie = tol + (group_tie * scale if np.isfinite(scale) else 0.0)
             if classify == "ci":
                 status = "above" if lo > thr + tie else "below" if hi < thr - tie else "indistinguishable"
             else:
@@ -755,7 +762,9 @@ def centered_bar(
         are drawn: those in the groups on the axis, so a group left out of
         *order* does not count either. ``"mean"`` is correctly rounded, and
         values that differ from it only by floating-point rounding count as
-        on it (so at-or-above).
+        on it (so at-or-above). For float32 or float16 values that includes
+        the rounding of their storage, so they are counted as the same values
+        in float64 are.
     level
         Confidence level of the Wilson intervals, strictly between 0 and 1
         (``0.95``, not ``95``).

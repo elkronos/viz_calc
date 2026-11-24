@@ -832,3 +832,39 @@ def test_tuple_column_labels_work_like_plain_ones(name):
     assert numbers
     for i in numbers:  # the numbers match; labels in the table are the tuples given
         np.testing.assert_array_equal(res.table.iloc[:, i].to_numpy(), expected.iloc[:, i].to_numpy())
+
+
+# --- float32 and float16 values against a float64 threshold or centre ---------------------------------------------
+
+
+def _precision_frame(kind):
+    values = np.array([0.7] * 4 + [0.9] * 4, dtype=kind.lower())
+    return pd.DataFrame({"g": ["a"] * 4 + ["b"] * 4, "y": pd.array(values, dtype=kind)})
+
+
+@pytest.mark.parametrize("threshold", [0.7, "mean"])
+@pytest.mark.parametrize("call", [
+    lambda d, t: vc.centered_bar(d, x="g", y="y", threshold=t).table["n_above"],
+    lambda d, t: vc.benchmark_bar(d, x="g", y="y", threshold=t, classify="mean").table["status"],
+], ids=["centered_bar", "benchmark_bar"])
+@pytest.mark.parametrize("dtype", ["float32", "Float32", "float16"])
+def test_lower_precision_values_are_classified_as_in_float64(dtype, call, threshold):
+    assert call(_precision_frame(dtype), threshold).tolist() == call(_precision_frame("float64"), threshold).tolist()
+
+
+@pytest.mark.parametrize("dtype", ["float32", "Float32", "float16"])
+def test_lower_precision_values_on_the_threshold_or_centre_count_as_at_or_above(dtype):
+    frame = _precision_frame
+    assert vc.centered_bar(frame(dtype), x="g", y="y", threshold=0.7).table["n_above"].tolist() == [4, 4]
+    assert vc.centered_bar(frame(dtype), x="g", y="y", threshold=0.7).info["threshold"] == 0.7
+    points = pd.DataFrame({"x": [1.6, 6.8, 7.2, 5.2], "y": [1.0, 3, 2, 4]})  # 5.2 is the mean of x
+    expected = vc.quadrant_plot(points, x="x", y="y").table["n"].tolist()
+    assert vc.quadrant_plot(points.astype(dtype), x="x", y="y").table["n"].tolist() == expected == [2, 0, 1, 1]
+    groups = points.assign(g=["a", "b", "c", "d"], x=points["x"].astype(dtype))
+    assert vc.centered_bar(groups, x="g", y="x").table["n_above"].tolist() == [0, 1, 1, 1]
+
+
+def test_lower_precision_values_just_below_a_threshold_stay_below():
+    d = pd.DataFrame({"g": ["a"] * 3, "y": np.array([0.7, 0.6999999, 0.71], dtype="float32")})
+    assert vc.centered_bar(d, x="g", y="y", threshold=0.7).table["n_above"].tolist() == [2]
+    assert (pd.Series(d["y"]) >= 0.7).sum() == 2  # as pandas counts them
