@@ -163,6 +163,7 @@ def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0
     ----------
     Wilson, E. B. (1927). Probable inference, the law of succession, and
     statistical inference. *JASA*, 22(158), 209–212.
+
     Brown, L. D., Cai, T. T., & DasGupta, A. (2001). Interval estimation for a
     binomial proportion. *Statistical Science*, 16(2), 101–133.
     """
@@ -238,6 +239,7 @@ def welch_test(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> d
     ----------
     Welch, B. L. (1947). The generalization of 'Student's' problem when several
     different population variances are involved. *Biometrika*, 34, 28–35.
+
     Delacre, M., Lakens, D., & Leys, C. (2017). Why psychologists should by
     default use Welch's t-test instead of Student's t-test. *International
     Review of Social Psychology*, 30(1), 92–101.
@@ -278,6 +280,7 @@ def hedges_g(a: Sequence[float], b: Sequence[float], level: float = 0.95) -> dic
     Hedges, L. V. (1981). Distribution theory for Glass's estimator of effect
     size and related estimators. *Journal of Educational Statistics*, 6(2),
     107–128.
+
     Hedges, L. V., & Olkin, I. (1985). *Statistical Methods for
     Meta-Analysis*. Academic Press.
     """
@@ -332,6 +335,7 @@ def bootstrap_ci(
     ----------
     Efron, B. (1987). Better bootstrap confidence intervals. *JASA*, 82(397),
     171–185.
+
     Ho, J., Tumkaya, T., Aryal, S., Choi, H., & Claridge-Chang, A. (2019).
     Moving beyond P values: data analysis with estimation graphics. *Nature
     Methods*, 16, 565–566.
@@ -443,6 +447,7 @@ def adjust_pvalues(p: Sequence[float], method: Literal["holm", "fdr_bh", "bonfer
     ----------
     Holm, S. (1979). A simple sequentially rejective multiple test procedure.
     *Scandinavian Journal of Statistics*, 6(2), 65–70.
+
     Benjamini, Y., & Hochberg, Y. (1995). Controlling the false discovery
     rate. *JRSS B*, 57(1), 289–300.
     """
@@ -551,6 +556,7 @@ def correlation_test(x: Sequence[float], y: Sequence[float], method: Literal["pe
     ----------
     Fisher, R. A. (1921). On the "probable error" of a coefficient of
     correlation deduced from a small sample. *Metron*, 1, 3–32.
+
     Fieller, E. C., Hartley, H. O., & Pearson, E. S. (1957). Tests for rank
     correlation coefficients. I. *Biometrika*, 44(3/4), 470–481.
     """
@@ -597,6 +603,7 @@ def compare_correlations_test(r1: float | np.ndarray, n1: int | np.ndarray, r2: 
     References
     ----------
     Fisher, R. A. (1921). *Metron*, 1, 3–32.
+
     Cohen, J., Cohen, P., West, S. G., & Aiken, L. S. (2003). *Applied Multiple
     Regression/Correlation Analysis for the Behavioral Sciences* (3rd ed.).
     Erlbaum.
@@ -646,6 +653,7 @@ def histogram_bins(x: Sequence[float], rule: Literal["fd", "sturges", "scott", "
     Freedman, D., & Diaconis, P. (1981). On the histogram as a density
     estimator: L2 theory. *Z. Wahrscheinlichkeitstheorie verw. Gebiete*, 57,
     453–476.
+
     Scott, D. W. (1979). On optimal and data-based histograms. *Biometrika*,
     66(3), 605–610.
     """

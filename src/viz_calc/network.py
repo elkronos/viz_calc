@@ -340,6 +340,7 @@ def network_map(
     ----------
     Blondel, V. D., Guillaume, J.-L., Lambiotte, R., & Lefebvre, E. (2008).
     Fast unfolding of communities in large networks. *J. Stat. Mech.*, P10008.
+
     Brandes, U. (2001). A faster algorithm for betweenness centrality.
     *Journal of Mathematical Sociology*, 25(2), 163–177.
     """

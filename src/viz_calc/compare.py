@@ -213,8 +213,10 @@ def estimation_plot(
     ----------
     Ho, J. et al. (2019). Moving beyond P values: data analysis with estimation
     graphics. *Nature Methods*, 16, 565–566.
+
     Cumming, G. (2014). The new statistics: why and how. *Psychological
     Science*, 25(1), 7–29.
+
     Weissgerber, T. L. et al. (2015). Beyond bar and line graphs: time for a
     new data presentation paradigm. *PLoS Biology*, 13(4), e1002128.
     """

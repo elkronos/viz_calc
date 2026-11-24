@@ -347,6 +347,19 @@ def test_okabe_ito_has_a_docstring_the_api_page_shows():
     assert "Okabe" in doc.value.value and "colour-vision" in doc.value.value
 
 
+def test_api_reference_lists_have_one_paragraph_per_entry():
+    # the API page renders lines that are not separated by a blank line as one run-on paragraph
+    citation = re.compile(r"^[A-Z][^\s,]*, [A-Z]\.")  # "Surname, X." starts an entry
+    for name, obj in _api_objects().items():
+        doc = inspect.getdoc(obj) or ""
+        if "References\n----------\n" not in doc:
+            continue
+        section = re.split(r"\n\n\w+\n-+\n", doc.split("References\n----------\n")[1])[0].splitlines()
+        assert citation.match(section[0]), f"{name}: References does not start with an entry"
+        joined = [line for before, line in zip(section, section[1:]) if citation.match(line) and before]
+        assert not joined, f"{name}: no blank line before the reference {joined[0]!r}"
+
+
 # --- migration page ------------------------------------------------------------------------------------------------
 
 # The scripts that version 1.0 replaced, as they were at the last commit before the rebuild.

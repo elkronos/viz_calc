@@ -147,7 +147,9 @@ def correlogram(
     References
     ----------
     Holm, S. (1979). *Scandinavian Journal of Statistics*, 6(2), 65–70.
+
     Benjamini, Y., & Hochberg, Y. (1995). *JRSS B*, 57(1), 289–300.
+
     Crameri, F., Shephard, G. E., & Heron, P. J. (2020). The misuse of colour
     in science communication. *Nature Communications*, 11, 5444.
     """
@@ -225,6 +227,7 @@ def compare_correlations(
     References
     ----------
     Fisher, R. A. (1921). *Metron*, 1, 3–32.
+
     Cohen, J., Cohen, P., West, S. G., & Aiken, L. S. (2003). *Applied Multiple
     Regression/Correlation Analysis for the Behavioral Sciences* (3rd ed.).
     """
