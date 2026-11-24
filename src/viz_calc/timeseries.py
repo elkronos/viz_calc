@@ -91,6 +91,29 @@ def _numpy_dates(s: pd.Series) -> pd.Series:
     return s
 
 
+def _yearless(s: pd.Series, parsed: pd.Series) -> np.ndarray:
+    """Mask of the text values of *s* that name no year (``"1/2"``, ``"Jan 5"``) and that *parsed* reads as year 1.
+
+    pandas 3 reads such text as year 1; pandas 2 fails on it, as year 1 is
+    outside its range.
+    """
+    mask = np.array(parsed.dt.year == 1, dtype=bool)
+    if mask.any():
+        raw = s.to_numpy(dtype=object)
+        without: dict[str, bool] = {}
+        for i in np.flatnonzero(mask):
+            v = raw[i]
+            if isinstance(v, str) and v not in without:
+                without[v] = _has_year(v) is False
+            mask[i] = isinstance(v, str) and without[v]
+    return mask
+
+
+def _without_year(s: pd.Series, i: int, name: str) -> str:
+    return (f"column {name!r} holds dates without a year, such as {s.iloc[i]!r} (row {s.index[i]!r}); "
+            "write the year, ideally as ISO 8601 (YYYY-MM-DD)")
+
+
 def _unparsed(s: pd.Series, values: Any, name: str, dayfirst: bool) -> str:
     """Why no one reading parses *s*: what the column holds, or the first value that fails and why.
 
@@ -109,13 +132,15 @@ def _unparsed(s: pd.Series, values: Any, name: str, dayfirst: bool) -> str:
         except (ValueError, TypeError, OverflowError):
             continue
         if pd.api.types.is_datetime64_any_dtype(parsed):
-            missed = present & parsed.isna().to_numpy()
+            missed = present & (parsed.isna().to_numpy() | _yearless(s, parsed))
             if bad is None or missed.sum() < bad.sum():
                 bad = missed
     if bad is None or not bad.any():
         return (f"column {name!r} could not be parsed as dates; use one consistent format, "
                 "ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
     i = int(np.argmax(bad))  # the first value that the reading which parses the most values leaves out
+    if isinstance(s.iloc[i], str) and _has_year(s.iloc[i]) is False:
+        return _without_year(s, i, name)
     value = f"{s.iloc[i]!r} (row {s.index[i]!r})"
     try:
         with warnings.catch_warnings():
@@ -152,7 +177,8 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
     pandas would then read as year-day-month.
 
     A column that does not parse raises a ``ValueError`` naming its first
-    value that fails, with its row label, and why it fails.
+    value that fails, with its row label, and why it fails. Text dates
+    without a year (``"1/2"``, ``"Jan 5"``) raise on every pandas version.
     """
     errors: list[Exception] = []  # what each failed reading raised; the final error chains the last one
 
@@ -160,6 +186,8 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", FutureWarning)  # pandas 2.x warns about mixed offsets
+                # pandas falls back to reading each value on its own; text without a year is caught below
+                warnings.filterwarnings("ignore", "Could not infer format", UserWarning)
                 out = pd.to_datetime(values, **kwargs)
         except (ValueError, TypeError, OverflowError) as exc:
             errors.append(exc)
@@ -178,6 +206,10 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
         raise ValueError(f"column {name!r} holds numbers, which are ambiguous as dates (years? epoch seconds?); "
                          "convert it first, e.g. pd.to_datetime(values, unit='s') or format='%Y'")
     out = s if pd.api.types.is_datetime64_any_dtype(s) else attempt(s, dayfirst=dayfirst)
+    if out is not None and out is not s:
+        yearless = _yearless(s, out)  # read as year 1 by pandas 3; pandas 2 fails on them below
+        if yearless.any():
+            raise ValueError(_without_year(s, int(np.argmax(yearless)), name))
     if out is None:
         out = attempt(s, format="ISO8601")  # date-only and date-time ISO strings together
     if out is None:
