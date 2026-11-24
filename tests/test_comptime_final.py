@@ -131,7 +131,7 @@ def test_animated_bubble_accepts_x_and_y_labelled_true_and_false():
 @pytest.mark.parametrize("alpha", [-0.1, 1.5, 5, np.nan, "0.2", True])
 def test_timeseries_fill_rejects_a_bad_alpha(alpha):
     d = pd.DataFrame({"t": [1, 2], "a": [1, 3.0], "b": [2, 2.0]})
-    with pytest.raises(ValueError, match="alpha must be a number from 0 to 1"):
+    with pytest.raises(ValueError, match=r"alpha must be a number in \[0, 1\]"):
         vc.timeseries_fill(d, "t", ["a", "b"], alpha=alpha)
 
 

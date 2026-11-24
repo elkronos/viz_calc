@@ -2,6 +2,8 @@
 
 import contextlib
 import re
+from decimal import Decimal
+from fractions import Fraction
 from io import BytesIO
 
 import matplotlib.pyplot as plt
@@ -694,3 +696,70 @@ def test_quadrant_plot_writes_no_label_for_a_point_without_one():
     texts = [t.get_text() for t in vc.quadrant_plot(d, x="length", y="width", label="lab").axes.texts]
     assert "nan" not in texts and "None" not in texts
     assert sum(len(t) == 1 for t in texts) == 9
+
+
+# --- options -------------------------------------------------------------------------------------------------------
+
+SORT_CALLS = {
+    "benchmark_bar": lambda sort: vc.benchmark_bar(datasets.trial(), x="arm", y="score", sort=sort),
+    "dumbbell": lambda sort: vc.dumbbell(SMALL, label="k", start="a", end="b", sort=sort),
+    "divergent_bar": lambda sort: vc.divergent_bar(SMALL, category="k", left="a", right="b", sort=sort),
+    "likert": lambda sort: vc.likert(datasets.survey(), items=["Tools are adequate"], levels=LIKERT_LEVELS, sort=sort),
+    "circular_bar": lambda sort: vc.circular_bar(SMALL, label="k", value="a", sort=sort),
+    "gantt": lambda sort: vc.gantt(datasets.projects(), task="task", start="start", end="end", sort=sort),
+    "duration_plot": lambda sort: vc.duration_plot(datasets.projects(), "task", "start", "end", "work_start",
+                                                   "work_end", sort=sort),
+}
+
+
+@pytest.mark.parametrize("sort", ["asc", "no", "False", None])
+@pytest.mark.parametrize("name", list(SORT_CALLS))
+def test_a_sort_flag_must_be_true_or_false(name, sort):
+    with pytest.raises(ValueError, match=rf"sort must be one of \[True, False\], got {re.escape(repr(sort))}"):
+        SORT_CALLS[name](sort)
+    assert plt.get_fignums() == []
+    SORT_CALLS[name](np.False_)
+
+
+@pytest.mark.parametrize("bw_method", ["asc", 0.0, -1.0, np.nan, np.inf, True, [0.5]])
+@pytest.mark.parametrize("call", [
+    lambda bw: vc.ridgeplot(datasets.measurements(), x="depth", group="group", bw_method=bw),
+    lambda bw: vc.raincloud(datasets.trial(), x="arm", y="score", bw_method=bw),
+], ids=["ridgeplot", "raincloud"])
+def test_bw_method_is_checked_before_drawing(call, bw_method):
+    with pytest.raises(ValueError, match="bw_method must be 'scott', 'silverman', a positive number or a callable"):
+        call(bw_method)
+    assert plt.get_fignums() == []
+
+
+@pytest.mark.parametrize("bw_method", [None, "scott", "silverman", 0.5, Fraction(1, 2), lambda kde: 0.4])
+def test_bw_method_accepts_what_scipy_accepts(bw_method):
+    vc.ridgeplot(datasets.measurements(), x="depth", group="group", bw_method=bw_method)
+
+
+@pytest.mark.parametrize("threshold", ["50", np.nan, np.inf, True])
+def test_lollipop_threshold_must_be_a_finite_number(threshold):
+    with pytest.raises(ValueError, match="threshold must be a finite number or None"):
+        vc.lollipop(datasets.survey(), x="team", y="tenure_years", threshold=threshold)
+
+
+@pytest.mark.parametrize("ref_line", [np.nan, np.inf, -np.inf])
+def test_histogram_ref_line_must_be_finite(ref_line):
+    with pytest.raises(ValueError, match="ref_line must be 'mean', 'median', a number or None.*must be finite"):
+        vc.histogram(datasets.trial(), x="score", ref_line=ref_line)
+
+
+@pytest.mark.parametrize("value", [Fraction(1, 2), Decimal("0.5"), np.float32(0.5)], ids=["Fraction", "Decimal",
+                                                                                          "float32"])
+def test_exact_numbers_are_accepted_by_every_real_option(value):
+    expected = vc.circular_bar(SMALL, label="k", value="a", inner_radius=0.5).axes.get_ylim()
+    assert vc.circular_bar(SMALL, label="k", value="a", inner_radius=value).axes.get_ylim() == expected
+    vc.donut_grid(SMALL, min_label=value)
+    vc.stacked_percentages(datasets.trial(), group="arm", category="site", min_label=value)
+    vc.timeseries_fill(datasets.sales().head(30), time="date", series=["online", "store"], alpha=value)
+
+
+def test_stacked_percentages_rejects_an_order_given_twice():
+    with pytest.raises(TypeError, match="give category_order only; category_order_ is its deprecated alias"):
+        vc.stacked_percentages(datasets.survey(), group="team", category="remote", category_order=[False, True],
+                               category_order_=[True, False])

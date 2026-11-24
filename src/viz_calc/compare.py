@@ -377,6 +377,7 @@ def benchmark_bar(
     how to read pictures of data. *American Psychologist*, 60(2), 170–180.
     """
     check_dataframe(data, [x, y])
+    check_choice("sort", sort, [True, False])
     check_distinct(x=x, y=y)
     check_numeric(data, y)
     check_finite(data, y)
@@ -460,7 +461,7 @@ def lollipop(
     Dot plots are read more accurately than bars for comparing values on a
     common scale, and horizontal labels stay legible (Cleveland & McGill,
     1984). Stems start at zero so lengths stay honest. Values below
-    *threshold* are faded. *sort* is ``"descending"``, ``"ascending"`` or
+    *threshold* (a finite number) are faded. *sort* is ``"descending"``, ``"ascending"`` or
     ``None`` (keep the order of the categories).
 
     ``stat="count"`` counts the non-missing values of *y* in each category,
@@ -481,6 +482,10 @@ def lollipop(
     check_choice("stat", stat, ["mean", "median", "sum", "count"])
     check_choice("sort", sort, ["descending", "ascending", None])
     check_color("color", color)
+    if threshold is not None:
+        if isinstance(threshold, (bool, np.bool_)) or not isinstance(threshold, Real) or not np.isfinite(float(threshold)):
+            raise ValueError(f"threshold must be a finite number or None, got {threshold!r}")
+        threshold = float(threshold)
     check_not_reserved(["value"], x=x)
     check_has_values(data, x, y)
     key = group_key(data[x])
@@ -579,6 +584,7 @@ def dumbbell(
         A tuple of two colours: ``(start, end)``.
     """
     check_dataframe(data, [label, start, end])
+    check_choice("sort", sort, [True, False])
     check_distinct(start=start, end=end)
     check_not_reserved(["change", "pct_change"], label=label, start=start, end=end)
     check_numeric(data, start, end)
@@ -660,6 +666,7 @@ def divergent_bar(
         A tuple of two colours: ``(left, right)``.
     """
     check_dataframe(data, [category, left, right])
+    check_choice("sort", sort, [True, False])
     check_distinct(category=category, left=left, right=right)
     check_numeric(data, left, right)
     check_finite(data, left, right)
@@ -844,6 +851,7 @@ def likert(
     """
     items = column_list("items", items, distinct=True)
     check_dataframe(data, items)
+    check_choice("sort", sort, [True, False])
     check_has_values(data, *items)
     if isinstance(levels, str):
         raise TypeError("levels must be a list of response options, not a str")

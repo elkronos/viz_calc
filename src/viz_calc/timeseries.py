@@ -34,6 +34,7 @@ from ._core import (
     check_has_values,
     check_not_reserved,
     check_numeric,
+    check_range,
     cleanup_on_error,
     column_list,
     foreground,
@@ -306,8 +307,7 @@ def timeseries_fill(
     check_not_reserved(["difference", "leader"], time=time, **{"first series": a, "second series": b})
     check_numeric(data, a, b)
     check_finite(data, a, b)
-    if isinstance(alpha, bool) or not isinstance(alpha, numbers.Real) or not 0 <= alpha <= 1:
-        raise ValueError(f"alpha must be a number from 0 to 1, got {alpha!r}")
+    alpha = check_range("alpha", alpha, 0, 1)
     if labels is None:
         names = [a, b]
     else:  # a lone string or number is one name, not a list of them
@@ -506,6 +506,7 @@ def gantt(
     ``"duration_days"``, which names the table's own column.
     """
     check_dataframe(data, [task, start, end, group])
+    check_choice("sort", sort, [True, False])
     _check_distinct(task=task, start=start, end=end)
     _check_distinct(group=group, start=start, end=end)
     check_not_reserved(["duration_days"], task=task, start=start, end=end, group=group)
@@ -590,6 +591,7 @@ def duration_plot(
         A tuple of two colours: ``(outer, inner)``.
     """
     check_dataframe(data, [label, start, end, inner_start, inner_end])
+    check_choice("sort", sort, [True, False])
     _check_distinct(label=label, start=start, end=end)
     _check_distinct(label=label, inner_start=inner_start, inner_end=inner_end)
     _check_distinct(start=start, inner_end=inner_end)

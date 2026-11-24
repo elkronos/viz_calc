@@ -50,6 +50,22 @@ def _describe(s: pd.Series) -> dict[str, float]:
             "q1": s.quantile(0.25), "q3": s.quantile(0.75)}
 
 
+def _check_bw(bw_method: Any) -> Any:
+    """*bw_method* checked for SciPy's ``gaussian_kde``: ``None``, ``"scott"``, ``"silverman"``, a callable or a number > 0.
+
+    A number is returned as a float. SciPy would reject other values only
+    once the figure exists, fail on 0 with a singular matrix, and draw a
+    negative factor with RuntimeWarnings.
+    """
+    if bw_method is None or callable(bw_method) or isinstance(bw_method, str) and bw_method in ("scott", "silverman"):
+        return bw_method
+    number = float(bw_method) if isinstance(bw_method, Real) and not isinstance(bw_method, (bool, np.bool_)) else np.nan
+    if not (0 < number < np.inf):
+        raise ValueError("bw_method must be 'scott', 'silverman', a positive number or a callable, "
+                         f"got {bw_method!r}")
+    return number
+
+
 def _kde(values: np.ndarray, grid: np.ndarray, bw_method: Any = None) -> np.ndarray | None:
     values = values[np.isfinite(values)]
     if values.size < 2 or np.ptp(values) == 0:
@@ -82,8 +98,8 @@ def histogram(
     Use ``stat="density"`` or ``"percent"`` when groups differ in size.
 
     ``ref_line`` draws the mean or median **of each facet** (and of each hue
-    group within it), not a single global value; a number draws a fixed line
-    at that value.
+    group within it), not a single global value; a finite number draws a
+    fixed line at that value.
 
     Rows with a missing *hue* or *facet* are not dropped: a missing *hue* is
     drawn as a last hue group, in grey, and a missing *facet* in a last
@@ -146,8 +162,10 @@ def histogram(
                              f"increasing edges, got {bins!r}")
     if isinstance(ref_line, str):
         check_choice("ref_line", ref_line, ["mean", "median"])
-    elif ref_line is not None and (isinstance(ref_line, bool) or not isinstance(ref_line, Real)):
-        raise ValueError(f"ref_line must be 'mean', 'median', a number or None, got {ref_line!r}")
+    elif ref_line is not None and (isinstance(ref_line, bool) or not isinstance(ref_line, Real)
+                                   or not np.isfinite(float(ref_line))):
+        raise ValueError(f"ref_line must be 'mean', 'median', a number or None, got {ref_line!r}; the number must be "
+                         "finite")
     check_count("col_wrap", col_wrap)
     alpha = check_range("alpha", alpha, 0, 1)
     values = data[x].dropna().to_numpy(float)
@@ -249,6 +267,7 @@ def ridgeplot(
     check_numeric(data, x)
     check_finite(data, x)
     overlap = check_range("overlap", overlap, 0, 1, include_high=False)
+    bw_method = _check_bw(bw_method)
     check_has_values(data, x)
     named = category_order(data[group], order)
     groups = with_missing(named, data[group])
@@ -314,6 +333,7 @@ def raincloud(
     check_finite(data, y)
     check_has_values(data, y)
     check_complete(data, x, y)  # rows with a missing x are left out
+    bw_method = _check_bw(bw_method)
     groups = category_order(data[x], order)
     cols = palette(len(groups), colors)
     rng = np.random.default_rng(seed)

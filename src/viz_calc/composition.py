@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import numbers
 from collections.abc import Iterable, Mapping, Sequence
+from decimal import Decimal
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
@@ -61,11 +62,18 @@ __all__ = ["waffle", "percent_grid", "stacked_percentages", "donut_grid", "neste
            "waterfall", "funnel", "bullet", "upset"]
 
 
-def _check_real(name: str, value: Any, minimum: float = -math.inf) -> None:
-    """Raise unless *value* is a finite number of at least *minimum* (a label threshold, a radius)."""
-    if isinstance(value, bool) or not isinstance(value, numbers.Real) or not minimum <= value < math.inf:
+def _check_real(name: str, value: Any, minimum: float = -math.inf) -> float:
+    """*value* as a float, after checking it is a finite number of at least *minimum* (a label threshold, a radius).
+
+    A ``Fraction`` or a ``Decimal`` is accepted, as in :func:`check_range`, and
+    comes back as a float that Matplotlib can use.
+    """
+    real = isinstance(value, (numbers.Real, Decimal)) and not isinstance(value, (bool, np.bool_))
+    number = float(value) if real else math.nan
+    if not minimum <= number < math.inf:
         at_least = f" >= {minimum:g}" if minimum > -math.inf else ""
         raise ValueError(f"{name} must be a finite number{at_least}, got {value!r}")
+    return number
 
 
 def _missing_rows(data: pd.DataFrame, columns: Sequence[str], label: str | None = None) -> list[Any]:
@@ -281,21 +289,24 @@ def stacked_percentages(
     scale. A group with no non-missing answers is drawn empty, with ``n=0``
     and ``nan`` percentages in the table.
 
-    ``category_order_`` is a deprecated alias of *category_order*.
+    ``category_order_`` is a deprecated alias of *category_order*; passing
+    both raises ``TypeError``.
     """
     if category_order_ is not None:
         import warnings
 
+        if category_order is not None:
+            raise TypeError("give category_order only; category_order_ is its deprecated alias")
         # stacklevel 3: past cleanup_on_error's wrapper to the caller's line
         warnings.warn("category_order_ is deprecated; use category_order", FutureWarning, stacklevel=3)
-        category_order = category_order if category_order is not None else category_order_
+        category_order = category_order_
     check_dataframe(data, [group, category])
     if group == category:
         raise ValueError(f"group and category must be different columns; both are {group!r}")
     reserved = [c for c in (group, category) if c in ("n", "percent")]
     if reserved:
         raise ValueError(f"rename column(s) {reserved}: 'n' and 'percent' are the names of the output columns")
-    _check_real("min_label", min_label)
+    min_label = _check_real("min_label", min_label)
     groups = with_missing(_levels(data[group], group_order), data[group])
     cats = _levels(data[category], category_order, complete=True, allow_absent=True)
     # crosstab aligns its inputs on the index, which fails on repeated labels (pd.concat) in pandas 3
@@ -361,7 +372,7 @@ def donut_grid(
     columns = None if columns is None else column_list("columns", columns, distinct=True)
     check_dataframe(data, columns or [])
     check_count("col_wrap", col_wrap)
-    _check_real("min_label", min_label)
+    min_label = _check_real("min_label", min_label)
     columns = columns if columns is not None else [
         c for c, s in column_items(data) if is_number_column(s)]
     check_dataframe(data, columns)  # a column picked by default may have a repeated label
@@ -530,12 +541,13 @@ def circular_bar(
     if ax is not None and getattr(ax, "name", None) != "polar":
         raise ValueError("circular_bar needs a polar Axes, e.g. plt.subplot(projection='polar')")
     check_dataframe(data, [label, value, group])
+    check_choice("sort", sort, [True, False])
     check_distinct(value=value, group=group)
     check_numeric(data, value)
     check_finite(data, value)
     check_has_values(data, label, value)
     check_count("gap", gap, minimum=0)
-    _check_real("inner_radius", inner_radius, minimum=0)
+    inner_radius = _check_real("inner_radius", inner_radius, minimum=0)
     if (data[value] < 0).any():
         raise ValueError("circular_bar values must be non-negative")
     # dict.fromkeys: one column may play two roles (label="city", group="city"), but must be selected once

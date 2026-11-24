@@ -168,7 +168,9 @@ once on all data so groups and facets are directly comparable.
 
 ### Kernel density estimates
 Gaussian KDE with Scott's bandwidth rule (SciPy's default), adjustable with
-`bw_method`. Raincloud densities are trimmed to each group's observed range.
+`bw_method`: `"scott"`, `"silverman"`, a positive number or a callable, as
+SciPy's `gaussian_kde` takes it. Raincloud densities are trimmed to each
+group's observed range.
 
 ### Largest-remainder apportionment
 Hamilton's method: floor each exact quota, then give the remaining units
