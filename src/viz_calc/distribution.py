@@ -297,6 +297,10 @@ def raincloud(
     hides the data. Raincloud plots show all three with little clutter
     (Allen et al., 2019). Groups run along the vertical axis.
 
+    Each group's density is scaled to the same peak height, so cloud heights
+    are not comparable between groups; ``ridgeplot`` draws all groups on one
+    height scale.
+
     Rows with a missing *x* belong to no group, so they are left out;
     ``info["dropped_missing_group"]`` counts them (0 when there are none).
 

@@ -407,6 +407,19 @@ def test_each_statistical_method_cites_its_source():
     assert ("Scott", "1992") in CITATION.findall(methods["Kernel density estimates"])
 
 
+def test_raincloud_docs_say_every_cloud_has_the_same_height():
+    from matplotlib.collections import PolyCollection
+
+    df = pd.DataFrame({"g": ["narrow"] * 50 + ["wide"] * 50,
+                       "y": [0.01 * i for i in range(50)] + [0.3 * i for i in range(50)]})
+    clouds = [c for c in vc.raincloud(df, x="g", y="y").axes.collections if isinstance(c, PolyCollection)]
+    heights = {round(float(v[:, 1].max() - v[:, 1].min()), 9) for v in (c.get_paths()[0].vertices for c in clouds)}
+    assert len(clouds) == 2 and len(heights) == 1  # a spread 30 times as wide gets a cloud of the same height
+    assert "same peak height" in inspect.getdoc(vc.raincloud)
+    kde = _section(_read("docs/methodology.md"), "### Kernel density estimates")
+    assert "same peak height" in kde and "ridgeplot" in kde
+
+
 def test_changelog_spearman_entry_names_the_sizes_that_got_a_false_star():
     text = _read("CHANGELOG.md")
     entry = text[text.index("- Spearman p-values for up to 9 pairs"):].split("\n- ")[0]

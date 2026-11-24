@@ -170,8 +170,10 @@ once on all data so groups and facets are directly comparable.
 
 ### Kernel density estimates
 Gaussian KDE with Scott's (1992) bandwidth rule (SciPy's default),
-adjustable with
-`bw_method`. Raincloud densities are trimmed to each group's observed range.
+adjustable with `bw_method`. Raincloud densities are trimmed to each group's
+observed range and each is scaled to the same peak height, so the clouds
+compare shapes and spreads but not heights. `ridgeplot` draws every group
+on one height scale, so its peak heights are comparable.
 
 ### Largest-remainder apportionment
 Hamilton's method: floor each exact quota, then give the remaining units
