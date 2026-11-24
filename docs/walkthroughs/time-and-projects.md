@@ -14,7 +14,13 @@ return with `dtype_backend="pyarrow"`, or text in one consistent format,
 ideally ISO 8601 (`2024-03-15`, `2024-03-15 09:30+01:00`). `timeseries_fill`,
 `gantt` and `duration_plot` keep time zones, so text that mixes values with
 and without a UTC offset raises a `ValueError` instead of guessing the
-missing offsets.
+missing offsets. Text dates must name their year: `"1/2"` or `"Jan 5"`
+raises a `ValueError` on every pandas version (pandas 3 would read it as
+year 1). A column that does not parse raises one naming its first bad value
+and that value's row, and a `Period` column raises one suggesting
+`.dt.to_timestamp()`. pandas 2 holds dates from 1677-09-21 to 2262-04-11
+only, so with it `period_bars` and `calendar_heatmap` raise for periods or
+years beyond that range; pandas 3 draws them.
 
 ## 1. Calendar periods with a trend
 
