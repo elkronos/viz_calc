@@ -29,7 +29,7 @@ STEPS = pd.DataFrame({"k": pd.Series(["a", None, "b", np.nan], dtype=object), "a
 
 
 def test_level_label_reads_any_missing_value_as_missing():
-    for value in (None, np.nan, pd.NA, pd.NaT, np.datetime64("NaT"), float("nan")):
+    for value in (None, np.nan, pd.NA, pd.NaT, np.datetime64("NaT", "ns"), float("nan")):
         assert level_label(value) == "(missing)"
     assert level_label("nan") == "nan"  # a real level spelled like a missing value keeps its text
 
