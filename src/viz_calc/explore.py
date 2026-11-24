@@ -287,7 +287,7 @@ def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: i
     titles = [titles] if isinstance(titles, str) else list(titles) if titles is not None else []
     slides = []  # (figure, title) pairs
     for i, it in enumerate(items):
-        fig = it.figure if isinstance(it, VizResult) else it
+        fig = (it if isinstance(it, VizResult) else VizResult(it)).figure  # a SubFigure becomes its whole figure
         pages = fig if isinstance(fig, list) else [fig]
         title = titles[i] if i < len(titles) else None
         for k, page in enumerate(pages, start=1):

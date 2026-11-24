@@ -74,6 +74,11 @@ class VizResult:
     table: pd.DataFrame = field(default_factory=pd.DataFrame)
     info: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        # A SubFigure cannot be saved or shown by itself, so a chart drawn into one of its Axes keeps the whole figure.
+        if isinstance(self.figure, FigureBase):
+            self.figure = self.figure.figure
+
     def save(self, path: str, **kwargs: Any) -> str | list[str]:
         """Save the figure to *path* (PNG/SVG/PDF for Matplotlib, HTML for Plotly).
 
@@ -377,7 +382,8 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         before = set(plt.get_fignums())
-        text = _Text(a for a in (*args, *kwargs.values()) if isinstance(a, Axes))
+        axes = [a for a in (*args, *kwargs.values()) if isinstance(a, Axes)]
+        text = _Text(axes)
         try:
             with plt.rc_context(_NO_MATH):
                 result = func(*args, **kwargs)
@@ -385,7 +391,9 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
             for num in set(plt.get_fignums()) - before:
                 plt.close(num)
             raise
-        text.settle(_figures(result))
+        # The result holds the whole figure of a caller's Axes; outside its (sub)figure the call drew nothing.
+        callers = {a.figure.figure for a in axes}
+        text.settle([f for f in _figures(result) if f not in callers])
         return result
 
     return wrapper
