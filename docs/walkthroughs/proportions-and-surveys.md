@@ -89,8 +89,7 @@ dropped.
   group's *n* in the label, because percentages hide group size.
 * `waffle(df, category=)` gives a 10×10 grid (configurable). Tiles are
   allocated by the largest-remainder method, so the grid is always exactly
-  full. Rounding each share independently can over- or under-fill it; the
-  original script crashed when that happened.
+  full; rounding each share independently can over- or under-fill it.
 
 ```python
 res = vc.waffle(survey, category="team")

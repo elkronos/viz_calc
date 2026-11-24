@@ -66,7 +66,7 @@ data get a row, so a stray placeholder date such as `1900-01-01` adds one
 row rather than more than a hundred empty ones. All years share one colour
 scale, and days without data are grey so they are not mistaken for zero.
 Weekend dips and the summer peak stand out. It is drawn with Matplotlib
-alone, removing the old `calmap` dependency.
+alone.
 
 ## 4. Project timelines
 
@@ -127,9 +127,8 @@ res.table                                   # one row per frame: the mean of x, 
 
 Two details keep frames comparable: bubble area is proportional to
 `size` on one scale for the whole animation, and the axis limits are fixed
-across frames. The original script rescaled sizes within every frame and
-colour group, and let the axes rescale each frame, so the same bubble size
-or position meant different values in different frames.
+across frames. Rescaling either one frame by frame would make the same
+bubble size or position mean different values in different frames.
 
 Frames play in time order, and `res.info["frames"]` and `res.table` list
 them in that order: numbers and dates ascending, text that reads as numbers

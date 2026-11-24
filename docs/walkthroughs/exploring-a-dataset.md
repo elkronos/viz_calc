@@ -50,10 +50,9 @@ of the numeric column's variance explained by the grouping. `group`
 separates the specimens almost completely on depth; `grade` explains
 practically nothing.
 
-The original `all_boxes` script chose columns by whether their *maximum
-value* was below 100 and paired numeric columns with each other. The
-function now pairs categorical (few levels) with numeric (many levels)
-columns, which is what a box plot compares.
+A column with at most `max_levels` distinct values counts as categorical
+and any other numeric column as numeric, so each categorical column is
+paired with each numeric one, which is what a box plot compares.
 
 ## 3. Every numeric pair, strongest correlation first
 
@@ -87,6 +86,4 @@ vc.to_pptx([vc.profile_bars(df), vc.profile_boxes(df), res],
 
 `to_pptx` (needs the `pptx` extra, see
 [Install](../getting-started.md#install)) puts one figure per 16:9
-slide, scaled to fit without distortion. The original scripts stretched each
-image into a fixed 4.5 × 4.5 inch square and paused for keyboard input between
-plots.
+slide, scaled to fit without distortion.

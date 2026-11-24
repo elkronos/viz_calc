@@ -77,7 +77,7 @@ def _unit_scale(*samples: np.ndarray) -> float:
     """A power of two close to the largest magnitude in *samples* (1 if there is none).
 
     Dividing by a power of two is exact, so results for ordinary data are unchanged,
-    but squared deviations can no longer overflow (``|x|`` above about 1e154) or
+    but squared deviations do not overflow (``|x|`` above about 1e154) or
     underflow. *t*, *g* and *df* do not depend on the scale; differences and
     standard errors are multiplied back by it.
     """

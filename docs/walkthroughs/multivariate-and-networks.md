@@ -31,9 +31,7 @@ What the function does, and why:
   per group it holds about 95% of each group's population; a small group's
   own points nearly all fall inside it. `ellipse="confidence"` draws a 95%
   confidence region for the group *mean* (Hotelling's T²), which is much
-  smaller. The original script took the square root of the eigenvalues twice
-  and used an unexplained 68% level, so its "circles" had no interpretable
-  size.
+  smaller.
 * **Biplot arrows** (`loadings=True` or a number *n* for the top *n*) show
   how each feature projects onto the plotted components. Here width loads on
   PC2 (0.94) while length, depth and mass load on PC1.

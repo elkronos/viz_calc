@@ -408,8 +408,8 @@ def network_map(
                          "the weights by a constant")
     # Louvain squares sums of strengths and the spring layout multiplies weights, so both overflow (or, for tiny
     # weights, underflow to zero) long before the weights do. Very large weights are divided, and very small ones
-    # multiplied, by a power of two for them: exact, modularity is unchanged, and the layout no longer changes
-    # with the weights' scale at that size.
+    # multiplied, by a power of two for them: exact, modularity is unchanged, and the layout does not depend on
+    # the weights' scale at that size.
     exponent = math.frexp(max(G[u][v][weight] for u, v in G.edges()))[1] if weighted else 0
     if exponent > 256:
         scale = math.ldexp(1.0, 256 - exponent)

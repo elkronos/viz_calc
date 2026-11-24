@@ -595,6 +595,16 @@ def test_docs_and_docstrings_avoid_em_dashes_and_rhetorical_summaries():
     assert not [h for h in headings if h.endswith("?")], headings
 
 
+def test_only_the_migration_page_and_changelog_tell_the_history():
+    history = re.compile(r"\bno longer\b|\bused to (?:give|be)\b|\boriginal (?:`\w+` )?scripts?\b|\bthe old `")
+    for where, text in _prose().items():
+        if where != "docs/migration.md":
+            found = history.search(" ".join(text.split()))
+            assert not found, f"{where} describes an earlier version: {found[0]!r}"
+    private = inspect.getdoc(stats._unit_scale)  # not on the API page, but help() shows it
+    assert not history.search(" ".join(private.split()))
+
+
 # --- methodology and citations -------------------------------------------------------------------------------------
 
 _NAME = r"[A-Z][\w\-]*"
