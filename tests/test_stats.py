@@ -4,6 +4,7 @@ import inspect
 import tracemalloc
 
 import numpy as np
+import pandas as pd
 import pytest
 from scipy import stats as sps
 
@@ -194,3 +195,60 @@ def test_largest_remainder_example():
     assert list(st.largest_remainder([0, 0], 10)) == [0, 0]
     with pytest.raises(ValueError):
         st.largest_remainder([-1, 2], 10)
+
+
+def _largest_remainder_with_fractions(values, total):
+    """Hamilton's method on Fractions, the reference for the integer arithmetic of largest_remainder."""
+    from fractions import Fraction
+
+    parts = [Fraction(v) for v in values]
+    whole = sum(parts)
+    if whole == 0:
+        return [0] * len(parts)
+    quotas = [p * total / whole for p in parts]
+    base = [q.numerator // q.denominator for q in quotas]
+    for i in sorted(range(len(parts)), key=lambda i: base[i] - quotas[i])[:total - sum(base)]:
+        base[i] += 1
+    return base
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_largest_remainder_matches_exact_fractions(seed):
+    rng = np.random.default_rng(seed)
+    for _ in range(150):
+        n = int(rng.integers(1, 25))
+        values = [rng.random(n), rng.integers(0, 6, n) / 4, rng.gamma(2, 10, n) * 10.0 ** rng.integers(-300, 300),
+                  np.where(rng.random(n) < 0.3, 0.0, rng.random(n) * 10.0 ** rng.integers(-320, 300, n))][seed % 4]
+        total = int(rng.choice([0, 1, 7, 100, 10**18, 2**70]))
+        assert st.largest_remainder(values, total).tolist() == _largest_remainder_with_fractions(values.tolist(), total)
+
+
+@pytest.mark.parametrize("values", [np.array([10**16 + 1, 10**16 + 3]), [10**16 + 1, 10**16 + 3],
+                                    pd.Series([10**16 + 1, 10**16 + 3], dtype="Int64"),
+                                    np.array([10**16 + 1, 10**16 + 3], dtype=np.uint64)],
+                         ids=["int64", "list", "Int64", "uint64"])
+def test_largest_remainder_keeps_integers_above_2_53_exact(values):
+    # As floats both counts round to 1e16 and the larger one took a unit from the smaller.
+    assert st.largest_remainder(values, 2 * 10**16 + 4).tolist() == [10**16 + 1, 10**16 + 3]
+
+
+def test_largest_remainder_takes_python_ints_beyond_int64():
+    assert st.largest_remainder([10**20 + 1, 10**20 + 3], 2 * 10**20 + 4).tolist() == [10**20 + 1, 10**20 + 3]
+    with pytest.raises(ValueError, match="non-negative"):
+        st.largest_remainder([10**20, -1], 10)
+
+
+def test_largest_remainder_serves_equal_remainders_in_input_order():
+    assert st.largest_remainder([1, 1, 1], 2).tolist() == [1, 1, 0]
+    assert st.largest_remainder([1, 1, 1, 1], 6).tolist() == [2, 2, 1, 1]  # the sorted branch for many leftovers
+    assert st.largest_remainder(np.ones(40), 1).tolist() == [1] + [0] * 39  # and the heap branch for few
+
+
+def test_largest_remainder_is_fast_for_a_million_values():
+    import time
+
+    values = np.random.default_rng(0).gamma(2, 10, 10**6)
+    start = time.perf_counter()
+    out = st.largest_remainder(values, 100)
+    assert out.sum() == 100
+    assert time.perf_counter() - start < 8  # 15 s or more with a Fraction per value

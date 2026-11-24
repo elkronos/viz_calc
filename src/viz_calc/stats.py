@@ -10,10 +10,10 @@ page of the documentation.
 
 from __future__ import annotations
 
+import heapq
 import inspect
 import numbers
 from collections.abc import Callable, Sequence
-from fractions import Fraction
 from functools import lru_cache
 from itertools import permutations
 from typing import Any, Literal
@@ -690,7 +690,12 @@ def largest_remainder(values: Sequence[float], total: int) -> np.ndarray:
     then give the leftover units to the largest fractional remainders. The
     result sums to *total* (unless every value is zero, which returns all
     zeros), unlike independent rounding, which can over- or under-fill a
-    waffle chart or a 100 % stacked label set.
+    waffle chart or a 100 % stacked label set. Remainders that are exactly
+    equal get the leftover units in input order: the earlier value first.
+
+    The quotas are exact. Values held in an integer type (an integer array,
+    Series or list of ints) are used as they are, so counts above 2**53
+    are not rounded to floats first; other values are read as floats.
 
     References
     ----------
@@ -700,20 +705,61 @@ def largest_remainder(values: Sequence[float], total: int) -> np.ndarray:
     # A fractional total cannot be met by whole counts, and a negative one would give negative counts.
     if isinstance(total, bool) or not isinstance(total, numbers.Integral) or total < 0:
         raise ValueError(f"total must be a non-negative integer, got {total!r}")
-    v = _as_float(values)
-    if not np.all(np.isfinite(v)) or np.any(v < 0):
+    # Exact quotas: in floating point a large total (1e15 and up) can round a quota across an integer, and the
+    # floors would then over- or under-fill the total. Every value becomes an integer on one common scale.
+    parts = _whole_numbers(values)
+    if parts is None:
+        v = _as_float(values).ravel()
+        if not np.all(np.isfinite(v)) or np.any(v < 0):
+            raise ValueError("values must be finite, non-negative and not missing")
+        parts = _common_scale(v)
+    elif any(p < 0 for p in parts):
         raise ValueError("values must be finite, non-negative and not missing")
-    # Exact rational quotas: in floating point a large total (1e15 and up) can round a quota across an integer,
-    # and the floors would then over- or under-fill the total. Fractions of floats cannot overflow either.
     total = int(total)
-    parts = [Fraction(x) for x in v.ravel().tolist()]
     whole = sum(parts)
     dtype = int if total < 2**63 else object  # a count beyond int64 stays a Python int
     if whole == 0:
         return np.zeros(len(parts), dtype=dtype)
-    quotas = [p * total / whole for p in parts]
-    base = [q.numerator // q.denominator for q in quotas]
+    # Each quota is p * total / whole: its floor and, over the common denominator whole, its remainder.
+    scaled = [p * total for p in parts]
+    base = [s // whole for s in scaled]
+    remainders = [s % whole for s in scaled]
     short = total - sum(base)  # fewer than len(parts), since each remainder is below 1
-    for i in sorted(range(len(parts)), key=lambda i: base[i] - quotas[i])[:short]:  # sorted() is stable
+    # Both keep input order among equal remainders; a heap is faster when few units are left over.
+    order = range(len(parts))
+    if short * 16 <= len(parts):
+        served = heapq.nlargest(short, order, key=remainders.__getitem__)
+    else:
+        served = sorted(order, key=remainders.__getitem__, reverse=True)[:short]
+    for i in served:
         base[i] += 1
     return np.array(base, dtype=dtype)
+
+
+def _whole_numbers(values: Any) -> list[int] | None:
+    """*values* as Python ints when they are held in an integer type and none is missing; otherwise ``None``."""
+    if isinstance(values, (pd.Series, pd.Index, pd.api.extensions.ExtensionArray)):
+        if pd.api.types.is_integer_dtype(values.dtype) and not pd.api.types.is_bool_dtype(values.dtype):
+            return None if pd.isna(values).any() else [int(x) for x in values.tolist()]
+        if values.dtype != object:
+            return None
+        values = values.to_numpy()
+    try:
+        arr = np.asarray(values)
+    except (TypeError, ValueError):
+        return None
+    if arr.dtype.kind in "iu":
+        return arr.ravel().tolist()
+    if arr.dtype == object and arr.size and all(
+            isinstance(x, numbers.Integral) and not isinstance(x, (bool, np.bool_)) for x in arr.flat):
+        return [int(x) for x in arr.flat]  # e.g. a list of ints beyond int64
+    return None
+
+
+def _common_scale(v: np.ndarray) -> list[int]:
+    """Finite non-negative floats *v* as Python ints, each the value times one common power of two (exact)."""
+    mantissa, exponent = np.frexp(v)  # v = mantissa * 2**exponent, 0.5 <= mantissa < 1 (both 0 for v = 0)
+    whole = (mantissa * 2.0**53).astype(np.int64)  # exact: a mantissa has 53 bits
+    nonzero = exponent[v > 0]
+    shift = exponent - (nonzero.min() if nonzero.size else 0)
+    return [m << s if m else 0 for m, s in zip(whole.tolist(), shift.tolist())]
