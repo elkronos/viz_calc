@@ -68,7 +68,9 @@ See the [gallery](https://elkronos.github.io/viz_calc/gallery/) for charts with 
 
 The `analyses/` and `templates/` scripts have been replaced by the package.
 [Migrating from the old scripts](https://elkronos.github.io/viz_calc/migration/)
-maps each script to its replacement and lists the defects fixed.
+maps each script to its replacement and lists the defects fixed. The old
+scripts are kept in the repository history at commit
+[a34caa6](https://github.com/elkronos/viz_calc/tree/a34caa60dc11ddfbcc097a3ccf450ab53912b71e).
 
 ## Development
 

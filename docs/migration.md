@@ -8,7 +8,9 @@ the working directory. Version 1.0 is an installable package with one
 calling convention, tests, and documentation.
 
 This page maps every old script to its replacement and lists the defects the
-review found.
+review found. The old scripts are kept in the repository history: commit
+[a34caa6](https://github.com/elkronos/viz_calc/tree/a34caa60dc11ddfbcc097a3ccf450ab53912b71e), the
+last one before the rebuild, has all 48 of them.
 
 ## Old → new
 
@@ -17,6 +19,7 @@ review found.
 | `analyses/significant_means.py` | `estimation_plot` | Welch instead of Student *t*; effect size + CI; raw data shown; any number of groups |
 | `analyses/bench_bar.py` | `benchmark_bar` | CI error bars; groups classified by whether the CI excludes the benchmark |
 | `analyses/lollipop_plot.py` | `lollipop` | |
+| `templates/create_dumbbellplot.py` | `dumbbell` | Matplotlib; sorted by change; absolute and percentage change in the table |
 | `analyses/divergent_bar.py` | `divergent_bar` | Absolute-value axis labels |
 | `analyses/centered_barplot.py` | `centered_bar` | Wilson intervals |
 | `analyses/correlogram.py` | `correlogram` | Multiple-comparison adjustment; CIs; pairwise *n* |
@@ -59,6 +62,7 @@ defects. Use the library directly:
 |---|---|
 | `templates/create_barplot.py` | `benchmark_bar`/`lollipop`, or `seaborn.barplot` / `plotly.express.bar` |
 | `templates/create_scatterplot.py` | `quadrant_plot`, or `plotly.express.scatter(df, x, y, color=, symbol=, facet_col=)` |
+| `templates/create_bubbleplot.py` | `plotly.express.scatter(df, x=, y=, size=, color=)` |
 | `templates/create_densityplot.py` | `ridgeplot`, `histogram(..., density_curve=True)`, or `seaborn.kdeplot` |
 | `templates/create_heatmap.py` | `seaborn.histplot(df, x=, y=)` or `plotly.express.density_heatmap` |
 | `analyses/pairs_plot.py` | `seaborn.pairplot(df, hue=...)`; for statistics, `correlogram` |
@@ -99,6 +103,9 @@ defects. Use the library directly:
   as "Box Plot" and "Jitter Points".
 * `create_scatterplot`: `symbol_col` applied one symbol sequence across
   faceted traces.
+* `create_bubbleplot`: sizes were min-max rescaled, so marker area was not
+  proportional to the value (the smallest value always got `base_size`), and
+  equal sizes divided by zero.
 * `network_map`: node size and colour columns were never used (NetworkX
   nodes have no such attributes), and `interactive` did nothing.
 
@@ -128,7 +135,11 @@ defects. Use the library directly:
 * Errors were printed and swallowed (`heatmap_calendar`, `pairs_plot`,
   `all_*`) or raised as `assert`.
 * Global style state was changed (`sns.set`, `sns.set_theme`,
-  `sns.set_style`), altering every later plot in the session.
+  `sns.set_style` and others, in `correlogram`, `plot_pca`,
+  `stacked_percentages`, `create_boxjitter`, `create_boxplot`,
+  `create_bubbleplot`, `create_densityplot`, `create_gantt`,
+  `create_ridgeplot` and `create_violinplot`), altering every later plot in
+  the session.
 * No package metadata, dependency list, tests or licence. The README had
   typos and names that did not match the code (`grid_pecent`,
   `create_dumbellplot`, `pairs_plots`) and omitted `create_bulletchart`.

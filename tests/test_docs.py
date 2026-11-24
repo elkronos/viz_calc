@@ -301,3 +301,43 @@ def test_polar_functions_draw_into_a_polar_axes():
     _, ring = plt.subplots(subplot_kw={"projection": "polar"})
     small = meas.head(5).assign(id=list("abcde"))
     assert vc.circular_bar(small, label="id", value="mass", ax=ring).axes is ring
+
+
+# --- migration page ------------------------------------------------------------------------------------------------
+
+# The scripts that version 1.0 replaced, as they were at the last commit before the rebuild.
+OLD_SCRIPTS_COMMIT = "a34caa60dc11ddfbcc097a3ccf450ab53912b71e"
+OLD_SCRIPTS = (
+    [f"analyses/{n}.py" for n in (
+        "all_bars all_boxes all_scatters animated_bubble bar_time bench_bar centered_barplot compare_correlations "
+        "correlogram divergent_bar donut_charts duration_plot grid_percent heatmap_calendar histo_group lollipop_plot "
+        "nested_pie network_map pairs_plot plot_pca quadrant_norm significant_means stacked_percentages "
+        "timeseries_fill").split()]
+    + [f"templates/create_{n}.py" for n in (
+        "barplot boxjitter boxplot bubbleplot bulletchart choropleth circularbar densityplot dumbbellplot funnelplot "
+        "gantt heatmap histogram markermap radarplot ridgeplot sankeydiagram scatterplot stockplot venn violinplot "
+        "waffle waterfallchart wordcloud").split()]
+)
+
+
+def test_migration_page_maps_every_old_script():
+    text = _read("docs/migration.md")
+    assert len(OLD_SCRIPTS) == 48
+    missing = [path for path in OLD_SCRIPTS if path.split("/")[-1] not in text]
+    assert not missing, f"docs/migration.md does not map {missing}"
+
+
+def test_migration_page_and_readme_link_the_old_scripts():
+    for page in ("docs/migration.md", "README.md"):
+        assert f"https://github.com/elkronos/viz_calc/tree/{OLD_SCRIPTS_COMMIT}" in _read(page), page
+
+
+def test_old_scripts_list_matches_the_commit():
+    import subprocess
+
+    out = subprocess.run(["git", "-C", str(ROOT), "ls-tree", "-r", "--name-only", OLD_SCRIPTS_COMMIT],
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        pytest.skip("the commit is not in this checkout")
+    scripts = [p for p in out.stdout.splitlines() if p.startswith(("analyses/", "templates/"))]
+    assert sorted(scripts) == sorted(OLD_SCRIPTS)
