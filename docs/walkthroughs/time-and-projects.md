@@ -18,9 +18,10 @@ missing offsets. Text dates must name their year: `"1/2"` or `"Jan 5"`
 raises a `ValueError` on every pandas version (pandas 3 would read it as
 year 1). A column that does not parse raises one naming its first bad value
 and that value's row, and a `Period` column raises one suggesting
-`.dt.to_timestamp()`. pandas 2 holds dates from 1677-09-21 to 2262-04-11
-only, so with it `period_bars` and `calendar_heatmap` raise for periods or
-years beyond that range; pandas 3 draws them.
+`.dt.to_timestamp()`. With pandas 2, text dates must fall between
+1677-09-21 and 2262-04-11, and `period_bars` and `calendar_heatmap` raise
+for periods or years beyond that range even in a `datetime64[s]` column;
+pandas 3 draws them.
 
 ## 1. Calendar periods with a trend
 
@@ -101,8 +102,9 @@ columns is named like a table column they add (`duration_days`,
 `outer_days`, `inner_days`, `inner_share`), which would otherwise be
 overwritten. `today` takes a date or `"now"`; a number such as `2024`
 raises instead of being read as nanoseconds since 1970. A task with a
-missing start or end keeps its row, with no bar, and
-`res.info["missing_start_or_end"]` counts such rows.
+missing start or end keeps its row without its bar (in `duration_plot`,
+without the overall bar), and `res.info["missing_start_or_end"]` counts
+such rows.
 
 ## 5. Animated bubbles
 

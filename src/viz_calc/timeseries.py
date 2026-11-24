@@ -156,7 +156,7 @@ def _unparsed(s: pd.Series, values: Any, name: str, dayfirst: bool) -> str:
             pd.to_datetime(pd.Series([s.iloc[i]], dtype=object), dayfirst=dayfirst)
     except pd.errors.OutOfBoundsDatetime:
         return (f"column {name!r} could not be parsed as dates: {value} is outside the dates pandas "
-                f"{pd.__version__} can hold, {pd.Timestamp.min:%Y-%m-%d} to {pd.Timestamp.max:%Y-%m-%d}")
+                f"{pd.__version__} can read, {pd.Timestamp.min:%Y-%m-%d} to {pd.Timestamp.max:%Y-%m-%d}")
     except (ValueError, TypeError, OverflowError):
         return f"column {name!r} could not be parsed as dates: {value} does not read as a date"
     return (f"column {name!r} could not be parsed as dates: {value} is not in the format of the other values; "

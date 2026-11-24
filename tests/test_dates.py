@@ -54,7 +54,8 @@ def test_a_column_that_does_not_parse_names_its_first_bad_value(call, dates, ind
 def test_dates_beyond_the_range_of_pandas_2_are_named(call):
     if pd.to_datetime(pd.Series(["9999-12-31"]), errors="coerce").notna().all():
         pytest.skip("pandas 3 holds 9999-12-31")
-    with pytest.raises(ValueError, match=re.escape("'9999-12-31' (row 1) is outside the dates pandas")):
+    with pytest.raises(ValueError, match=re.escape(f"'9999-12-31' (row 1) is outside the dates pandas {pd.__version__} "
+                                                   "can read, 1677-09-21 to 2262-04-11")):
         call(_frame(["2024-01-01", "9999-12-31"]))
 
 
@@ -114,7 +115,7 @@ def test_iso_dates_in_year_1_name_their_year():
     s = pd.Series(["0001-01-05", "0001-02-05"])
     try:
         out = timeseries._dates(s, "d")
-    except ValueError as exc:  # pandas 2 holds no dates before 1677
+    except ValueError as exc:  # pandas 2 reads no dates before 1677
         assert "is outside the dates pandas" in str(exc)
     else:
         assert out.dt.strftime("%Y-%m-%d").tolist() == ["0001-01-05", "0001-02-05"]
