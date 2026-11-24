@@ -4,7 +4,6 @@ site_author: elkronos
 site_url: https://elkronos.github.io/viz_calc/
 repo_url: https://github.com/elkronos/viz_calc
 repo_name: elkronos/viz_calc
-edit_uri: edit/main/docs/
 
 theme:
   name: material

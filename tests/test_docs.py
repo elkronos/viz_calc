@@ -360,6 +360,13 @@ def test_api_reference_lists_have_one_paragraph_per_entry():
         assert not joined, f"{name}: no blank line before the reference {joined[0]!r}"
 
 
+def test_mkdocs_edit_uri_only_with_page_actions():
+    # Material uses edit_uri only for the edit and view buttons, which are off unless listed as theme features
+    config = _read("mkdocs.yml")
+    if re.search(r"^edit_uri:", config, re.M):
+        assert re.search(r"^\s+- content\.action\.(edit|view)$", config, re.M), "edit_uri is set but has no effect"
+
+
 # --- migration page ------------------------------------------------------------------------------------------------
 
 # The scripts that version 1.0 replaced, as they were at the last commit before the rebuild.
