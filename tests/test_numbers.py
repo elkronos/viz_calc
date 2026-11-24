@@ -338,3 +338,23 @@ def test_a_share_equal_to_min_label_is_labelled(min_label):
     for row in ([57, 43], [0.57, 0.43]):
         donut = vc.donut_grid(pd.DataFrame({"a": [row[0]], "b": [row[1]]}), min_label=min_label)
         assert "57%" in [t.get_text() for t in donut.axes.flat[0].texts]
+
+
+# --- warnings on degenerate input ---------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("draw", [
+    lambda: vc.divergent_bar(pd.DataFrame({"k": list("abcd"), "a": [0.0] * 4, "b": [0.0] * 4}), "k", "a", "b"),
+    lambda: vc.animated_bubble(pd.DataFrame({"t": [1, 1, 2], "x": [2.0**62] * 3, "y": [1.0, 2, 3], "s": [1.0] * 3}),
+                               time="t", x="x", y="y", size="s"),
+    lambda: vc.animated_bubble(pd.DataFrame({"t": [1, 2], "x": [1.0, 2], "y": [1e17] * 2, "s": [1.0] * 2}),
+                               time="t", x="x", y="y", size="s"),
+    lambda: vc.benchmark_bar(datasets.trial().groupby("arm", observed=True).head(1), x="arm", y="score",
+                             threshold=50),
+], ids=["divergent_bar all zero", "animated_bubble constant x", "animated_bubble constant y",
+        "benchmark_bar groups of one"])
+def test_degenerate_but_valid_input_draws_without_warnings(draw):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # identical axis limits; an all-NaN error-bar axis on Matplotlib 3.7
+        res = draw()
+        _render(res)

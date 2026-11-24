@@ -825,8 +825,9 @@ def animated_bubble(
     smax = float(data[size].max()) or 1.0
     fig, ax = plt.subplots(figsize=(9, 6))
     # Missing values are skipped (pandas min/max ignore NaN) so the fixed limits stay finite.
-    pad_x = 0.08 * ((data[x].max() - data[x].min()) or 1)
-    pad_y = 0.08 * ((data[y].max() - data[y].min()) or 1)
+    # At least a few float steps of the values: 0.08 is lost in rounding next to a constant such as 1e17.
+    pad_x = max(0.08 * ((data[x].max() - data[x].min()) or 1), 4 * float(np.spacing(data[x].abs().max())))
+    pad_y = max(0.08 * ((data[y].max() - data[y].min()) or 1), 4 * float(np.spacing(data[y].abs().max())))
     xlim = (data[x].min() - pad_x, data[x].max() + pad_x)
     ylim = (data[y].min() - pad_y, data[y].max() + pad_y)
 

@@ -422,7 +422,8 @@ def benchmark_bar(
     fig, ax = get_ax(ax)
     pos = np.arange(len(table))
     ax.bar(pos, table["mean"], color=[color_for[s] for s in table["status"]], width=0.65, zorder=2)
-    ax.errorbar(pos, table["mean"], yerr=err, fmt="none", ecolor=foreground(ax), capsize=4, lw=1.2, zorder=3)
+    if np.isfinite(err).any():  # groups of one have no interval; Matplotlib 3.7 warns when no bar has one
+        ax.errorbar(pos, table["mean"], yerr=err, fmt="none", ecolor=foreground(ax), capsize=4, lw=1.2, zorder=3)
     if show_points:
         rng = np.random.default_rng(0)
         for p, g in zip(pos, table[x]):
