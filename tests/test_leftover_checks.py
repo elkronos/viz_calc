@@ -7,7 +7,7 @@ import pytest
 
 import viz_calc as vc
 from viz_calc import datasets
-from viz_calc._core import NEUTRAL
+from viz_calc._core import NEUTRAL, exact_mean
 
 METRICS = ["length", "width", "depth", "mass"]
 
@@ -103,11 +103,12 @@ def test_radar_puts_a_constant_metric_mid_scale_whatever_the_group_sizes(meas, c
     assert t["c_scaled"].tolist() == [0.5] * 3
 
 
-def test_radar_keeps_the_float_mean_of_groups_that_vary(meas):
+def test_radar_takes_the_correctly_rounded_mean_of_groups_that_vary(meas):
+    # pandas 3 sums a group in another order than pandas 2.0, and its float means were each off by an ulp here
     d = _unequal_groups(meas)
     t = vc.radar(d, metrics=["length", "width", "depth"], group="group").table
-    expected = d.groupby("group")["length"].mean().reindex(t["group"]).tolist()
-    assert t["length_mean"].tolist() == expected
+    expected = [exact_mean(d.loc[d["group"] == g, "length"]) for g in t["group"]]
+    assert t["length_mean"].tolist() == expected == [4.963720930232558, 5.939, 6.6074]
 
 
 # --- rows with a missing group ---------------------------------------------------------------------------------------

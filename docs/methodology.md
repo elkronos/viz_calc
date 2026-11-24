@@ -13,6 +13,14 @@ missing values are dropped (pairwise for correlations). Every `level=` is a
 proportion strictly between 0 and 1 (`0.95`, not `95`); anything else raises
 a `ValueError` instead of producing `NaN` intervals.
 
+Group means that a chart draws or compares (`lollipop`, `radar`,
+`period_bars` and `calendar_heatmap` with `stat="mean"`, repeated time stamps
+in `timeseries_fill`, the table of `animated_bubble`) are correctly rounded:
+the exact sum divided by the count, rounded once. A floating-point mean can
+be off by an ulp in a way that depends on the order of the rows and on the
+pandas version, which would move a mean that equals a threshold to one side
+of it or spread two equal groups over a whole radar axis.
+
 ### Confidence interval for a mean
 Student-*t* interval: $\bar x \pm t_{n-1,\,1-\alpha/2}\, s/\sqrt{n}$.
 Used by `estimation_plot`, `benchmark_bar`.

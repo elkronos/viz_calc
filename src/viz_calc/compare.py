@@ -36,6 +36,7 @@ from ._core import (
     foreground,
     get_ax,
     group_key,
+    group_mean,
     level_label,
     level_mask,
     level_percent,
@@ -462,8 +463,10 @@ def lollipop(
     *threshold* are faded. *sort* is ``"descending"``, ``"ascending"`` or
     ``None`` (keep the order of the categories).
 
-    ``stat="count"`` counts the non-missing values of *y* in each category,
-    or the rows when *y* is not given. The aggregated values are in the
+    ``stat="mean"`` is correctly rounded, so a mean equal to *threshold* is
+    not faded and the order of the rows does not matter. ``stat="count"``
+    counts the non-missing values of *y* in each category, or the rows when
+    *y* is not given. The aggregated values are in the
     table's ``value`` column, so *x* cannot be named ``"value"``.
 
     Rows with a missing *x* are not dropped: they form a "(missing)"
@@ -489,9 +492,11 @@ def lollipop(
         check_finite(data, y)
         if stat == "sum":  # in float where an int64 sum could wrap around
             agg = safe_sum(data[y], key, sort=True, dropna=False)
+        elif stat == "mean":  # correctly rounded, so a mean that equals threshold is not faded by rounding
+            agg = group_mean(data[y], key, sort=True, dropna=False)
         else:  # in float64 with NaN, also for nullable and Arrow columns
             values = pd.Series(data[y].to_numpy(dtype=float, na_value=np.nan), index=data.index)
-            agg = values.groupby(key, observed=True, dropna=False).agg(stat)
+            agg = values.groupby(key, observed=True, dropna=False).median()
     elif y is not None:
         agg = data.groupby(key, observed=True, dropna=False)[y].count().astype(np.int64)
     else:

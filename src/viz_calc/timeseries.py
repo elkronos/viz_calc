@@ -35,6 +35,7 @@ from ._core import (
     column_list,
     foreground,
     get_ax,
+    group_mean,
     level_codes,
     level_label,
     palette,
@@ -206,7 +207,8 @@ def period_bars(
 
     The table has one row per period: ``value`` (the statistic), ``n`` (the
     number of non-missing values behind it, which is what ``count`` counts),
-    ``trend`` and ``period_start``.
+    ``trend`` and ``period_start``. A mean is correctly rounded, so it does
+    not depend on the order of the rows.
 
     Parameters
     ----------
@@ -227,8 +229,13 @@ def period_bars(
     if not d["v"].notna().any():
         raise ValueError(f"no row has both a date in {date!r} and a value in {value!r}")
     grouped = d.groupby("period")["v"]
-    agg = pd.DataFrame({"value": _sum_by(d["v"], d["period"]) if stat == "sum" else grouped.agg(stat),
-                        "n": grouped.count()})
+    if stat == "sum":
+        bars = _sum_by(d["v"], d["period"])
+    elif stat == "mean":  # correctly rounded: the same values in another row order give the same bar
+        bars = group_mean(d["v"], d["period"], sort=True)
+    else:
+        bars = grouped.agg(stat)
+    agg = pd.DataFrame({"value": bars, "n": grouped.count()})
     full = pd.period_range(agg.index.min(), agg.index.max(), freq=agg.index.freq)
     agg = agg.reindex(full)
     agg["n"] = agg["n"].fillna(0).astype(int)
@@ -267,8 +274,9 @@ def timeseries_fill(
     """Two series with the gap between them shaded by which one leads.
 
     Shading is interpolated at the crossing points, so the colour switches
-    exactly where the lines cross. Duplicate time stamps are averaged. The
-    ``info`` reports the number of crossovers.
+    exactly where the lines cross. Duplicate time stamps are averaged, with
+    correctly rounded means, so their row order cannot change the leader.
+    The ``info`` reports the number of crossovers.
 
     Parameters
     ----------
@@ -329,7 +337,10 @@ def timeseries_fill(
         col = numeric if numeric is not None else _dates(col, time, keep_tz=True)
     d[time] = _numpy_numbers(col)
     check_finite(d, time)  # a numeric time column too, also years stored as objects or in a Categorical
-    d = d.dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
+    d = d.dropna(subset=[time])
+    # Rows sharing a time stamp are averaged, correctly rounded, so their row order cannot move the leader
+    d = pd.DataFrame({c: group_mean(d[c], d[time], sort=True) for c in (a, b)}).rename_axis(time)
+    d = d.reset_index().sort_values(time)
     t = d[time]
     tz = getattr(t.dtype, "tz", None)
     # Matplotlib converts tz-aware values one Timestamp at a time; their UTC date numbers draw the same, fast
@@ -378,9 +389,9 @@ def calendar_heatmap(
     Parameters
     ----------
     stat
-        How each day's values of *value* are combined. Without *value* each
-        day shows its number of rows, so only ``"sum"`` (the default) and
-        ``"count"`` are accepted then.
+        How each day's values of *value* are combined; a mean is correctly
+        rounded. Without *value* each day shows its number of rows, so only
+        ``"sum"`` (the default) and ``"count"`` are accepted then.
     """
     check_dataframe(data, [date, value])
     check_choice("stat", stat, ["sum", "mean", "count", "max", "min"])
@@ -398,7 +409,8 @@ def calendar_heatmap(
     else:
         d["v"] = _numpy_numbers(data[value]).to_numpy()  # nullable Int64 sums guarded against wrapping too
         grouped = d.groupby("day")["v"]
-        daily = (_sum_by(d["v"], d["day"]) if stat == "sum" else grouped.agg(stat)).astype(float)
+        daily = (_sum_by(d["v"], d["day"]) if stat == "sum" else group_mean(d["v"], d["day"], sort=True)
+                 if stat == "mean" else grouped.agg(stat)).astype(float)
         if stat != "count":
             daily[grouped.count() == 0] = np.nan  # a day whose values are all missing is "no data", not 0
     if daily.empty or daily.isna().all():
@@ -776,8 +788,8 @@ def animated_bubble(
     Returns a :class:`VizResult` whose ``info["animation"]`` is a Matplotlib
     ``FuncAnimation`` (kept alive by the figure, so ``plt.show()`` plays it)
     and ``info["frames"]`` the time values in playing order; the table has
-    one row per frame, in the same order, with the mean of *x*, *y* and
-    *size* (a column used for two of these appears once). *time* must be a
+    one row per frame, in the same order, with the correctly rounded mean of
+    *x*, *y* and *size* (a column used for two of these appears once). *time* must be a
     different column from *x*, *y* and *size*. Save the animation with
     ``anim.save("out.gif")`` or show it in a notebook with
     ``IPython.display.HTML(anim.to_jshtml())``. A ``FuncAnimation`` cannot
@@ -857,6 +869,7 @@ def animated_bubble(
     fig.canvas.mpl_connect("close_event", lambda _event, _keep=anim: None)
     anim._draw_was_started = True  # what Animation.save() also sets to silence the warning
     # A shared column once; selected by label, as a groupby would read [True, False] as a mask
-    table = select_columns(data, dict.fromkeys([x, y, size])).groupby(data[time], observed=True).mean()
-    table = table.iloc[table.index.get_indexer(frames)].reset_index()  # rows in playing order
+    columns = select_columns(data, dict.fromkeys([x, y, size]))
+    table = pd.DataFrame({c: group_mean(columns.iloc[:, i], data[time]) for i, c in enumerate(columns.columns)})
+    table = table.iloc[table.index.get_indexer(frames)].rename_axis(time).reset_index()  # rows in playing order
     return VizResult(fig, ax, table, {"animation": anim, "frames": frames, "area_scale": max_area / smax})

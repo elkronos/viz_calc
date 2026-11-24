@@ -188,3 +188,45 @@ def test_ridgeplot_summary_of_a_nullable_group_with_no_values_is_float():
     t = vc.ridgeplot(d, x="y", group="g").table
     assert (t[["mean", "median", "sd", "q1", "q3"]].dtypes == np.float64).all()  # object with pd.NA before
     assert t["n"].tolist() == [3, 0] and t["mean"].iloc[1] != t["mean"].iloc[1]
+
+
+# --- correctly rounded group means (independent of row order and pandas version) ----------------------------------
+
+
+def test_lollipop_does_not_fade_a_mean_equal_to_the_threshold():
+    res = vc.lollipop(pd.DataFrame({"g": ["b"] * 4, "y": [9.2, 6.0, 8.8, 9.6]}), x="g", y="y", threshold=8.4)
+    assert res.table["value"].tolist() == [8.4]  # 8.399999999999999 on pandas 3, faded as below
+    assert res.axes.collections[-1].get_alpha() == 1.0
+
+
+def test_period_bars_mean_does_not_depend_on_row_order():
+    d = pd.DataFrame({"date": pd.to_datetime(["2024-01-01"] * 3 + ["2024-02-01"] * 3),
+                      "v": [0.1, 0.2, 0.3, 0.3, 0.2, 0.1]})
+    assert vc.period_bars(d, date="date", value="v", stat="mean").table["value"].tolist() == [0.2, 0.2]
+
+
+def test_calendar_heatmap_mean_does_not_depend_on_row_order():
+    d = pd.DataFrame({"date": pd.to_datetime(["2024-01-01"] * 3 + ["2024-01-02"] * 3),
+                      "v": [0.1, 0.2, 0.3, 0.3, 0.2, 0.1]})
+    t = vc.calendar_heatmap(d, date="date", value="v", stat="mean").table
+    assert t["value"].dropna().tolist() == [0.2, 0.2]
+
+
+def test_radar_groups_with_equal_means_sit_mid_scale():
+    d = pd.DataFrame({"grp": ["a"] * 3 + ["b"] * 3, "m1": [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
+                      "m2": [1.0, 2, 3, 4, 5, 6], "m3": [3.0, 2, 1, 6, 5, 4]})
+    t = vc.radar(d, metrics=["m1", "m2", "m3"], group="grp", normalize="groups").table
+    assert t["m1_mean"].tolist() == [0.2, 0.2] and t["m1_scaled"].tolist() == [0.5, 0.5]  # 0 and 1 on pandas 3
+
+
+def test_timeseries_fill_averages_repeated_stamps_independently_of_row_order():
+    d = pd.DataFrame({"t": [1, 1, 1, 2, 2, 2], "a": [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
+                      "b": [0.3, 0.2, 0.1, 0.1, 0.2, 0.3]})
+    res = vc.timeseries_fill(d, time="t", series=["a", "b"])
+    assert res.table["difference"].tolist() == [0.0, 0.0] and res.info["crossovers"] == 0
+
+
+def test_animated_bubble_table_means_do_not_depend_on_row_order():
+    d = pd.DataFrame({"t": [1, 1, 1, 2, 2, 2], "x": [0.1, 0.2, 0.3, 0.3, 0.2, 0.1], "y": [1.0] * 6, "s": [1.0] * 6})
+    t = vc.animated_bubble(d, time="t", x="x", y="y", size="s").table
+    assert t["x"].tolist() == [0.2, 0.2]

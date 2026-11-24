@@ -712,6 +712,33 @@ def exact_mean(values: Any) -> float:
     return float(sum(map(Fraction, parts)) / len(v))
 
 
+def group_mean(values: pd.Series, by: Any, sort: bool = False, dropna: bool = True) -> pd.Series:
+    """:func:`exact_mean` of *values* per group of *by*, skipping missing values (``NaN`` for a group with none).
+
+    A floating-point mean depends on the order of the rows and, for a
+    groupby, on the pandas version, so groups holding the same values in a
+    different order can differ by an ulp and land on different sides of a
+    threshold. The result is float64 whatever the dtype of *values*
+    (nullable, Arrow, float16 or bool). *by*, *sort* and *dropna* are passed
+    on to the pandas ``groupby``.
+    """
+    x = pd.Series(values.to_numpy(dtype=float, na_value=np.nan), index=values.index, name=values.name)
+    grouped = x.groupby(by, sort=sort, observed=True, dropna=dropna)
+    low, high = grouped.min(), grouped.max()
+    means = low.to_numpy(copy=True)  # exact for a group of one value, or of equal ones; NaN for a group of none
+    mixed = (low < high).to_numpy()
+    if mixed.any():  # only these need the exact sum, one group at a time
+        codes = grouped.ngroup().to_numpy(dtype=float, na_value=np.nan)  # NaN for rows whose key was dropped
+        v = x.to_numpy()
+        rows = ~np.isnan(v) & ~np.isnan(codes)
+        rows[rows] = mixed[codes[rows].astype(np.int64)]
+        order = np.argsort(codes[rows], kind="stable")
+        codes, v = codes[rows][order].astype(np.int64), v[rows][order]
+        starts = np.flatnonzero(np.r_[True, codes[1:] != codes[:-1]])
+        means[codes[starts]] = [exact_mean(part) for part in np.split(v, starts[1:])]
+    return pd.Series(means, index=low.index, name=values.name)
+
+
 def numpy_values(values: pd.Series) -> np.ndarray:
     """*values* in a NumPy dtype, which Matplotlib and arithmetic handle alike in every pandas version.
 

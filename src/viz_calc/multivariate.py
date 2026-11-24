@@ -29,6 +29,7 @@ from ._core import (
     column_list,
     foreground,
     get_ax,
+    group_mean,
     level_label,
     level_percent,
     palette,
@@ -247,17 +248,16 @@ def _floats(frame: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(frame.to_numpy(dtype=float, na_value=np.nan), index=frame.index, columns=frame.columns)
 
 
-def _group_stat(grouped: Any, stat: str) -> pd.DataFrame:
-    """*stat* of each column of *grouped* per group, as floats; the mean of a constant group is its value exactly.
+def _group_stat(frame: pd.DataFrame, keys: Any, stat: str) -> pd.DataFrame:
+    """*stat* of each column of *frame* per group of *keys*, as floats; the mean is correctly rounded.
 
-    The floating-point mean of ``[0.1] * 3`` is off by an ulp (see ``stats._mean``), so groups of different sizes
-    holding one constant would get different means, which ``normalize="groups"`` spreads over the whole axis.
+    A floating-point mean is off by an ulp for ``[0.1] * 3`` (see ``stats._mean``) and, on pandas 3, depends on
+    the row order, so groups holding the same values would get different means, which ``normalize="groups"``
+    spreads over the whole axis. ``exact_mean`` gives every such group the same mean.
     """
-    value = _floats(grouped.agg(stat))
     if stat == "mean":
-        lo, hi = _floats(grouped.min()), _floats(grouped.max())
-        value = value.mask(lo == hi, lo)
-    return value
+        return pd.DataFrame({c: group_mean(frame.iloc[:, i], keys, sort=True) for i, c in enumerate(frame.columns)})
+    return _floats(frame.groupby(keys, observed=True).agg(stat))
 
 
 @cleanup_on_error
@@ -285,9 +285,10 @@ def radar(
 
     An axis with nothing to scale (every value of the metric the same under
     ``"data"``, every group's *stat* the same under ``"groups"``) puts the
-    groups mid-scale, at 0.5. The mean of a group whose values are all the
-    same is exactly that value, so a constant metric such as 0.1 lands there
-    too, whatever the group sizes.
+    groups mid-scale, at 0.5. Means are correctly rounded: the mean of a
+    group whose values are all the same is exactly that value, so a constant
+    metric such as 0.1 lands there too, whatever the group sizes, and groups
+    holding the same values in another order get the same mean.
 
     Rows with a missing *group* are not dropped: they are drawn last, in
     grey, as "(missing)", and their row of the table has a missing *group*.
@@ -318,12 +319,12 @@ def radar(
     check_not_reserved([f"{m}_{suffix}" for suffix in (stat, "scaled") for m in metrics], group=group)
     groups = category_order(data[group], order)
     grouped = data.groupby(group, observed=True)[metrics]
-    raw = _group_stat(grouped, stat).reindex(groups)
+    raw = _group_stat(select_columns(data, metrics), data[group], stat).reindex(groups)
     missing = data[group].isna().to_numpy()
     rest = select_columns(data, metrics)[missing]  # rows without a group, drawn in grey as "(missing)"
     if missing.any():
         label = pd.Index(data[group][missing].iloc[:1])  # a missing value of the group column's own type
-        raw = pd.concat([raw, _group_stat(rest.groupby(np.zeros(len(rest), dtype=int)), stat).set_axis(label)])
+        raw = pd.concat([raw, _group_stat(rest, np.zeros(len(rest), dtype=int), stat).set_axis(label)])
     scaled = raw.copy()
     if normalize != "none":
         ref = raw
