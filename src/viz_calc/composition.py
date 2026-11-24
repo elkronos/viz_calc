@@ -72,6 +72,16 @@ def _check_real(name: str, value: Any, minimum: float = -math.inf) -> None:
         raise ValueError(f"{name} must be a finite number{at_least}, got {value!r}")
 
 
+def _labelled(share: float, min_label: float) -> bool:
+    """Whether a *share* in percent reaches *min_label*, counting a share short of it only by rounding as equal.
+
+    In floating point 57 / 100 * 100 is 56.99999999999999, which would leave a 57 % share unlabelled at
+    ``min_label=57``.
+    """
+    limit = float(min_label)  # a NumPy float32 would round the margin away
+    return share >= limit - 1e-12 * abs(limit)
+
+
 def _missing_rows(data: pd.DataFrame, columns: Sequence[str], label: str | None = None) -> list[Any]:
     """Labels (index labels, or the *label* column) of the rows with a missing value in *columns*."""
     rows = select_columns(data, columns).isna().any(axis=1).to_numpy()
@@ -323,7 +333,7 @@ def stacked_percentages(
         vals = pct[c].to_numpy()
         bars = (ax.barh(pos, vals, left=base, color=col, label=level_label(c), edgecolor="white")
                 if horizontal else ax.bar(pos, vals, bottom=base, color=col, label=level_label(c), edgecolor="white"))
-        center_labels(ax, bars, [f"{v:.0f}%" if v >= min_label else "" for v in vals], fontsize=8,
+        center_labels(ax, bars, [f"{v:.0f}%" if _labelled(v, min_label) else "" for v in vals], fontsize=8,
                       color=text_color(col))
         base += vals
     ticks = [f"{group_label(g)}\n(n={n})" for g, n in zip(groups, counts.sum(axis=1))]
@@ -404,7 +414,7 @@ def donut_grid(
                            startangle=90, counterclock=False, wedgeprops={"width": 0.4, "edgecolor": "white"})
         if labels and total:
             for w, sh, c in zip(wedges, share, cols):
-                if sh >= min_label:
+                if _labelled(sh, min_label):
                     ang = np.deg2rad((w.theta1 + w.theta2) / 2)
                     ax.text(0.8 * np.cos(ang), 0.8 * np.sin(ang), f"{sh:.0f}%", ha="center", va="center", fontsize=8,
                             color=text_color(c))

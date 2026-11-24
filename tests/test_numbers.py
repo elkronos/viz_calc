@@ -327,3 +327,14 @@ def test_quadrant_plot_explains_an_undefined_interval(x, y, why):
     res = vc.quadrant_plot(pd.DataFrame({"x": x, "y": y}), x="x", y="y")
     assert f"[95% CI n/a: {why}]" in res.axes.get_title(loc="left")  # "[95% CI nan, nan]" before
     assert np.isnan(res.info["correlation"]["ci_low"])
+
+
+@pytest.mark.parametrize("min_label", [57, 57.0, np.float32(57)])
+def test_a_share_equal_to_min_label_is_labelled(min_label):
+    # 57 / 100 * 100 is 56.99999999999999, which read as smaller than 57
+    res = vc.stacked_percentages(pd.DataFrame({"g": ["x"] * 100, "c": ["a"] * 57 + ["b"] * 43}), group="g",
+                                 category="c", min_label=min_label)
+    assert [t.get_text() for t in res.axes.texts] == ["57%", ""]
+    for row in ([57, 43], [0.57, 0.43]):
+        donut = vc.donut_grid(pd.DataFrame({"a": [row[0]], "b": [row[1]]}), min_label=min_label)
+        assert "57%" in [t.get_text() for t in donut.axes.flat[0].texts]
