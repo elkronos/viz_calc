@@ -421,3 +421,13 @@ def test_profile_boxes_shows_every_level_of_a_column_in_each_panel():
     res = vc.profile_boxes(d, categorical=["group"], numeric=["length", "width"])
     ticks = {ax.get_title(loc="left").split("  ")[0]: _ticks(ax) for f in res.figure for ax in f.axes}
     assert ticks == {"length by group": ["alpha", "beta", "gamma"], "width by group": ["alpha", "beta (n=0)", "gamma"]}
+
+
+# --- network communities ----------------------------------------------------------------------------------------------
+
+def test_network_map_numbers_tied_communities_the_same_whatever_the_row_order():
+    pytest.importorskip("networkx")
+    edges = datasets.network()
+    ids = {int(vc.network_map(edges.sample(frac=1, random_state=k), "source", "target", weight="strength")
+               .table.set_index("node").loc["Ana", "community"]) for k in range(6)}
+    assert len(ids) == 1

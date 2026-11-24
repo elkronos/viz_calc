@@ -18,6 +18,7 @@ from matplotlib.patches import Patch
 from ._core import (
     NEUTRAL,
     VizResult,
+    _sorted,
     abbreviate,
     check_choice,
     check_dataframe,
@@ -331,7 +332,11 @@ def network_map(
     ``info["betweenness_arithmetic"]`` says which was used and
     ``info["betweenness_tolerance"]`` gives the tolerance. For directed
     graphs, communities are found on the undirected graph with reciprocal
-    weights summed.
+    weights summed. Communities are numbered from 0, largest first, and
+    communities of the same size in the sorted order of their nodes. Louvain
+    and the layout visit the nodes in the order they first appear in the
+    rows, so with the same seed a different row order can give a different
+    partition or layout.
 
     Node labels are black or white, whichever reads better on the node's
     colour; a label wider than its node is drawn in the axes foreground.
@@ -457,7 +462,10 @@ def network_map(
                 U.add_edge(u, v, w=w)
         if U.size(weight="w") > 0:
             comms = nx.community.louvain_communities(U, weight="w", seed=None if seed is None else int(seed))
-            cmap = {n: i for i, c in enumerate(sorted(comms, key=len, reverse=True)) for n in c}
+            # Numbered by size, largest first; communities of the same size in the sorted order of their nodes.
+            rank = {n: i for i, n in enumerate(_sorted(nodes))}
+            comms = sorted(comms, key=lambda c: (-len(c), min(rank[n] for n in c)))
+            cmap = {n: i for i, c in enumerate(comms) for n in c}
             table["community"] = [cmap[n] for n in nodes]
         else:  # no positive weights: modularity is undefined
             table["community"] = 0
