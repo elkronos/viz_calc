@@ -51,9 +51,8 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     adds a component with zero variance, and if every feature is constant
     there is no variance to analyse, which raises ``ValueError`` too. A
     feature holding an infinite value raises ``ValueError`` either way.
-    Component signs are fixed so that the
-    largest-magnitude loading of each component is positive, making results
-    reproducible.
+    Component signs are fixed so that the largest-magnitude loading of each
+    component is positive, making results reproducible.
 
     Returns a dict with ``scores`` (DataFrame, index aligned to *data*),
     ``loadings`` (features × components), ``explained_variance_ratio`` and
