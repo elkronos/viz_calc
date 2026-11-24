@@ -285,9 +285,10 @@ def to_pptx(figures: Any, path: str | os.PathLike[str] | IO[bytes], titles: Iter
 
     *path* is a file path, returned as a string, or a binary file-like
     object such as ``io.BytesIO``, returned as given. A *dpi* too low for
-    the figure's text to be drawn raises ``ValueError``, as does one that
-    makes an image larger than Pillow, which python-pptx reads it with,
-    opens (twice ``PIL.Image.MAX_IMAGE_PIXELS``).
+    the figure's text to be drawn raises ``ValueError``, and so does one
+    that makes an image of more pixels than Pillow opens (twice
+    ``PIL.Image.MAX_IMAGE_PIXELS``); python-pptx reads the image with
+    Pillow.
     """
     import struct
     import warnings
