@@ -173,7 +173,10 @@ Gaussian KDE with Scott's bandwidth rule (SciPy's default), adjustable with
 ### Largest-remainder apportionment
 Hamilton's method: floor each exact quota, then give the remaining units
 to the largest fractional remainders, so tile counts always sum to the grid
-size (Balinski & Young, 1982). Used by `waffle`.
+size (Balinski & Young, 1982). The quotas are exact rational numbers, and
+exactly equal remainders are served in input order. Used by `waffle`, which
+lists equal totals in sorted order, so row order does not decide who gets
+the extra tile.
 
 ### Eta-squared
 $\eta^2 = SS_\text{between}/SS_\text{total}$, the share of a numeric

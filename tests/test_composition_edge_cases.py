@@ -243,6 +243,22 @@ def test_waffle_rejects_a_negative_row_even_if_the_total_is_positive():
         vc.waffle(pd.DataFrame({"c": ["a", "a", "b"], "v": [10, -8, 5]}), "c", "v")
 
 
+@pytest.mark.parametrize("category", [pd.Series(list("abc")), pd.Series(list("cba")),
+                                      pd.Categorical(list("abc"), categories=list("cab"))],
+                         ids=["abc", "cba", "categorical"])
+def test_waffle_gives_the_extra_tile_of_equal_totals_by_level_not_row_order(category):
+    t = vc.waffle(pd.DataFrame({"c": category}), "c").table
+    first = "c" if isinstance(category, pd.Categorical) else "a"
+    assert t["c"].iloc[0] == first and t["tiles"].tolist() == [34, 33, 33]
+
+
+def test_waffle_keeps_integer_totals_exact_next_to_an_unused_level():
+    # An unused level listed in order= made the totals float, which rounded 2**53 + 1 to 2**53.
+    d = pd.DataFrame({"c": ["x", "y"], "v": [3 * 2**53 + 1, 2**53 + 1]})
+    t = vc.waffle(d, "c", "v", order=["x", "y", "z"], rows=1, columns=4).table
+    assert t["value"].tolist() == [3 * 2**53 + 1, 2**53 + 1, 0] and t["tiles"].tolist() == [3, 1, 0]
+
+
 @pytest.mark.parametrize("kwargs", [{"rows": 0}, {"columns": 0}, {"rows": 2.5}, {"rows": True}])
 def test_waffle_grid_size_is_validated(kwargs):
     with pytest.raises(ValueError, match=f"{next(iter(kwargs))} must be an integer >= 1"):

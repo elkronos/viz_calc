@@ -105,7 +105,9 @@ def waffle(
     or under-fill it. With *value* omitted, rows are counted. Values must be
     non-negative; missing values count as zero, but *category* and *value*
     each need at least one non-missing value. Categories are drawn largest
-    first unless *order* is given. *order* must list every category that
+    first unless *order* is given; equal totals keep the sorted order (the
+    category order for a ``Categorical``), and the first of them gets any
+    extra tile, whatever the row order. *order* must list every category that
     occurs and may add unused ones (drawn with zero tiles); unused categories
     of a ``Categorical`` are left out otherwise. Rows with a missing
     *category* are not dropped: they are drawn last, in grey, as
@@ -126,15 +128,19 @@ def waffle(
     if order is not None:  # must list every category, or the shares would be renormalized over a subset
         levels = _levels(data[category], order, complete=True, allow_absent=True)
     else:
+        try:  # equal totals in level order, not row order: the first of them gets any extra tile
+            totals = totals.sort_index()
+        except TypeError:  # levels of mixed types keep the order they first appear in
+            pass
         levels = list(totals.sort_values(ascending=False, kind="stable").index)
-    values = totals.reindex(levels).fillna(0).to_numpy()
+    values = totals.reindex(levels, fill_value=0).to_numpy()  # integer totals stay exact
     cols = palette(len(levels), colors)
     names = [level_label(lvl) for lvl in levels]
     if unknown.any():
         levels, names, cols = levels + [np.nan], names + ["(missing)"], cols + [NEUTRAL]
         values = np.append(values, unknown_total)
     n_tiles = rows * columns
-    tiles = st.largest_remainder(values.astype(float), n_tiles)
+    tiles = st.largest_remainder(values, n_tiles)
 
     fig, ax = get_ax(ax, figsize=(columns * 0.45 + 3, rows * 0.45 + 1))
     idx = 0

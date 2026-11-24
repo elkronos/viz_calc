@@ -227,7 +227,8 @@ same thing everywhere. The exceptions are listed here.
 * **Order.** Where a function has `order=`, it fixes the order of the
   categories; otherwise a Categorical column keeps its category order and any
   other column is sorted. The exceptions: `waffle` puts the largest category
-  first; `divergent_bar` and `nested_pie` keep the order in which categories
+  first (equal totals in the usual order); `divergent_bar` and `nested_pie`
+  keep the order in which categories
   first appear (`divergent_bar` keeps a Categorical's category order);
   `funnel`, `waterfall` and `bullet` keep row order. Functions with `sort=`
   order by value while it is on: by default `lollipop` (descending value),
