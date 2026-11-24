@@ -89,7 +89,7 @@ def _threshold(values: pd.Series, threshold: Any) -> tuple[float, float]:
         raise ValueError(f"threshold={threshold!r} needs a value of {values.name!r} in one of the groups drawn")
     if threshold == "median":
         return float(np.median(v)), 0.0
-    thr, scale = exact_mean(v), float(np.mean(np.abs(v)))
+    thr, scale = exact_mean(v), st._mean_abs(v)
     return thr, (_TIE * scale if np.isfinite(thr) and np.isfinite(scale) else 0.0)
 
 
@@ -399,7 +399,7 @@ def benchmark_bar(
             status = "no data"
         else:
             # A group mean carries its own rounding error, so widen the tie tolerance by the group's scale.
-            scale = float(np.mean(np.abs(s)))
+            scale = st._mean_abs(s)
             tie = tol + (_TIE * scale if np.isfinite(scale) else 0.0)
             if classify == "ci":
                 status = "above" if lo > thr + tie else "below" if hi < thr - tie else "indistinguishable"

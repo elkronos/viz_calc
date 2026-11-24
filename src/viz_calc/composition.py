@@ -392,9 +392,15 @@ def donut_grid(
     nrow = int(np.ceil(n / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.3 * ncol + 1.5, 3.3 * nrow), squeeze=False)
     for ax, idx, vals in zip(axes.flat, data.index, values):
-        total = vals.sum()
+        with np.errstate(over="ignore"):  # reported below
+            total = vals.sum()
+        if np.isinf(total):
+            raise ValueError(f"the values of row {idx!r} add up to more than the largest float")
+        # Wedges from the values divided by a power of two (exact): Matplotlib 3.7 draws float32 wedge sizes, which
+        # are 0 below about 1e-45 and infinite above about 3e38.
+        sizes = np.ldexp(vals, -int(np.frexp(vals.max())[1])) if total else np.ones_like(vals)
         share = vals / total * 100 if total else vals
-        wedges, _ = ax.pie(vals if total else np.ones_like(vals), colors=cols if total else ["#eeeeee"] * len(vals),
+        wedges, _ = ax.pie(sizes, colors=cols if total else ["#eeeeee"] * len(vals),
                            startangle=90, counterclock=False, wedgeprops={"width": 0.4, "edgecolor": "white"})
         if labels and total:
             for w, sh, c in zip(wedges, share, cols):
@@ -473,6 +479,9 @@ def nested_pie(
     rank = np.argsort(codes, kind="stable")
     agg, codes = agg.iloc[rank].reset_index(drop=True), codes[rank]
     weights = pd.Series(agg["value"].to_numpy(dtype=float))  # totals of large integers would wrap around in int64
+    # Divided by a power of two (exact), so the totals cannot overflow and Matplotlib 3.7, which draws float32 wedge
+    # sizes, gets neither zeros (below about 1e-45) nor infinities (above about 3e38); the shares do not change.
+    weights = pd.Series(np.ldexp(weights.to_numpy(), -int(np.frexp(weights.max())[1])))
     parent_tot = weights.groupby(codes).sum()
     child_cols = []
     for i, c in enumerate(base_cols):

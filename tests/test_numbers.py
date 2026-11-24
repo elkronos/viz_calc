@@ -135,6 +135,67 @@ def test_summary_mean_of_values_whose_sum_overflows_is_finite():
         assert res.table["mean"].tolist() == [expected]  # inf before
 
 
+# --- extreme magnitudes ------------------------------------------------------------------------------------------
+
+_FEATURES = ["length", "width", "depth", "mass"]
+
+
+@pytest.mark.parametrize("factor", [1e300, 1e-200])
+@pytest.mark.parametrize("scale", [True, False])
+def test_pca_does_not_depend_on_the_magnitude_of_the_data(factor, scale):
+    meas = datasets.measurements()
+    expected = vc.pca(meas, _FEATURES, scale=scale)["explained_variance_ratio"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # x 1e300 overflowed to nan; x 1e-200 read every feature as constant
+        got = vc.pca(meas.assign(**{c: meas[c] * factor for c in _FEATURES}), _FEATURES, scale=scale)
+    assert got["explained_variance_ratio"].tolist() == pytest.approx(expected.tolist(), rel=1e-9)
+
+
+def test_pearson_r_of_values_near_the_float_limit():
+    meas = datasets.measurements()
+    expected = vc.stats.correlation_test(meas["length"], meas["width"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        got = vc.stats.correlation_test(meas["length"] * 2.0**1000, meas["width"])  # nan, or a SciPy error
+        table = vc.correlogram(meas.assign(length=meas["length"] * 1e306)[_FEATURES]).table
+    assert got == expected  # a power of two changes no digit
+    assert np.isfinite(table["r"]).all()
+
+
+def test_bootstrap_ci_of_values_near_the_float_limit():
+    a, b = np.array([1.0, 2.0, 4.0, 7.0]), np.array([3.0, 5.0, 6.0, 9.0, 10.0])
+    for samples in ((a,), (a, b)):
+        expected = vc.stats.bootstrap_ci(*samples)
+        for factor in (2.0**1000, 2.0**-1000):  # BCa's power sums overflowed or underflowed: nan limits
+            got = vc.stats.bootstrap_ci(*(s * factor for s in samples))
+            assert got == tuple(v * factor for v in expected)
+
+
+@pytest.mark.parametrize("factor", [1e-200, 1e39])
+def test_pies_draw_values_beyond_float32(factor):
+    # Matplotlib 3.7 casts wedge sizes to float32, which gave 0 / 0 or inf / inf and a crash
+    donut = vc.donut_grid(pd.DataFrame({"a": [3.0, 5.0], "b": [4.0, 1.0]}) * factor)
+    assert donut.table["percent"].round(6).tolist() == [42.857143, 83.333333, 57.142857, 16.666667]
+    nested = vc.nested_pie(pd.DataFrame({"p": list("aab"), "c": list("xyz"), "v": [1.0, 2.0, 3.0]}).assign(
+        v=lambda d: d["v"] * factor), outer="p", inner="c", value="v")
+    assert nested.table["percent_of_total"].round(6).tolist() == [16.666667, 33.333333, 50.0]
+    _render(donut)
+    _render(nested)
+
+
+def test_donut_grid_names_a_row_whose_values_overflow():
+    with pytest.raises(ValueError, match=r"the values of row 'r' add up to more than the largest float"):
+        vc.donut_grid(pd.DataFrame({"a": [1e308], "b": [1e308]}, index=["r"]))
+
+
+def test_quadrant_plot_of_values_near_the_float_limit_does_not_warn():
+    meas = datasets.measurements()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # the tie tolerance took np.mean(np.abs(x)), which overflowed
+        res = vc.quadrant_plot(meas.assign(length=meas["length"] * 1e306), x="length", y="width")
+    assert np.isfinite(res.info["correlation"]["r"])
+
+
 # --- missing values in Arrow-backed columns -----------------------------------------------------------------------
 
 

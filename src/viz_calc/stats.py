@@ -146,6 +146,15 @@ def _mean(x: np.ndarray) -> float:
     return float(x[0]) if np.ptp(x) == 0 else float(x.mean())
 
 
+def _mean_abs(x: np.ndarray) -> float:
+    """Mean of ``|x|``, the scale of a sample's rounding error, without overflow near the largest float.
+
+    The values are divided by a power of two first (see :func:`_unit_scale`), which is exact.
+    """
+    s = _unit_scale(x)
+    return float(np.mean(np.abs(x) / s) * s)
+
+
 def wilson_ci(successes: int | np.ndarray, n: int | np.ndarray, level: float = 0.95) -> tuple[Any, Any]:
     """Wilson score interval for a binomial proportion.
 
@@ -318,9 +327,10 @@ def bootstrap_ci(
     numbers of samples need a *statistic*, which is called with one array per
     sample. A fixed *seed* keeps figures reproducible. With the default
     statistic, a bootstrap value that equals the estimate in exact arithmetic
-    but differs from it by rounding error counts as a tie, so the BCa
-    interval does not change with the units of the data (a statistic you
-    pass is used as it is).
+    but differs from it by rounding error counts as a tie, and the data are
+    divided by a power of two first (exact), so the BCa interval does not
+    change with the units of the data and values near the float limits do
+    not overflow (a statistic you pass is used as it is).
 
     *level* must be strictly between 0 and 1 (``0.95``, not ``95``),
     *n_resamples* a whole number of at least 1, *method* one of ``"BCa"``,
@@ -389,8 +399,9 @@ def _bootstrap(samples, statistic, level, n_resamples, method, seed):
     """Like :func:`bootstrap_ci` but also returns the bootstrap distribution.
 
     A *statistic* of ``None`` stands for the default of :func:`bootstrap_ci`,
-    with ties to the estimate kept exact (see :func:`_tie_exact`) and values
-    far from zero shifted first (see :func:`_offset`).
+    with ties to the estimate kept exact (see :func:`_tie_exact`), values
+    far from zero shifted first (see :func:`_offset`) and every value
+    divided by a power of two (see :func:`_unit_scale`).
     """
     level = _check_level(level)
     default = statistic is None
@@ -408,6 +419,12 @@ def _bootstrap(samples, statistic, level, n_resamples, method, seed):
         back = shift if len(data) == 1 else 0.0
         estimate, lo, hi, dist = _bootstrap(tuple(d - shift for d in data), None, level, n_resamples, method, seed)
         return estimate + back, lo + back, hi + back, dist + back
+    scale = _unit_scale(*data) if default else 1.0
+    if scale != 1.0:
+        # Divided by a power of two (exact; see _unit_scale), so the squares and cubes of BCa's jackknife values
+        # neither overflow nor underflow; a mean and a difference in means scale back exactly.
+        estimate, lo, hi, dist = _bootstrap(tuple(d / scale for d in data), None, level, n_resamples, method, seed)
+        return estimate * scale, lo * scale, hi * scale, dist * scale
     estimate = float(statistic(*data))
     if all(np.ptp(d) == 0 for d in data):  # every resample equals the data: the interval is the estimate itself
         return estimate, estimate, estimate, np.full(n_resamples, estimate)
@@ -567,7 +584,10 @@ def correlation_test(x: Sequence[float], y: Sequence[float], method: Literal["pe
     if method == "spearman":
         res = _st.spearmanr(x, y)
     else:
-        res = _st.pearsonr(x - _offset(x), y - _offset(y))  # exact shifts, which r does not depend on; see _offset
+        # Exact shifts and powers of two, which r does not depend on: values far from zero keep their digits, and
+        # sums of squares of values near 1e300 cannot overflow; see _offset and _unit_scale.
+        xs, ys = x - _offset(x), y - _offset(y)
+        res = _st.pearsonr(xs / _unit_scale(xs), ys / _unit_scale(ys))
     r, p = float(res[0]), float(res[1])
     if method == "spearman" and n <= _SPEARMAN_EXACT_MAX_N:
         p = _spearman_exact_p(x, y)

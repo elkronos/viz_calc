@@ -73,6 +73,12 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     # Centring removes any shift of a feature, so features far from zero next to their spread are first shifted by an
     # exact amount that keeps their digits (see stats._offset); other features are left as they are.
     X = X - [st._offset(X.iloc[:, j].to_numpy()) for j in range(X.shape[1])]
+    # Then each feature is divided by a power of two (exact; see stats._unit_scale), so squared deviations neither
+    # overflow (values near 1e300) nor underflow (near 1e-200, which read as constant). Standardized features do not
+    # depend on it; unscaled ones share one factor, and the scores and eigenvalues are multiplied back by it.
+    factors = ([st._unit_scale(X.iloc[:, j].to_numpy()) for j in range(X.shape[1])] if scale
+               else [st._unit_scale(X.to_numpy())] * X.shape[1])
+    X = X / factors
     # The float mean of a constant column such as 0.1 is off by an ulp, so centring leaves rounding noise (an SD
     # near 3e-17) that scaling would blow up into a whole component; constant columns are found by their values.
     constant = (X.max() == X.min()).to_numpy()
@@ -89,13 +95,15 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     Vt *= signs[:, None]
     U *= signs[None, :]
     eig = S**2 / (len(X) - 1)
+    back = 1.0 if scale else factors[0]
     names = [f"PC{i + 1}" for i in range(len(S))]
-    return {
-        "scores": pd.DataFrame(U * S, index=X.index, columns=names),
-        "loadings": pd.DataFrame(Vt.T, index=features, columns=names),
-        "explained_variance_ratio": pd.Series(eig / eig.sum(), index=names),
-        "eigenvalues": pd.Series(eig, index=names),
-    }
+    with np.errstate(over="ignore"):  # an unscaled variance beyond the largest float is honestly infinite
+        return {
+            "scores": pd.DataFrame(U * S * back, index=X.index, columns=names),
+            "loadings": pd.DataFrame(Vt.T, index=features, columns=names),
+            "explained_variance_ratio": pd.Series(eig / eig.sum(), index=names),
+            "eigenvalues": pd.Series(eig * back * back, index=names),
+        }
 
 
 def _ellipse(ax: Axes, pts: np.ndarray, level: float, kind: str, color: str) -> dict[str, float] | None:

@@ -47,10 +47,13 @@ A group counts as constant when all its values are identical, so `[0.1] * 3`
 behaves like `[1.0] * 3` even though its floating-point mean is off by an ulp:
 its mean is taken to be its common value, so `[0.1] * 3` and `[0.1] * 10`
 are identical groups and the mean CI of `[0.1] * 3` is exactly 0.1.
-The mean CI, Welch's test and *g* rescale the data by a power of two before
-squaring deviations; the rescaling is exact, so ordinary results are
-unchanged and magnitudes beyond about $10^{\pm 154}$ no longer overflow or
-underflow (which used to give $g = 0$). When all values sit far from zero
+The mean CI, Welch's test, *g*, Pearson's *r*, PCA, the default bootstrap
+statistics and the summary means of `histogram`, `ridgeplot` and `raincloud`
+rescale the data by a power of two before squaring deviations or summing;
+the rescaling is exact, so ordinary results are unchanged and magnitudes
+beyond about $10^{\pm 154}$ no longer overflow or underflow (which used to
+give $g = 0$, `NaN` for *r*, PCA and BCa limits, and every PCA feature read
+as constant near $10^{-200}$). When all values sit far from zero
 next to their spread (a spread below $2^{-20}$ of their magnitude, as with an
 offset of $10^{12}$ on data spread over tens), deviations from the rounded
 mean lose the values' low digits; at an offset of $2^{53}$ the mean is off by

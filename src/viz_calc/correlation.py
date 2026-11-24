@@ -71,7 +71,7 @@ def _at_or_above(values: np.ndarray, centre: float, kind: str) -> np.ndarray:
     every value, so for the mean the tolerance follows the data's scale, not the
     mean's (which may be near zero); a median carries only its own rounding.
     """
-    scale = float(np.mean(np.abs(values))) if kind == "mean" else abs(centre)
+    scale = st._mean_abs(values) if kind == "mean" else abs(centre)
     return values >= centre - (4 * np.finfo(float).eps * scale if np.isfinite(scale) else 0.0)
 
 
