@@ -36,7 +36,7 @@ def _nullable_pair():
     lambda d: tuple(st.histogram_bins(d["b"])),
     lambda d: tuple(st.adjust_pvalues(d["b"].abs() / 10)),
     lambda d: st.wilson_ci(d["a"].iloc[:3], d["a"].iloc[3:6] + 60),
-    lambda d: st.compare_correlations_test(d["b"].iloc[5:9], d["a"].iloc[:4] + 10, 0.1, 40),
+    lambda d: st.compare_correlations_test(d["b"].iloc[5:9] / 10, d["a"].iloc[:4] + 10, 0.1, 40),  # |r| <= 1
 ])
 def test_stats_treat_pd_na_like_nan(func):
     df, nullable = _nullable_pair()

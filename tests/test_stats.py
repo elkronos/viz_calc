@@ -252,3 +252,18 @@ def test_largest_remainder_is_fast_for_a_million_values():
     out = st.largest_remainder(values, 100)
     assert out.sum() == 100
     assert time.perf_counter() - start < 8  # 15 s or more with a Fraction per value
+
+
+@pytest.mark.parametrize("r", [1.5, -2.0, np.inf, -np.inf])
+def test_compare_correlations_test_rejects_values_that_are_not_correlations(r):
+    # 1.5 was clipped to 0.999999 and gave z = 48 and p = 0
+    with pytest.raises(ValueError, match=r"correlations must be between -1 and 1, got \["):
+        st.compare_correlations_test(r, 100, 0.3, 100)
+    with pytest.raises(ValueError, match="between -1 and 1"):
+        st.compare_correlations_test(np.array([0.2, 0.3]), 100, np.array([0.1, r]), 100)
+
+
+def test_compare_correlations_test_accepts_the_whole_range_and_missing_values():
+    z, p = st.compare_correlations_test(np.array([1.0, -1.0, 1 + 2e-16, np.nan]), 50, 0.5, 50)
+    assert np.isfinite(z[:3]).all() and np.isnan(z[3]) and np.isnan(p[3])
+    assert z[0] == z[2]  # a perfect correlation that rounding left a hair above 1 is still clipped

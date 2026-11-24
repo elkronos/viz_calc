@@ -609,10 +609,13 @@ def compare_correlations_test(r1: float | np.ndarray, n1: int | np.ndarray, r2: 
     Fisher's r-to-z test: ``z = (atanh r1 - atanh r2) / sqrt(se1² + se2²)``,
     two-sided. Works element-wise on arrays, e.g. two correlation matrices.
     Only valid when the correlations come from different people/units. The
-    result is ``nan`` wherever either ``n`` is 3 or less. The test is
-    asymptotic, so read it with caution for groups of only a few units; a
-    correlation of ±1 is clipped to ±0.999999, which gives a very small
-    p-value even for tiny groups.
+    result is ``nan`` wherever either ``n`` is 3 or less, or a correlation
+    is missing. The test is asymptotic, so read it with caution for groups
+    of only a few units. Every ``|r|`` above 0.999999, a correlation of ±1
+    included, is clipped to ±0.999999, which gives a very small p-value even
+    for tiny groups, and correlations closer to ±1 than that are not told
+    apart. A correlation outside [-1, 1] (beyond rounding) raises
+    ``ValueError``.
 
     References
     ----------
@@ -622,7 +625,14 @@ def compare_correlations_test(r1: float | np.ndarray, n1: int | np.ndarray, r2: 
     Erlbaum.
     """
     _check_method(method)
-    r1, r2 = np.clip(_as_float(r1), -0.999999, 0.999999), np.clip(_as_float(r2), -0.999999, 0.999999)
+    r1, r2 = _as_float(r1), _as_float(r2)
+    every = np.concatenate([r1.ravel(), r2.ravel()])
+    with np.errstate(invalid="ignore"):  # nan (a missing correlation) passes and gives nan
+        outside = every[np.abs(every) > 1 + 8 * np.finfo(float).eps]
+    if outside.size:
+        raise ValueError(f"correlations must be between -1 and 1, got {outside[:5].tolist()}"
+                         f"{' ...' if outside.size > 5 else ''}")
+    r1, r2 = np.clip(r1, -0.999999, 0.999999), np.clip(r2, -0.999999, 0.999999)
     se = np.sqrt(_fisher_se(n1, method) ** 2 + _fisher_se(n2, method) ** 2)
     z = (np.arctanh(r1) - np.arctanh(r2)) / se
     p = 2 * _st.norm.sf(np.abs(z))

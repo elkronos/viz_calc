@@ -155,7 +155,9 @@ $z = \dfrac{\operatorname{atanh} r_B - \operatorname{atanh} r_A}{\sqrt{SE_A^2 + 
 two-sided normal p-value (Fisher, 1921; Cohen, Cohen, West & Aiken, 2003).
 Valid only when the groups contain different units; dependent correlations
 need Steiger's (1980) test. The test is asymptotic, so read it with caution
-for groups of only a few units; correlations of ±1 are clipped to ±0.999999.
+for groups of only a few units. Every $|r|$ above 0.999999, ±1 included, is
+clipped to ±0.999999, so correlations closer to ±1 than that compare as
+equal; a correlation outside $[-1, 1]$ raises a `ValueError`.
 Used by `compare_correlations`.
 
 ### Histogram bin width
