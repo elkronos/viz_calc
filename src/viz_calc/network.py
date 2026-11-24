@@ -581,7 +581,7 @@ def sankey(
         raise ValueError("flows must be non-negative")
     if np.isinf(data[value].to_numpy(dtype=float, na_value=np.nan)).any():
         raise ValueError(f"flow values in {value!r} must be finite")
-    flows = data.groupby([source, target], sort=False, observed=True)[value].sum().reset_index()
+    flows = data[value].groupby([data[source], data[target]], sort=False, observed=True).sum().reset_index()
     nodes = list(pd.unique(pd.concat([flows[source], flows[target]])))
     index = {n: i for i, n in enumerate(nodes)}
     with plt.rc_context({"axes.facecolor": "white"}):  # Plotly's background, whatever the Matplotlib style
@@ -592,8 +592,8 @@ def sankey(
               "color": "rgba(150,150,150,0.35)"},
     ))
     fig.update_layout(title_text=title, font_size=12)
-    inflow = flows.groupby(target, observed=True)[value].sum()
-    outflow = flows.groupby(source, observed=True)[value].sum()
+    inflow = flows[value].groupby(flows[target], observed=True).sum()
+    outflow = flows[value].groupby(flows[source], observed=True).sum()
     table = pd.DataFrame({"node": nodes, "inflow": [inflow.get(n, 0) for n in nodes],
                           "outflow": [outflow.get(n, 0) for n in nodes]})
     return VizResult(fig, None, table, {"flows": flows})

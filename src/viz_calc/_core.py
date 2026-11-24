@@ -322,6 +322,19 @@ def column_list(name: str, columns: Any, distinct: bool = False, allow_none: boo
     return columns
 
 
+def plain_index(data: pd.DataFrame) -> pd.DataFrame:
+    """*data* without the index level names that are also column labels; the index values are kept.
+
+    ``groupby`` and ``sort_values`` read such a name as ambiguous and raise
+    (as ``set_index("date", drop=False)`` leaves it).
+    """
+    names = list(data.index.names)
+    clash = [n is not None and n in data.columns for n in names]
+    if not any(clash):
+        return data
+    return data.rename_axis(index=[None if c else n for n, c in zip(names, clash)])
+
+
 def column_items(data: pd.DataFrame) -> Iterator[tuple[Any, pd.Series]]:
     """Each column of *data* with its label, taken by position, so a repeated label gives each of its columns."""
     for i, label in enumerate(data.columns):

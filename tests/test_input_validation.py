@@ -2,6 +2,7 @@
 
 import contextlib
 import re
+import warnings
 from decimal import Decimal
 from fractions import Fraction
 from io import BytesIO
@@ -763,3 +764,71 @@ def test_stacked_percentages_rejects_an_order_given_twice():
     with pytest.raises(TypeError, match="give category_order only; category_order_ is its deprecated alias"):
         vc.stacked_percentages(datasets.survey(), group="team", category="remote", category_order=[False, True],
                                category_order_=[True, False])
+
+
+# --- index level names and tuple column labels ---------------------------------------------------------------------
+
+INDEXED_CALLS = {
+    "lollipop": ("survey", "team", lambda d: vc.lollipop(d, x="team", y="tenure_years")),
+    "nested_pie": ("small", "o", lambda d: vc.nested_pie(d, outer="o", inner="k", value="a")),
+    "circular_bar": ("small", "a", lambda d: vc.circular_bar(d, label="k", value="a")),
+    "radar": ("measurements", "group", lambda d: vc.radar(d, metrics=["length", "width", "depth"], group="group")),
+    "sankey": ("network", "source", lambda d: vc.sankey(d, source="source", target="target", value="strength")),
+    "timeseries_fill": ("sales", "date", lambda d: vc.timeseries_fill(d, time="date", series=["online", "store"])),
+    "gantt": ("projects", "start", lambda d: vc.gantt(d, task="task", start="start", end="end")),
+    "duration_plot": ("projects", "start", lambda d: vc.duration_plot(d, "task", "start", "end", "work_start",
+                                                                      "work_end")),
+}
+
+
+@pytest.mark.parametrize("name", list(INDEXED_CALLS))
+def test_an_index_named_like_a_column_gives_the_same_table(name):
+    source, column, call = INDEXED_CALLS[name]
+    if name == "sankey":
+        pytest.importorskip("plotly")
+    data = _frame(source)
+    expected = call(data).table
+    indexed = data.set_index(data[column].rename(column))  # as set_index(column, drop=False) gives
+    res = call(indexed)
+    pd.testing.assert_frame_equal(res.table.reset_index(drop=True), expected.reset_index(drop=True))
+    assert indexed.index.name == column  # the caller's frame is left as it was
+
+
+def _tuple_labels(data):
+    d = data.copy()
+    d.columns = pd.MultiIndex.from_tuples([("m", c) for c in d.columns])
+    return d
+
+
+def _m(*columns):
+    return [("m", c) for c in columns]
+
+
+TUPLE_CALLS = {
+    "lollipop": ("survey", lambda d, c: vc.lollipop(d, x=c("team")[0], y=c("tenure_years")[0])),
+    "divergent_bar": ("small", lambda d, c: vc.divergent_bar(d, *c("k", "a", "b"))),
+    "radar": ("measurements", lambda d, c: vc.radar(d, c("length", "width", "depth"), c("group")[0])),
+    "sankey": ("network", lambda d, c: vc.sankey(d, *c("source", "target", "strength"))),
+    "timeseries_fill": ("sales", lambda d, c: vc.timeseries_fill(d, c("date")[0], c("online", "store"))),
+    "gantt": ("projects", lambda d, c: vc.gantt(d, *c("task", "start", "end"))),
+    "duration_plot": ("projects", lambda d, c: vc.duration_plot(d, *c("task", "start", "end", "work_start",
+                                                                      "work_end"))),
+    "donut_grid": ("small", lambda d, c: vc.donut_grid(d, columns=c("a", "b"))),
+}
+
+
+@pytest.mark.parametrize("name", list(TUPLE_CALLS))
+def test_tuple_column_labels_work_like_plain_ones(name):
+    source, call = TUPLE_CALLS[name]
+    if name == "sankey":
+        pytest.importorskip("plotly")
+    data = _frame(source)
+    expected = call(data, lambda *c: list(c)).table
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # pandas 3 warns when a short key adds a column to MultiIndex columns
+        res = call(_tuple_labels(data), _m)
+    assert res.table.shape == expected.shape
+    numbers = [i for i in range(expected.shape[1]) if pd.api.types.is_numeric_dtype(expected.iloc[:, i])]
+    assert numbers
+    for i in numbers:  # the numbers match; labels in the table are the tuples given
+        np.testing.assert_array_equal(res.table.iloc[:, i].to_numpy(), expected.iloc[:, i].to_numpy())

@@ -48,6 +48,7 @@ from ._core import (
     level_mask,
     level_percent,
     palette,
+    plain_index,
     safe_sum,
     select_columns,
     slot_colors,
@@ -415,7 +416,7 @@ def donut_grid(
     share = values / np.where(totals == 0, np.nan, totals)[:, None] * 100  # nan for an all-zero row
     # Built column by column (not with melt), so data columns named "row" or "percent" cannot collide.
     row_labels = data.index.to_flat_index().take(np.tile(np.arange(n), len(columns)))  # keeps the index dtype
-    table = pd.DataFrame({"row": row_labels, "category": pd.Index(columns).repeat(n),
+    table = pd.DataFrame({"row": row_labels, "category": pd.Index(columns, tupleize_cols=False).repeat(n),
                           "percent": share.ravel(order="F")})
     return VizResult(fig, axes, table)
 
@@ -551,7 +552,7 @@ def circular_bar(
     if (data[value] < 0).any():
         raise ValueError("circular_bar values must be non-negative")
     # dict.fromkeys: one column may play two roles (label="city", group="city"), but must be selected once
-    d = select_columns(data, dict.fromkeys([label, value] + ([group] if group is not None else []))).copy()
+    d = plain_index(select_columns(data, dict.fromkeys([label, value] + ([group] if group is not None else []))))
     # a group column with no values: every row goes to the "(missing)" cluster below
     groups = (_levels(d[group]) if d[group].notna().any() else []) if group is not None else [None]
     cols = palette(len(groups), colors)

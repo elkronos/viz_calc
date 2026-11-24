@@ -33,6 +33,7 @@ from ._core import (
     level_label,
     level_percent,
     palette,
+    plain_index,
     select_columns,
 )
 
@@ -320,7 +321,8 @@ def radar(
                          "plt.subplots(subplot_kw={'projection': 'polar'}) or fig.add_subplot(projection='polar')")
     check_not_reserved([f"{m}_{suffix}" for suffix in (stat, "scaled") for m in metrics], group=group)
     groups = category_order(data[group], order)
-    grouped = data.groupby(group, observed=True)[metrics]
+    data = plain_index(data)
+    grouped = select_columns(data, metrics).groupby(data[group], observed=True)
     raw = _group_stat(grouped, stat).reindex(groups)
     missing = data[group].isna().to_numpy()
     rest = select_columns(data, metrics)[missing]  # rows without a group, drawn in grey as "(missing)"
@@ -362,5 +364,5 @@ def radar(
         ax.set_title(f"{stat} per group; axes scaled to the {'observed' if normalize == 'data' else 'group'} range",
                      fontsize="medium", color=NEUTRAL, pad=20)
     ax.legend(title=str(group), frameon=False, loc="upper left", bbox_to_anchor=(1.05, 1.05))
-    table = raw.add_suffix(f"_{stat}").join(scaled.add_suffix("_scaled")).rename_axis(group).reset_index()
+    table = raw.add_suffix(f"_{stat}").join(scaled.add_suffix("_scaled")).rename_axis([group]).reset_index()
     return VizResult(fig, ax, table, {"normalize": normalize})

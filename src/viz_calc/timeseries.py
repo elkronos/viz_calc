@@ -42,6 +42,7 @@ from ._core import (
     level_codes,
     level_label,
     palette,
+    plain_index,
     safe_sum,
     select_columns,
     slot_colors,
@@ -333,7 +334,7 @@ def timeseries_fill(
         col = numeric if numeric is not None else _dates(col, time, keep_tz=True)
     d[time] = _numpy_numbers(col)
     check_finite(d, time)  # a numeric time column too, also years stored as objects or in a Categorical
-    d = d.dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
+    d = plain_index(d).dropna(subset=[time]).groupby(time, as_index=False).mean().sort_values(time)
     if not (d[a].notna() & d[b].notna()).any():
         raise ValueError(f"no time has both a {a!r} and a {b!r} value, so there is nothing to compare")
     t = d[time]
@@ -343,8 +344,8 @@ def timeseries_fill(
     ya = d[a].to_numpy(dtype=float, na_value=np.nan)  # nullable dtypes with NA on pandas 2.0
     yb = d[b].to_numpy(dtype=float, na_value=np.nan)
     fig, ax = get_ax(ax, figsize=(10, 4.5))
-    ax.plot(x, ya, color=colors[0], lw=1.8, label=names[0])
-    ax.plot(x, yb, color=colors[1], lw=1.8, label=names[1])
+    ax.plot(x, ya, color=colors[0], lw=1.8, label=str(names[0]))  # a tuple label is one name
+    ax.plot(x, yb, color=colors[1], lw=1.8, label=str(names[1]))
     ax.fill_between(x, ya, yb, where=ya >= yb, interpolate=True, color=colors[0], alpha=alpha, lw=0)
     ax.fill_between(x, ya, yb, where=ya < yb, interpolate=True, color=colors[1], alpha=alpha, lw=0)
     if tz is not None:
@@ -474,6 +475,13 @@ def _timeline_columns(d: pd.DataFrame, columns: Sequence[str]) -> Any:
     return tz
 
 
+def _flat(table: pd.DataFrame) -> pd.DataFrame:
+    """*table* with MultiIndex columns turned into one level of tuple labels, so plain labels can be added to it."""
+    if isinstance(table.columns, pd.MultiIndex):
+        table.columns = pd.Index(list(table.columns), tupleize_cols=False)
+    return table
+
+
 def _timeline(ax: Axes, labels: list[str], starts: pd.Series, ends: pd.Series, colors: list[str], height: float,
               alpha: float = 1.0, zorder: int = 2) -> None:
     pos = np.arange(len(labels))[::-1]
@@ -512,7 +520,7 @@ def gantt(
     check_not_reserved(["duration_days"], task=task, start=start, end=end, group=group)
     check_has_values(data, task, start, end)
     check_complete(data, start, end)
-    d = data.copy()
+    d = plain_index(data).copy()
     tz = _timeline_columns(d, [start, end])
     bad = d[d[end] < d[start]]
     if len(bad):
@@ -555,7 +563,7 @@ def gantt(
     ax.set_axisbelow(True)
     ax.spines[["top", "right"]].set_visible(False)
     table = d[list(dict.fromkeys([task, start, end, group] if group is not None else [task, start, end]))]
-    table = table.reset_index(drop=True)
+    table = _flat(table.reset_index(drop=True))
     table["duration_days"] = (table[end] - table[start]).dt.total_seconds() / 86400
     return VizResult(fig, ax, table)
 
@@ -601,7 +609,7 @@ def duration_plot(
     colors = slot_colors(colors, ("outer", "inner"))
     check_has_values(data, label, start, end)
     check_complete(data, start, end)
-    d = data.copy()
+    d = plain_index(data).copy()
     # dict.fromkeys: the inner window may reuse the outer window's columns, which must be selected once
     columns = list(dict.fromkeys([label, start, end, inner_start, inner_end]))
     tz = _timeline_columns(d, columns[1:])
@@ -623,7 +631,7 @@ def duration_plot(
     ax.grid(axis="x", color=foreground(ax, "#eeeeee"))
     ax.set_axisbelow(True)
     ax.spines[["top", "right"]].set_visible(False)
-    table = d[columns].reset_index(drop=True)
+    table = _flat(d[columns].reset_index(drop=True))
     table["outer_days"] = (table[end] - table[start]).dt.total_seconds() / 86400
     table["inner_days"] = (table[inner_end] - table[inner_start]).dt.total_seconds() / 86400
     table["inner_share"] = table["inner_days"] / table["outer_days"].replace(0, np.nan)

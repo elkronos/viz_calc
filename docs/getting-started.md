@@ -297,8 +297,11 @@ same thing everywhere. The exceptions are listed here.
   that names both. Rename one of them first. A label that appears twice in
   the frame (joining frames side by side can give one) raises an error too
   when a chart uses that column or would pick it by default; repeated labels
-  a chart does not use are ignored. A list of columns may not hold `None`,
-  which means "no column".
+  a chart does not use are ignored. A column labelled `None` cannot be used
+  in any role, since `None` means "no column", and a list of columns may not
+  hold it. In a frame with MultiIndex columns, a column is named by its full
+  tuple label. An index level named like a column, as
+  set_index("date", drop=False) leaves, does not change the result.
 
 ## Example datasets
 
