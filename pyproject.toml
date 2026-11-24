@@ -38,7 +38,7 @@ network = ["networkx>=3.2"]
 interactive = ["plotly>=5.15"]
 pptx = ["python-pptx>=0.6.21"]
 all = ["viz_calc[network,interactive,pptx]"]
-dev = ["viz_calc[all]", "pytest>=7", "ruff>=0.4"]
+dev = ["viz_calc[all]", "pytest>=7", "ruff>=0.17.5"]
 docs = ["viz_calc[all]", "mkdocs>=1.6,<2", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.24"]
 
 [project.urls]

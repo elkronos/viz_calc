@@ -47,7 +47,8 @@ jobs:
             pip install -e . "pytest>=7"
           else
             if [ -n "${{ matrix.deps }}" ]; then pip install ${{ matrix.deps }}; fi
-            pip install -e ".[dev]" ${{ matrix.deps }}
+            # Every job lints with this ruff release, the floor of the dev extra in pyproject.toml.
+            pip install -e ".[dev]" ruff==0.17.5 ${{ matrix.deps }}
           fi
       - name: Check that no optional dependency is installed
         if: matrix.extras == 'none'

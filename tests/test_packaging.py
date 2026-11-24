@@ -85,6 +85,17 @@ def test_ci_minimum_job_installs_exactly_the_declared_floors():
     assert {_name(k): _version(v) for k, v in pins.items()} == {k: _version(v) for k, v in floors.items()}
 
 
+def test_ci_lints_with_the_ruff_release_the_dev_extra_requires():
+    # Lint results change only when ci.yml names another ruff release. The dev extra asks for at least that
+    # release, since ruff 0.12 still reports 15 errors in code that 0.13 and later accept.
+    if not CI.exists():
+        pytest.skip("the CI workflow is not next to the tests")
+    pinned = set(re.findall(r"\bruff==([0-9][0-9.]*)", CI.read_text(encoding="utf-8")))
+    assert len(pinned) == 1, f"ci.yml pins ruff to {sorted(pinned) or 'no release'}"
+    floor = _floors(_pyproject()["project"]["optional-dependencies"]["dev"])["ruff"]
+    assert _version(floor) == _version(pinned.pop())
+
+
 def test_numpy_floor_skips_1_24_0():
     # NumPy 1.24.0's np.ma.masked_invalid raises TypeError for a pandas Series, which Matplotlib's
     # fill_between passes it, so timeseries_fill failed with a numeric time column. 1.24.1 fixed it.

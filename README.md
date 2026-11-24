@@ -75,7 +75,7 @@ maps each script to its replacement and lists the defects fixed.
 ```bash
 pip install -e ".[dev]"
 pytest                    # unit tests, including checks against SciPy and worked examples
-ruff check src tests
+ruff check src tests examples
 python examples/gallery.py && mkdocs serve    # rebuild images and preview the docs (needs ".[docs]")
 ```
 
