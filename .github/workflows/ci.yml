@@ -10,11 +10,18 @@ on:
     - cron: "17 6 * * 1"
   workflow_dispatch:
 
+# A new push to a pull request cancels the run for the commit it replaces. Every other run has a group of
+# its own, so pushes to main, the weekly run and runs started by hand never wait or cancel.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   test:
     # A label keeps a job's name the same when its pins change.
     name: test (${{ matrix.python }}${{ matrix.label && format(', {0}', matrix.label) || '' }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -36,10 +43,14 @@ jobs:
           - python: "3.13"
           - python: "3.14"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            .github/workflows/ci.yml
       - name: Install
         run: |
           python -m pip install --upgrade pip
@@ -69,9 +80,10 @@ jobs:
   # not only when publish.yml runs at a release.
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.13"
       - name: Build the sdist and wheel

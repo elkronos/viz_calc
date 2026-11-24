@@ -286,6 +286,36 @@ def test_docs_load_mathjax_only_on_pages_with_math(tmp_path):
     assert len(added["math"]) == 1 and added["math"][0].endswith("/mathjax@3/es5/tex-mml-chtml.js")
 
 
+def _workflows() -> dict[str, str]:
+    """{file name: text} for each workflow file."""
+    if not WORKFLOWS.is_dir():
+        pytest.skip("the workflows are not next to the tests")
+    return {path.name: path.read_text(encoding="utf-8") for path in sorted(WORKFLOWS.glob("*.yml"))}
+
+
+def test_workflows_pin_each_action_to_a_commit():
+    # A tag or a branch can be moved to other code and a commit SHA cannot. The comment names the release, so
+    # an update shows in the diff.
+    for name, text in _workflows().items():
+        for action, ref, comment in re.findall(r"^ +(?:- )?uses: ([^@\s]+)@(\S+)(.*)$", text, re.M):
+            assert re.fullmatch(r"[0-9a-f]{40}", ref), f"{name}: {action}@{ref} is not pinned to a commit"
+            assert re.fullmatch(r"  # v[0-9]+(\.[0-9]+)*", comment), f"{name}: {action} has no '  # vX.Y.Z' comment"
+
+
+def test_every_workflow_job_has_a_time_limit():
+    # Without timeout-minutes a job that hangs holds its runner for six hours.
+    for name, text in _workflows().items():
+        for job, lines in _jobs(text).items():
+            assert re.search(r"^    timeout-minutes: [1-9][0-9]*$", lines, re.M), f"{name}: job {job} has no time limit"
+
+
+def test_jobs_that_install_the_checkout_cache_pip_downloads():
+    for name, text in _workflows().items():
+        for job, lines in _jobs(text).items():
+            if "pip install -e" in lines:
+                assert re.search(r"^ +cache: pip$", lines, re.M), f"{name}: job {job} does not cache pip downloads"
+
+
 def _publish_workflow() -> str:
     if not WORKFLOWS.is_dir():
         pytest.skip("the workflows are not next to the tests")
