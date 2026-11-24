@@ -293,9 +293,11 @@ def stacked_percentages(
     if category_order_ is not None:
         import warnings
 
+        if category_order is not None:
+            raise TypeError("pass category_order or its deprecated alias category_order_, not both")
         # stacklevel 3: past cleanup_on_error's wrapper to the caller's line
         warnings.warn("category_order_ is deprecated; use category_order", FutureWarning, stacklevel=3)
-        category_order = category_order if category_order is not None else category_order_
+        category_order = category_order_
     check_dataframe(data, [group, category])
     if group == category:
         raise ValueError(f"group and category must be different columns; both are {group!r}")

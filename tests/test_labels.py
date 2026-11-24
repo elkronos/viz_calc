@@ -263,3 +263,13 @@ def test_pca_plot_order_must_list_every_group():
     assert _legend(res.axes) == ["gamma", "alpha", "beta"]
     with pytest.raises(ValueError, match=r"level '\(missing\)' and missing values"):
         vc.pca_plot(d.assign(group=d["group"].replace("beta", "(missing)").where(d.index % 7 > 0)), features, "group")
+
+
+# --- deprecated alias -------------------------------------------------------------------------------------------------
+
+def test_category_order_and_its_deprecated_alias_cannot_both_be_given():
+    survey = datasets.survey()
+    item = "Meetings are useful"
+    levels = sorted(survey[item].dropna().unique())
+    with pytest.raises(TypeError, match="not both"):
+        vc.stacked_percentages(survey, group="team", category=item, category_order=levels, category_order_=levels)
