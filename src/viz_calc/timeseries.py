@@ -239,11 +239,44 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
     return out
 
 
+class _ConciseDates(mdates.ConciseDateFormatter):
+    """Matplotlib's concise date labels, with day ticks that span months naming each month.
+
+    Matplotlib labels such ticks "15", "Feb", "15", ... with the last
+    tick's month as the offset ("2024-May"), so the first month is never
+    named and the offset reads as if every date were in May. Here the
+    offset names only the year (or the first and last years) and the first
+    tick its month ("Jan 15"). Other ticks keep Matplotlib's labels.
+    """
+
+    def __init__(self, locator: Any, tz: Any = None) -> None:
+        super().__init__(locator, tz=tz)
+        self._zone = tz
+        self._years: str | None = None  # the offset for day ticks that span months
+
+    def format_ticks(self, values: Any) -> list[str]:
+        labels = super().format_ticks(values)
+        self._years = None
+        when = [mdates.num2date(v, tz=self._zone) for v in values]
+        fields = np.array([w.timetuple()[:6] for w in when]).reshape(-1, 6)
+        day_ticks = len(np.unique(fields[:, 2])) > 1 and all(len(np.unique(f)) == 1 for f in fields[:, 3:].T)
+        if day_ticks and len({(w.year, w.month) for w in when}) > 1:
+            first, last = when[0], when[-1]
+            if super().get_offset():
+                self._years = f"{first:%Y}" if first.year == last.year else f"{first:%Y}–{last:%Y}"
+            if first.day != 1:  # the first of a month is already labelled with its month
+                labels[0] = f"{first:%b} {labels[0]}"
+        return labels
+
+    def get_offset(self) -> str:
+        return super().get_offset() if self._years is None else self._years
+
+
 def _date_axis(ax: Axes, axis: str = "x", tz: Any = None) -> None:
     locator = mdates.AutoDateLocator(tz=tz)  # label ticks in the data's own time zone
     target = ax.xaxis if axis == "x" else ax.yaxis
     target.set_major_locator(locator)
-    target.set_major_formatter(mdates.ConciseDateFormatter(locator, tz=tz))
+    target.set_major_formatter(_ConciseDates(locator, tz=tz))
 
 
 def _numpy_numbers(s: pd.Series) -> pd.Series:

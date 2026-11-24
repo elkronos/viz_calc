@@ -4,6 +4,7 @@ import io
 import re
 import warnings
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -194,3 +195,43 @@ def test_rows_missing_a_start_or_an_end_are_kept_and_counted():
                            inner_end="work_end")
     assert res.info["missing_start_or_end"] == 2
     assert len(res.table) == 6 and res.table["outer_days"].isna().sum() == 2
+
+
+# --- date axes ------------------------------------------------------------------------------------------------------
+
+
+def _ticks(res):
+    res.figure.canvas.draw()
+    formatter = res.axes.xaxis.get_major_formatter()
+    return [t.get_text() for t in res.axes.get_xticklabels()], formatter.get_offset()
+
+
+@pytest.mark.parametrize("call", [
+    lambda p: vc.gantt(p, task="task", start="start", end="end"),
+    lambda p: vc.duration_plot(p, label="task", start="start", end="end", inner_start="work_start",
+                               inner_end="work_end"),
+], ids=["gantt", "duration_plot"])
+def test_day_ticks_across_months_name_the_first_month_and_only_the_year(call):
+    # the projects run from January to May: the offset read "2024-May" and the first tick "15" named no month
+    labels, offset = _ticks(call(datasets.projects()))
+    assert labels == ["Jan 15", "Feb", "15", "Mar", "15", "Apr", "15", "May", "15"]
+    assert offset == "2024"
+
+
+@pytest.mark.parametrize("starts,ends,offset", [
+    (["2024-03-02", "2024-03-10"], ["2024-03-12", "2024-03-20"], "2024-Mar"),  # one month
+    (["2024-03-02 02:00", "2024-03-02 09:00"], ["2024-03-02 08:00", "2024-03-02 20:00"], "2024-Mar-02"),  # one day
+    (["2022-03-10", "2023-01-05"], ["2023-01-02", "2024-08-20"], ""),  # years: the ticks name them
+])
+def test_date_axes_that_need_no_change_keep_matplotlibs_labels(starts, ends, offset):
+    res = vc.gantt(pd.DataFrame({"t": ["a", "b"], "s": starts, "e": ends}), "t", "s", "e")
+    labels, got = _ticks(res)
+    plain = mdates.ConciseDateFormatter(res.axes.xaxis.get_major_locator())
+    assert labels == plain.format_ticks(res.axes.get_xticks()) and got == plain.get_offset() == offset
+
+
+def test_day_ticks_across_new_year_name_both_years():
+    res = vc.gantt(pd.DataFrame({"t": ["a", "b"], "s": ["2023-12-10", "2024-01-05"], "e": ["2024-01-02", "2024-02-20"]}),
+                   "t", "s", "e")
+    labels, offset = _ticks(res)
+    assert labels[:3] == ["Dec 15", "Jan", "15"] and offset == "2023\u20132024"
