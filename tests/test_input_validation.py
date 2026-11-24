@@ -919,3 +919,22 @@ def test_network_map_seed_is_what_networkx_takes(seed, message):
 def test_dataset_sizes_must_be_whole_numbers_of_at_least_one(call, name, size):
     with pytest.raises(ValueError, match=f"{name} must be a whole number of at least 1"):
         call(size)
+
+
+# --- nothing to analyse ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", [0.0, 5.0, 0.1])
+@pytest.mark.parametrize("call", [
+    lambda d: vc.pca(d, MEASURES, scale=False),
+    lambda d: vc.pca_plot(d, MEASURES, scale=False),
+], ids=["pca", "pca_plot"])
+def test_unscaled_pca_of_constant_features_raises(call, value):
+    d = datasets.measurements().assign(**{c: value for c in MEASURES})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # gave NaN ratios with "invalid value encountered in divide"
+        with pytest.raises(ValueError, match=r"every feature is constant, so there is no variance to analyse"):
+            call(d)
+    assert plt.get_fignums() == []
+    one_varies = d.assign(length=datasets.measurements()["length"])
+    assert vc.pca(one_varies, MEASURES, scale=False)["explained_variance_ratio"].iloc[0] == 1.0

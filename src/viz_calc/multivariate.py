@@ -48,7 +48,9 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     when features are on different units; otherwise large-variance features
     dominate (Jolliffe & Cadima, 2016). A feature whose values are all
     identical cannot be standardized and raises ``ValueError``; unscaled, it
-    adds a component with zero variance. A feature holding an infinite value
+    adds a component with zero variance, and if every feature is constant
+    there is no variance to analyse, which raises ``ValueError`` too. A
+    feature holding an infinite value
     raises ``ValueError`` either way. Component signs are fixed so that the
     largest-magnitude loading of each component is positive, making results
     reproducible.
@@ -86,6 +88,8 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
         if flat.any():
             raise ValueError(f"constant feature(s) cannot be scaled: {[f for f, c in zip(features, flat) if c]}")
         Z = Z / sd
+    elif constant.all():  # no variance at all: every explained-variance ratio would be 0/0
+        raise ValueError(f"every feature is constant, so there is no variance to analyse: {features}")
     U, S, Vt = np.linalg.svd(Z, full_matrices=False)
     signs = np.sign(Vt[np.arange(len(Vt)), np.abs(Vt).argmax(axis=1)])
     Vt *= signs[:, None]
