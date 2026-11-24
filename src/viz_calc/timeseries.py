@@ -91,6 +91,45 @@ def _numpy_dates(s: pd.Series) -> pd.Series:
     return s
 
 
+def _unparsed(s: pd.Series, values: Any, name: str, dayfirst: bool) -> str:
+    """Why no one reading parses *s*: what the column holds, or the first value that fails and why.
+
+    *values* is *s*, or its categories for a Categorical.
+    """
+    kind = pd.api.types.infer_dtype(values, skipna=True)
+    if kind in ("boolean", "timedelta", "timedelta64", "period", "interval", "time"):
+        return f"column {name!r} holds {kind} values ({values.dtype}), which cannot be read as dates"
+    present = s.notna().to_numpy()
+    bad = None
+    for kwargs in ({"dayfirst": dayfirst}, {"format": "ISO8601", "utc": True}):  # the readings _dates tries
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")  # the failed readings have warned already
+                parsed = pd.to_datetime(s, errors="coerce", **kwargs)
+        except (ValueError, TypeError, OverflowError):
+            continue
+        if pd.api.types.is_datetime64_any_dtype(parsed):
+            missed = present & parsed.isna().to_numpy()
+            if bad is None or missed.sum() < bad.sum():
+                bad = missed
+    if bad is None or not bad.any():
+        return (f"column {name!r} could not be parsed as dates; use one consistent format, "
+                "ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
+    i = int(np.argmax(bad))  # the first value that the reading which parses the most values leaves out
+    value = f"{s.iloc[i]!r} (row {s.index[i]!r})"
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            pd.to_datetime(pd.Series([s.iloc[i]], dtype=object), dayfirst=dayfirst)
+    except pd.errors.OutOfBoundsDatetime:
+        return (f"column {name!r} could not be parsed as dates: {value} is outside the dates pandas "
+                f"{pd.__version__} can hold, {pd.Timestamp.min:%Y-%m-%d} to {pd.Timestamp.max:%Y-%m-%d}")
+    except (ValueError, TypeError, OverflowError):
+        return f"column {name!r} could not be parsed as dates: {value} does not read as a date"
+    return (f"column {name!r} could not be parsed as dates: {value} is not in the format of the other values; "
+            "use one consistent format, ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
+
+
 def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = False) -> pd.Series:
     """Parse *s* to datetimes, strictly.
 
@@ -111,14 +150,19 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
     With ``dayfirst=True`` numeric dates such as ``"05/01/2021"`` are read
     day first (5 January). It is not meant for ISO 8601 strings, which
     pandas would then read as year-day-month.
+
+    A column that does not parse raises a ``ValueError`` naming its first
+    value that fails, with its row label, and why it fails.
     """
+    errors: list[Exception] = []  # what each failed reading raised; the final error chains the last one
 
     def attempt(values, **kwargs):
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", FutureWarning)  # pandas 2.x warns about mixed offsets
                 out = pd.to_datetime(values, **kwargs)
-        except (ValueError, TypeError, OverflowError):
+        except (ValueError, TypeError, OverflowError) as exc:
+            errors.append(exc)
             return None
         return out if pd.api.types.is_datetime64_any_dtype(out) else None
 
@@ -139,8 +183,7 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
     if out is None:
         utc = attempt(s, format="ISO8601", utc=True)  # ISO strings with different UTC offsets
         if utc is None:
-            raise ValueError(f"column {name!r} could not be parsed as dates; use one consistent format, "
-                             "ideally ISO 8601 (YYYY-MM-DD or YYYY-MM-DD HH:MM[+HH:MM])")
+            raise ValueError(_unparsed(s, values, name, dayfirst)) from (errors[-1] if errors else None)
         if keep_tz:
             out = utc
         else:
