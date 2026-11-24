@@ -18,6 +18,7 @@ from ._core import (
     VizResult,
     category_order,
     check_choice,
+    check_color,
     check_count,
     check_dataframe,
     check_finite,
@@ -97,6 +98,7 @@ def profile_bars(
     check_count("max_levels", max_levels)
     check_count("per_page", per_page)
     check_count("ncols", ncols)
+    check_color("color", color)
     if cols is None:
         cols = [c for c, s in column_items(data) if s.nunique() <= max_levels]
         check_dataframe(data, cols)  # a column picked by default may have a repeated label

@@ -25,6 +25,8 @@ from ._core import (
     abbreviate,
     center_labels,
     check_choice,
+    check_color,
+    check_count,
     check_dataframe,
     check_distinct,
     check_finite,
@@ -57,12 +59,6 @@ from ._core import (
 
 __all__ = ["waffle", "percent_grid", "stacked_percentages", "donut_grid", "nested_pie", "circular_bar",
            "waterfall", "funnel", "bullet", "upset"]
-
-
-def _check_count(name: str, value: Any, minimum: int = 1) -> None:
-    """Raise unless *value* is an integer of at least *minimum* (a grid size, a gap)."""
-    if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < minimum:
-        raise ValueError(f"{name} must be an integer >= {minimum}, got {value!r}")
 
 
 def _check_real(name: str, value: Any, minimum: float = -math.inf) -> None:
@@ -117,8 +113,8 @@ def waffle(
     check_dataframe(data, [category, value])
     check_distinct(category=category, value=value)
     check_not_reserved(["value", "percent", "tiles"], category=category)
-    _check_count("rows", rows)
-    _check_count("columns", columns)
+    check_count("rows", rows)
+    check_count("columns", columns)
     check_has_values(data, category, value)
     totals = _aggregate(data, category, value)
     unknown = data[category].isna()  # rows without a category still count towards the total
@@ -209,7 +205,7 @@ def percent_grid(
     """
     check_dataframe(data, [column, facet])
     check_distinct(column=column, facet=facet)
-    _check_count("col_wrap", col_wrap)
+    check_count("col_wrap", col_wrap)
     st._check_level(level)
     colors = slot_colors(colors, ("success", "other"))
     check_has_values(data, column)
@@ -364,7 +360,7 @@ def donut_grid(
     """
     columns = None if columns is None else column_list("columns", columns, distinct=True)
     check_dataframe(data, columns or [])
-    _check_count("col_wrap", col_wrap)
+    check_count("col_wrap", col_wrap)
     _check_real("min_label", min_label)
     columns = columns if columns is not None else [
         c for c, s in column_items(data) if is_number_column(s)]
@@ -538,7 +534,7 @@ def circular_bar(
     check_numeric(data, value)
     check_finite(data, value)
     check_has_values(data, label, value)
-    _check_count("gap", gap, minimum=0)
+    check_count("gap", gap, minimum=0)
     _check_real("inner_radius", inner_radius, minimum=0)
     if (data[value] < 0).any():
         raise ValueError("circular_bar values must be non-negative")
@@ -710,6 +706,7 @@ def funnel(
     check_numeric(data, value)
     check_finite(data, value)
     check_has_values(data, stage, value)
+    check_color("color", color)
     missing = _missing_rows(data, [value], stage)
     if missing:
         raise ValueError(f"{value!r} is missing for stage(s) {missing}; a funnel needs a value for every stage")
@@ -824,6 +821,8 @@ def bullet(
     check_numeric(data, value, *([target] if target is not None else []), *band_cols)
     check_finite(data, value, *([target] if target is not None else []), *band_cols)
     check_has_values(data, label, value)
+    if bar_color is not None:
+        check_color("bar_color", bar_color)
     n = len(data)
     if ax is not None and n != 1:
         raise ValueError(f"bullet draws one panel per row, so ax= needs data with a single row, got {n} rows; "
@@ -925,7 +924,9 @@ def upset(
     if not (isinstance(min_size, numbers.Real) and math.isfinite(min_size)):
         raise ValueError(f"min_size must be a finite number, got {min_size!r}")
     if max_intersections is not None:
-        _check_count("max_intersections", max_intersections)
+        check_count("max_intersections", max_intersections)
+    if color is not None:
+        check_color("color", color)
     if isinstance(sets, pd.DataFrame):
         for c in sets.columns:
             bad = [v for v in pd.unique(sets[c].dropna()) if v not in (True, False)]  # 0/1 compare equal to bools

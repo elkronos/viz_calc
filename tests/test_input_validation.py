@@ -1,6 +1,7 @@
 """Input checks shared by the charts: column roles, infinite and missing values, read-only columns, sums."""
 
 import contextlib
+import re
 from io import BytesIO
 
 import matplotlib.pyplot as plt
@@ -514,3 +515,93 @@ def test_elementwise_statistics_name_their_arguments_when_shapes_differ():
     assert low.shape == high.shape == (3,)
     z, p = st.compare_correlations_test([0.1, 0.2], 10, [0.3, 0.4], 10)
     assert z.shape == p.shape == (2,)
+
+
+# --- colour, colormap and count arguments ---------------------------------------------------------------------------
+
+SINGLE_COLOUR_CALLS = {
+    "lollipop": lambda ax, **kw: vc.lollipop(datasets.survey(), x="team", y="tenure_years", ax=ax, **kw),
+    "funnel": lambda ax, **kw: vc.funnel(SMALL, stage="k", value="a", ax=ax, **kw),
+    "bullet": lambda ax, **kw: vc.bullet(SMALL.head(1), label="k", value="a", ax=ax, **kw),
+    "upset": lambda ax, **kw: vc.upset(datasets.memberships(), **kw),
+    "quadrant_plot": lambda ax, **kw: vc.quadrant_plot(datasets.trial(), x="baseline", y="score", ax=ax, **kw),
+    "profile_bars": lambda ax, **kw: vc.profile_bars(datasets.survey(), columns=["team"], **kw),
+    "period_bars": lambda ax, **kw: vc.period_bars(datasets.sales().head(60), date="date", value="online", ax=ax,
+                                                   **kw),
+}
+
+
+@pytest.mark.parametrize("value", ["x", ["red", "blue"], ["red"]], ids=["unknown", "two colours", "a list of one"])
+@pytest.mark.parametrize("name", list(SINGLE_COLOUR_CALLS))
+def test_a_single_colour_argument_must_be_one_colour(name, value):
+    argument = "bar_color" if name == "bullet" else "color"
+    fig, ax = plt.subplots()
+    with pytest.raises(ValueError, match=rf"{argument} must be one colour, such as 'red'.*got {re.escape(repr(value))}"):
+        SINGLE_COLOUR_CALLS[name](ax, **{argument: value})
+    assert not (ax.lines or ax.collections or ax.patches)  # nothing drawn on the caller's Axes
+    assert plt.get_fignums() == [fig.number]
+    plt.close("all")
+    SINGLE_COLOUR_CALLS[name](None, **{argument: (0.2, 0.4, 0.6)})  # an RGB tuple is one colour
+
+
+@pytest.mark.parametrize("call, argument", [
+    (lambda **kw: vc.correlogram(datasets.measurements(), **kw), "cmap"),
+    (lambda **kw: vc.compare_correlations(datasets.measurements(), group="group", **kw), "cmap"),
+    (lambda **kw: vc.calendar_heatmap(datasets.sales().head(60), date="date", value="online", **kw), "cmap"),
+], ids=["correlogram", "compare_correlations", "calendar_heatmap"])
+def test_a_colormap_argument_must_name_a_colormap(call, argument):
+    with pytest.raises(ValueError, match=r"cmap must be a Matplotlib colormap name such as 'viridis', got 'C0', "
+                                         "which is a colour, not a colormap"):
+        call(**{argument: "C0"})
+    with pytest.raises(ValueError, match=r"cmap must be a Matplotlib colormap name such as 'viridis', got 'nope'$"):
+        call(**{argument: "nope"})
+    assert plt.get_fignums() == []
+    call(**{argument: plt.get_cmap("viridis")})  # a Colormap object is still accepted
+
+
+def test_calendar_heatmap_checks_its_missing_colour():
+    with pytest.raises(ValueError, match="missing_color must be one colour, such as 'red'.*got 'nope'"):
+        vc.calendar_heatmap(datasets.sales().head(60), date="date", value="online", missing_color="nope")
+
+
+@pytest.mark.parametrize("call", [
+    lambda: vc.palette(3, "notacmap"),
+    lambda: vc.waffle(datasets.survey(), category="team", colors="notacmap"),
+    lambda: vc.ridgeplot(datasets.measurements(), x="depth", group="group", colors="notacmap"),
+], ids=["palette", "waffle", "ridgeplot"])
+def test_colors_name_the_argument_for_an_unknown_colormap(call):
+    with pytest.raises(ValueError, match="colors must be a Matplotlib colormap name or a list of colours, "
+                                         "got 'notacmap'$"):
+        call()
+
+
+def test_palette_suggests_a_list_for_one_colour():
+    with pytest.raises(ValueError, match=r"got 'red'; for one colour use \['red'\]"):
+        vc.palette(3, "red")
+    assert vc.palette(3, ["red"]) == ["red"] * 3
+
+
+@pytest.mark.parametrize("n", [2.5, 2.0, -2, True, "3"])
+def test_palette_needs_a_whole_number_of_colours(n):
+    with pytest.raises(ValueError, match="n must be a whole number of at least 0"):
+        vc.palette(n)
+
+
+def test_palette_takes_zero_and_numpy_integers():
+    assert vc.palette(0) == []
+    assert vc.palette(np.int64(2)) == list(vc.OKABE_ITO[:2])
+
+
+@pytest.mark.parametrize("call, name", [
+    (lambda: vc.waffle(datasets.survey(), category="team", rows=2.0), "rows"),
+    (lambda: vc.waffle(datasets.survey(), category="team", columns=5.0), "columns"),
+    (lambda: vc.percent_grid(datasets.trial(), column="improved", facet="arm", col_wrap=2.0), "col_wrap"),
+    (lambda: vc.donut_grid(SMALL, col_wrap=2.0), "col_wrap"),
+    (lambda: vc.circular_bar(SMALL, label="k", value="a", gap=1.0), "gap"),
+    (lambda: vc.upset(datasets.memberships(), max_intersections=3.0), "max_intersections"),
+    (lambda: vc.histogram(datasets.trial(), x="score", facet="arm", col_wrap=2.0), "col_wrap"),
+], ids=["waffle rows", "waffle columns", "percent_grid", "donut_grid", "circular_bar", "upset", "histogram"])
+def test_counts_given_as_whole_floats_get_the_same_message_everywhere(call, name):
+    with pytest.raises(ValueError, match=rf"{name} must be a whole number of at least \d given as an int, "
+                                         rf"got the float \d\.0; use \d$"):
+        call()

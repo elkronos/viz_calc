@@ -19,6 +19,8 @@ from ._core import (
     VizResult,
     category_order,
     check_choice,
+    check_cmap,
+    check_color,
     check_count,
     check_dataframe,
     check_distinct,
@@ -159,6 +161,7 @@ def correlogram(
     check_choice("triangle", triangle, ["lower", "upper", "full"])
     st._check_level(alpha, "alpha", "0.05, not 5")
     check_count("decimals", decimals, minimum=0)
+    check_cmap("cmap", cmap)
     cols = _numeric_columns(data, columns)
     table = _pairwise(data, cols, method)
     table["p_adjusted"] = st.adjust_pvalues(table["p"], p_adjust)
@@ -235,6 +238,7 @@ def compare_correlations(
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     st._check_level(alpha, "alpha", "0.05, not 5")
     check_count("decimals", decimals, minimum=0)
+    check_cmap("cmap", cmap)
     if columns is not None:
         columns = column_list("columns", columns, distinct=True)
         if group in columns:
@@ -334,6 +338,7 @@ def quadrant_plot(
     check_finite(data, x, y)
     check_choice("center", center, ["mean", "median"])
     check_choice("method", method, ["pearson", "spearman"])
+    check_color("color", color)
     d = select_columns(data, [c for c in dict.fromkeys([x, y, label]) if c is not None]).dropna(subset=[x, y])
     if len(d) < 3:
         raise ValueError("need at least three complete observations")

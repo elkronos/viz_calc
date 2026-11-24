@@ -119,7 +119,7 @@ def test_circular_bar_missing_value_leaves_an_empty_slot(values):
 
 
 def test_circular_bar_rejects_a_negative_gap():
-    with pytest.raises(ValueError, match="gap must be an integer >= 0"):
+    with pytest.raises(ValueError, match="gap must be a whole number of at least 0"):
         vc.circular_bar(ITEMS, label="lab", value="v", group="g", gap=-3)
 
 
@@ -245,7 +245,7 @@ def test_waffle_rejects_a_negative_row_even_if_the_total_is_positive():
 
 @pytest.mark.parametrize("kwargs", [{"rows": 0}, {"columns": 0}, {"rows": 2.5}, {"rows": True}])
 def test_waffle_grid_size_is_validated(kwargs):
-    with pytest.raises(ValueError, match=f"{next(iter(kwargs))} must be an integer >= 1"):
+    with pytest.raises(ValueError, match=f"{next(iter(kwargs))} must be a whole number of at least 1"):
         vc.waffle(datasets.trial(), category="arm", **kwargs)
 
 
@@ -264,5 +264,5 @@ def test_percent_grid_titles_an_empty_group_as_no_data():
     lambda: vc.donut_grid(WIDE, col_wrap=0),
 ], ids=["percent_grid", "donut_grid"])
 def test_col_wrap_is_validated(call):
-    with pytest.raises(ValueError, match="col_wrap must be an integer >= 1"):
+    with pytest.raises(ValueError, match="col_wrap must be a whole number of at least 1"):
         call()

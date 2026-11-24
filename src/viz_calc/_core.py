@@ -12,13 +12,14 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Any, ParamSpec, TypeVar
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.axis import Axis
 from matplotlib.category import StrCategoryFormatter
-from matplotlib.colors import is_color_like, to_hex, to_rgb, to_rgba
+from matplotlib.colors import Colormap, is_color_like, to_hex, to_rgb, to_rgba
 from matplotlib.figure import FigureBase
 from matplotlib.text import Text
 from matplotlib.ticker import FixedFormatter, FuncFormatter, ScalarFormatter
@@ -452,7 +453,7 @@ def get_ax(ax: Axes | None = None, figsize: tuple[float, float] = (8, 5), **subp
 
 
 def palette(n: int, colors: Sequence[str] | str | None = None) -> list[str]:
-    """Return *n* colours.
+    """Return *n* colours (an ``int`` of at least 0).
 
     ``None`` uses Okabe–Ito for up to eight categories and the perceptually
     uniform ``viridis`` colormap beyond that. The eighth Okabe–Ito colour is
@@ -460,6 +461,7 @@ def palette(n: int, colors: Sequence[str] | str | None = None) -> list[str]:
     as ``dark_background``) it is white instead. A string names any
     Matplotlib colormap; a sequence of colours is cycled.
     """
+    check_count("n", n, minimum=0)
     if n <= 0:
         return []
     if colors is None:
@@ -467,6 +469,9 @@ def palette(n: int, colors: Sequence[str] | str | None = None) -> list[str]:
             return [foreground(None, c) if c == OKABE_ITO[7] else c for c in OKABE_ITO[:n]]
         colors = "viridis"
     if isinstance(colors, str):
+        if colors not in matplotlib.colormaps:
+            hint = f"; for one colour use [{colors!r}]" if is_color_like(colors) else ""
+            raise ValueError(f"colors must be a Matplotlib colormap name or a list of colours, got {colors!r}{hint}")
         cmap = plt.get_cmap(colors)
         return [to_hex(c) for c in cmap(np.linspace(0, 1, n) if n > 1 else [0.5])]
     colors = list(colors)
@@ -494,6 +499,20 @@ def slot_colors(colors: Any, slots: Sequence[str], name: str = "colors") -> list
     if bad:
         raise ValueError(f"{name} contains invalid colour(s): {bad}")
     return colors
+
+
+def check_color(name: str, value: Any) -> None:
+    """Raise unless *value* is one Matplotlib colour; a list of colours is rejected rather than cycled over the marks."""
+    if not is_color_like(value):
+        raise ValueError(f"{name} must be one colour, such as 'red', '#0072B2' or an RGB tuple, got {value!r}")
+
+
+def check_cmap(name: str, value: Any) -> None:
+    """Raise unless *value* is a Matplotlib colormap or the name of one (``None`` is Matplotlib's default)."""
+    if value is None or isinstance(value, Colormap) or isinstance(value, str) and value in matplotlib.colormaps:
+        return
+    hint = ", which is a colour, not a colormap" if is_color_like(value) else ""
+    raise ValueError(f"{name} must be a Matplotlib colormap name such as 'viridis', got {value!r}{hint}")
 
 
 class _VisibleBar:

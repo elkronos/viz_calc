@@ -97,8 +97,8 @@ def test_percent_grid_accepts_any_colour_form():
 
 
 @pytest.mark.parametrize(("kwargs", "message"), [
-    ({"max_intersections": True}, "max_intersections must be an integer >= 1, got True"),
-    ({"max_intersections": 0}, "max_intersections must be an integer >= 1, got 0"),
+    ({"max_intersections": True}, "max_intersections must be a whole number of at least 1, got True"),
+    ({"max_intersections": 0}, "max_intersections must be a whole number of at least 1, got 0"),
     ({"min_size": "2"}, "min_size must be a finite number, got '2'"),
     ({"min_size": None}, "min_size must be a finite number, got None"),
     ({"min_size": np.nan}, "min_size must be a finite number"),

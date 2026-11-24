@@ -23,6 +23,7 @@ from ._core import (
     category_order,
     center_labels,
     check_choice,
+    check_color,
     check_count,
     check_dataframe,
     check_distinct,
@@ -479,6 +480,7 @@ def lollipop(
     check_distinct(x=x, y=y)
     check_choice("stat", stat, ["mean", "median", "sum", "count"])
     check_choice("sort", sort, ["descending", "ascending", None])
+    check_color("color", color)
     check_not_reserved(["value"], x=x)
     check_has_values(data, x, y)
     key = group_key(data[x])

@@ -71,10 +71,11 @@ def test_calendar_heatmap_and_animated_bubble_that_fail_after_drawing_leave_no_f
     assert plt.get_fignums() == []
 
 
-def test_a_failed_call_keeps_the_callers_figure():
+def test_a_failed_call_keeps_the_callers_figure(monkeypatch):
+    monkeypatch.setattr(timeseries, "_date_axis", _broken)
     fig, ax = plt.subplots()
-    with pytest.raises(ValueError, match="valid color"):  # Matplotlib rejects the colour while drawing
-        vc.period_bars(pd.DataFrame({"d": DATES, "v": range(6)}), date="d", value="v", color="not a colour", ax=ax)
+    with pytest.raises(RuntimeError, match="broken after drawing"):
+        vc.period_bars(pd.DataFrame({"d": DATES, "v": range(6)}), date="d", value="v", ax=ax)
     assert plt.get_fignums() == [fig.number]
 
 

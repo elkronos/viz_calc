@@ -166,6 +166,11 @@ additions. How you change a chart's colours depends on what it colours:
 In `animated_bubble`, `color=` names the **column** whose categories set the
 bubble colours; the colours themselves go in `colors=`.
 
+A `color=` or `bar_color=` that is not one colour (a list included), a colour
+in `colors=` that Matplotlib does not know, and a name that is not one of
+Matplotlib's colormaps raise a `ValueError` naming the argument before
+anything is drawn.
+
 viz_calc leaves the Matplotlib style to you. Marks drawn straight on the axes
 background (means and confidence intervals, error bars, reference and zero
 lines, labels beside bars, `pca_plot`'s loading labels, `upset`'s bars and
@@ -288,9 +293,9 @@ same thing everywhere. The exceptions are listed here.
   with both 0 and False (or 1 and True) as column labels, selecting either
   label returns both columns, so a chart given either label raises an error
   that names both. Rename one of them first. A label that appears twice in
-  the frame (`pd.concat(..., axis=1)` can give one) raises an error too when
-  a chart uses that column or would pick it by default; repeated labels a
-  chart does not use are ignored. A list of columns may not hold `None`,
+  the frame (joining frames side by side can give one) raises an error too
+  when a chart uses that column or would pick it by default; repeated labels
+  a chart does not use are ignored. A list of columns may not hold `None`,
   which means "no column".
 
 ## Example datasets

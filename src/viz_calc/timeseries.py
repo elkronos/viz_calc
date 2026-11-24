@@ -25,6 +25,8 @@ from ._core import (
     VizResult,
     category_order,
     check_choice,
+    check_cmap,
+    check_color,
     check_count,
     check_dataframe,
     check_finite,
@@ -219,6 +221,7 @@ def period_bars(
     check_finite(data, value)
     check_choice("freq", freq, list(_PERIOD))
     check_choice("stat", stat, ["sum", "mean", "median", "count", "max", "min"])
+    check_color("color", color)
     if trend_window is not None:
         check_count("trend_window", trend_window, minimum=0)
     check_has_values(data, date, value)
@@ -390,7 +393,9 @@ def calendar_heatmap(
         check_numeric(data, value)
         check_finite(data, value)
     check_has_values(data, date, value)
-    cm = plt.get_cmap(cmap).with_extremes(bad=missing_color)  # an unknown cmap fails before any work is done
+    check_cmap("cmap", cmap)
+    check_color("missing_color", missing_color)
+    cm = plt.get_cmap(cmap).with_extremes(bad=missing_color)
     d = pd.DataFrame({"day": _dates(data[date], date).dt.normalize()})  # tz-aware dates: local calendar day
     if value is None:
         daily = d.groupby("day").size().astype(float)
