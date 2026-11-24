@@ -19,7 +19,7 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.axis import Axis
 from matplotlib.category import StrCategoryFormatter
-from matplotlib.colors import is_color_like, to_hex, to_rgb, to_rgba
+from matplotlib.colors import ListedColormap, is_color_like, to_hex, to_rgb, to_rgba
 from matplotlib.figure import FigureBase
 from matplotlib.text import Text
 from matplotlib.ticker import FixedFormatter, FuncFormatter, ScalarFormatter
@@ -407,7 +407,10 @@ def palette(n: int, colors: Sequence[str] | str | None = None) -> list[str]:
     uniform ``viridis`` colormap beyond that. The eighth Okabe–Ito colour is
     black, so under a style with a dark ``rcParams["axes.facecolor"]`` (such
     as ``dark_background``) it is white instead. A string names any
-    Matplotlib colormap; a sequence of colours is cycled.
+    Matplotlib colormap; a sequence of colours is cycled. A qualitative
+    colormap (a list of fewer than 256 colours, such as ``"tab10"``) gives
+    its first *n* colours in order, and raises an error if it has fewer than
+    *n*; any other colormap is sampled evenly from end to end.
     """
     if n <= 0:
         return []
@@ -417,6 +420,11 @@ def palette(n: int, colors: Sequence[str] | str | None = None) -> list[str]:
         colors = "viridis"
     if isinstance(colors, str):
         cmap = plt.get_cmap(colors)
+        if isinstance(cmap, ListedColormap) and cmap.N < 256:  # sampling evenly would skip and repeat its colours
+            if n > cmap.N:
+                raise ValueError(f"colormap {colors!r} has {cmap.N} colours, too few for {n} categories; "
+                                 "use a larger one or a list of colours")
+            return [to_hex(c) for c in cmap(np.arange(n))]
         return [to_hex(c) for c in cmap(np.linspace(0, 1, n) if n > 1 else [0.5])]
     colors = list(colors)
     if not colors:

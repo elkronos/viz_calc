@@ -4,6 +4,7 @@ import io
 import warnings
 import xml.dom.minidom
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
@@ -237,3 +238,14 @@ def test_legends_keep_levels_that_are_empty_or_start_with_an_underscore(name):
         ax = vc.likert(d.assign(q=d["g"]), items=["q"], levels=HIDDEN).axes
     texts = [t.split(":")[0] for t in _legend(ax)]
     assert sorted(texts) == sorted(HIDDEN)
+
+
+# --- palette ----------------------------------------------------------------------------------------------------------
+
+def test_a_qualitative_colormap_gives_its_colours_in_order():
+    tab10 = [plt.matplotlib.colors.to_hex(c) for c in plt.get_cmap("tab10").colors]
+    assert vc.palette(3, "tab10") == tab10[:3]
+    assert vc.palette(10, "tab10") == tab10
+    with pytest.raises(ValueError, match="'tab10' has 10 colours, too few for 11"):
+        vc.palette(11, "tab10")
+    assert len(set(vc.palette(300, "viridis"))) > 200  # a continuous map is still sampled end to end
