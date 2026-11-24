@@ -203,6 +203,19 @@ def test_getting_started_statistics_comments():
     assert "[0.03, 0.06, 0.06]" in text
 
 
+def test_getting_started_describes_info_as_the_charts_fill_it():
+    pattern = _section(_read("docs/getting-started.md"), "## The one pattern to learn")
+    comment = next(ln for ln in pattern.splitlines() if ln.startswith("res.info"))
+    info = vc.benchmark_bar(datasets.trial(), x="arm", y="score", threshold=50).info
+    assert "threshold" in info and "threshold" in comment  # the comment describes the call above it
+    # not every chart records its settings: a chart with nothing beyond its table returns an empty dict
+    df = pd.DataFrame({"m": ["a", "b"], "s": [1.0, 2.0], "o": [2.0, 1.0]})
+    simple = [vc.dumbbell(df, label="m", start="s", end="o"), vc.funnel(df, stage="m", value="o"),
+              vc.waterfall(df, label="m", value="s")]
+    assert any(res.info == {} for res in simple)
+    assert "empty dict" in " ".join(pattern.split())
+
+
 # --- colours and ax= ------------------------------------------------------------------------------------------------
 
 

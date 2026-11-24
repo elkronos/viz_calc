@@ -39,7 +39,7 @@ res = vc.benchmark_bar(trial, x="arm", y="score", threshold=50)
 res.figure      # matplotlib.figure.Figure
 res.axes        # the Axes you can keep customising
 res.table       # the numbers that were drawn
-res.info        # extra results and the settings used
+res.info        # a dict of extra results; here the threshold and settings used
 res.save("benchmark.png")   # PNG, SVG or PDF; HTML for Plotly figures
 ```
 
@@ -52,7 +52,10 @@ res.save("benchmark.png")   # PNG, SVG or PDF; HTML for Plotly figures
 | high dose | 40 | 53.53 | 10.86 | 1.72 | 50.05 | 57.00 | above |
 
 The table is an ordinary DataFrame: export it with `res.table.to_csv(...)`,
-cite it in a report, or test it.
+cite it in a report, or test it. `res.info` holds what does not fit the
+table: test results, matrices, objects such as an animation and, for some
+charts, the settings behind the numbers. Charts with nothing beyond the
+table return an empty dict.
 
 ## Showing figures
 
