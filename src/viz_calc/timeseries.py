@@ -346,9 +346,9 @@ def period_bars(
     try:  # pandas 2 times periods in nanoseconds, so the first start and the last end must lie in its range
         _ = first.start_time, last.end_time
     except pd.errors.OutOfBoundsDatetime as exc:
+        lo, hi = pd.Period(pd.Timestamp.min, _PERIOD[freq]) + 1, pd.Period(pd.Timestamp.max, _PERIOD[freq]) - 1
         raise ValueError(f"column {date!r} has {freq}s from {first} to {last}, but with pandas {pd.__version__} "
-                         f"period_bars draws only {freq}s within {pd.Timestamp.min:%Y-%m-%d} to "
-                         f"{pd.Timestamp.max:%Y-%m-%d}") from exc
+                         f"period_bars draws only {freq}s from {lo} to {hi}") from exc
     grouped = d.groupby("period")["v"]
     agg = pd.DataFrame({"value": _sum_by(d["v"], d["period"]) if stat == "sum" else grouped.agg(stat),
                         "n": grouped.count()})

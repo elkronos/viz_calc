@@ -141,7 +141,7 @@ def test_dates_outside_1677_to_2262_draw_on_pandas_3_and_raise_a_clear_error_on_
     if PANDAS_2:
         with pytest.raises(ValueError, match=re.escape(
                 f"column 'd' has months from {periods[0]} to {periods[-1]}, but with pandas {pd.__version__} "
-                "period_bars draws only months within 1677-09-21 to 2262-04-11")):
+                "period_bars draws only months from 1677-10 to 2262-03")):
             vc.period_bars(d, date="d", value="v")
         with pytest.raises(ValueError, match=re.escape(
                 f"column 'd' has dates in the years {years}, but with pandas {pd.__version__} calendar_heatmap "
@@ -154,6 +154,23 @@ def test_dates_outside_1677_to_2262_draw_on_pandas_3_and_raise_a_clear_error_on_
     assert res.table["period_start"].dt.strftime("%Y-%m-%d").tolist() == [f"{p}-01" for p in periods]
     res = vc.calendar_heatmap(d, date="d", value="v")
     assert res.table["date"].dt.strftime("%Y-%m-%d").tolist() == dates
+
+
+@pytest.mark.parametrize("freq,limits", [
+    ("day", "1677-09-22 to 2262-04-10"),
+    ("week", "1677-09-27/1677-10-03 to 2262-03-31/2262-04-06"),
+    ("quarter", "1677Q4 to 2262Q1"),
+    ("year", "1678 to 2261"),
+])
+def test_period_bars_names_the_whole_periods_it_draws_on_pandas_2(freq, limits):
+    # the limits read "1677-09-21 to 2262-04-11", which the day 1677-09-21 seemed to lie within
+    d = _frame(np.array(["1677-09-21T06:00", "1677-10-10"], dtype="datetime64[s]"))
+    if not PANDAS_2:
+        assert vc.period_bars(d, date="d", value="v", freq=freq).table["n"].sum() == 2
+        return
+    with pytest.raises(ValueError, match=re.escape(f"but with pandas {pd.__version__} period_bars draws only {freq}s "
+                                                   f"from {limits}")):
+        vc.period_bars(d, date="d", value="v", freq=freq)
 
 
 # --- date windows ---------------------------------------------------------------------------------------------------
