@@ -118,6 +118,17 @@ def test_ax_of_the_wrong_projection_raises_before_drawing(name):
 
 
 @pytest.mark.parametrize("name", list(AX_CALLS))
+def test_a_3d_ax_raises_the_projection_error_before_drawing(name):
+    func, data, kwargs = _ax_call(name)
+    fig = plt.figure()
+    ax = fig.add_subplot(projection="3d")  # Matplotlib 3.10 and later give it no get_frame_on
+    before = len(ax.get_children()), len(fig.get_children())
+    with pytest.raises(ValueError, match="needs a polar Axes" if AX_CALLS[name][3] else r"\(Cartesian\) Axes, got a '3d'"):
+        func(data, ax=ax, **kwargs)
+    assert (len(ax.get_children()), len(fig.get_children())) == before
+
+
+@pytest.mark.parametrize("name", list(AX_CALLS))
 def test_ax_must_be_one_axes(name):
     func, data, kwargs = _ax_call(name)
     fig, axes = plt.subplots(1, 2, subplot_kw={"projection": "polar"} if AX_CALLS[name][3] else None)

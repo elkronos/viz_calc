@@ -567,7 +567,11 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
             ax = kwargs["ax"] if "ax" in kwargs else args[ax_at] if len(args) > ax_at else None
             _check_ax_type(func.__name__, ax)
         axes = [a for a in (*args, *kwargs.values()) if isinstance(a, Axes)]
-        text, drawing = _Text(axes), _Drawing(axes)
+        text = _Text(axes)
+        try:
+            drawing: _Drawing | None = _Drawing(axes)
+        except Exception:  # an Axes without the usual getters (a 3D one has no get_frame_on) is not taken back
+            drawing = None
         hooks = plt.rcParams["figure.hooks"]
         rc = {**_NO_MATH, "figure.hooks": hooks if _NOTE_FIGURE in hooks else [*hooks, _NOTE_FIGURE]}
         outer, made = _made.get(), []
@@ -578,8 +582,9 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
         except BaseException:
             for figure in made:
                 plt.close(figure)
-            with contextlib.suppress(Exception):  # the call's own error is the one to report
-                drawing.undo()
+            if drawing is not None:
+                with contextlib.suppress(Exception):  # the call's own error is the one to report
+                    drawing.undo()
             raise
         finally:
             _made.reset(token)
