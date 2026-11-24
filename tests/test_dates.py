@@ -4,12 +4,13 @@ import io
 import re
 import warnings
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
 
 import viz_calc as vc
-from viz_calc import timeseries
+from viz_calc import datasets, timeseries
 
 # Every chart that reads a date column, called with the dates in column "d" (and a copy in "e" for the windows)
 _DATE_CALLS = {
@@ -141,3 +142,39 @@ def test_dates_outside_1677_to_2262_draw_on_pandas_3_and_raise_a_clear_error_on_
     assert res.table["period_start"].dt.strftime("%Y-%m-%d").tolist() == [f"{p}-01" for p in periods]
     res = vc.calendar_heatmap(d, date="d", value="v")
     assert res.table["date"].dt.strftime("%Y-%m-%d").tolist() == dates
+
+
+# --- date windows ---------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("today", [2024, np.int64(2024), 2024.5, np.float64(1.7e18)])
+def test_gantt_rejects_a_number_for_today(today):
+    # 2024 was read as 2024 nanoseconds after 1970: a line at 1970-01-01 and an axis from 1967 to 2027
+    with pytest.raises(ValueError, match=re.escape(f"today must be a date or 'now', got {today!r}")):
+        vc.gantt(datasets.projects(), task="task", start="start", end="end", today=today)
+    assert plt.get_fignums() == []
+
+
+@pytest.mark.parametrize("work_start,work_end", [
+    ("2023-06-01", "2023-12-01"),  # wholly before the window: inner_share was 7.32
+    ("2024-01-01", "2024-01-20"),  # starts before it
+    ("2024-01-20", "2024-02-10"),  # ends after it
+])
+def test_duration_plot_rejects_an_inner_window_outside_its_row(work_start, work_end):
+    proj = datasets.projects()  # Discovery runs from 2024-01-08 to 2024-02-02
+    proj.loc[0, ["work_start", "work_end"]] = [pd.Timestamp(work_start), pd.Timestamp(work_end)]
+    with pytest.raises(ValueError, match=re.escape("the inner window ('work_start' to 'work_end') is not inside the "
+                                                   "window ('start' to 'end') for row(s): ['Discovery']")):
+        vc.duration_plot(proj, label="task", start="start", end="end", inner_start="work_start",
+                         inner_end="work_end")
+    assert plt.get_fignums() == []
+
+
+def test_duration_plot_accepts_an_inner_window_as_long_as_its_row():
+    proj = datasets.projects()
+    proj.loc[0, ["work_start", "work_end"]] = proj.loc[0, ["start", "end"]].to_numpy()
+    proj.loc[1, ["work_start", "work_end"]] = [pd.NaT, pd.NaT]
+    res = vc.duration_plot(proj, label="task", start="start", end="end", inner_start="work_start",
+                           inner_end="work_end")
+    share = res.table.set_index("task")["inner_share"]
+    assert share["Discovery"] == 1 and np.isnan(share["Design"]) and (share.dropna() <= 1).all()

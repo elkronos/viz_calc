@@ -580,11 +580,11 @@ def gantt(
 
     Tasks are sorted by start date (set ``sort=False`` to keep row order).
     The date axis adapts its tick spacing to the range. Pass ``today`` (a date
-    or ``"now"``) to draw a reference line. *start* and *end* must be two
-    different columns, each different from *task* and *group* (which may be
-    the same column, to colour each task by its own name). Tasks with a
-    missing *group* are drawn in grey as "(missing)" (all of them, if the
-    *group* column has no values). No column may be named
+    or ``"now"``, not a number) to draw a reference line. *start* and *end*
+    must be two different columns, each different from *task* and *group*
+    (which may be the same column, to colour each task by its own name).
+    Tasks with a missing *group* are drawn in grey as "(missing)" (all of
+    them, if the *group* column has no values). No column may be named
     ``"duration_days"``, which names the table's own column.
     """
     check_dataframe(data, [task, start, end, group])
@@ -598,6 +598,8 @@ def gantt(
     if len(bad):
         raise ValueError(f"end is before start for task(s): {bad[task].tolist()}")
     if today is not None:  # parsed before drawing, so a bad value fails early with a clear message
+        if isinstance(today, numbers.Number):  # pd.Timestamp reads 2024 as nanoseconds since 1970
+            raise ValueError(f"today must be a date or 'now', got {today!r}")
         try:
             t = pd.Timestamp.now(tz=tz) if isinstance(today, str) and today == "now" else pd.Timestamp(today)
         except (ValueError, TypeError) as exc:
@@ -658,12 +660,14 @@ def duration_plot(
 
     Example: a contract period with the time actually worked. The table
     reports both lengths in days and the inner share of the window. Like
-    :func:`gantt`, it raises if a window ends before it starts. Rows whose
-    inner window is missing get no inner bar. The date columns must differ
-    from *label*, and each window needs two different columns; an inner
-    window may reuse *start* and *end* (active for the whole period). No
-    column may be named ``"outer_days"``, ``"inner_days"`` or
-    ``"inner_share"``, which name the table's own columns.
+    :func:`gantt`, it raises if a window ends before it starts; it also
+    raises if an inner window starts before its row's window or ends after
+    it. Rows whose inner window is missing get no inner bar. The date
+    columns must differ from *label*, and each window needs two different
+    columns; an inner window may reuse *start* and *end* (active for the
+    whole period). No column may be named ``"outer_days"``,
+    ``"inner_days"`` or ``"inner_share"``, which name the table's own
+    columns.
 
     Parameters
     ----------
@@ -687,6 +691,10 @@ def duration_plot(
         bad = d[d[e] < d[s]]  # missing dates compare False, so empty inner windows pass
         if len(bad):
             raise ValueError(f"{e!r} is before {s!r} for row(s): {bad[label].tolist()}")
+    outside = d[(d[inner_start] < d[start]) | (d[inner_end] > d[end])]  # missing dates compare False here too
+    if len(outside):
+        raise ValueError(f"the inner window ({inner_start!r} to {inner_end!r}) is not inside the window ({start!r} "
+                         f"to {end!r}) for row(s): {outside[label].tolist()}")
     if sort:
         d = d.sort_values(start, kind="stable")
     names = [level_label(v) for v in d[label]]

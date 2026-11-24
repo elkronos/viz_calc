@@ -87,9 +87,12 @@ res.table[["task", "outer_days", "inner_days", "inner_share"]]
 
 Date ticks adapt to the range (days, months or years) through Matplotlib's
 concise date formatter. `gantt` and `duration_plot` raise a clear error if
-any task (or inner window) ends before it starts, or if one of your columns
-is named like a table column they add (`duration_days`, `outer_days`,
-`inner_days`, `inner_share`), which would otherwise be overwritten.
+any task (or inner window) ends before it starts, if an inner window starts
+before its row's window or ends after it, or if one of your columns is named
+like a table column they add (`duration_days`, `outer_days`, `inner_days`,
+`inner_share`), which would otherwise be overwritten. `today` takes a date
+or `"now"`; a number such as `2024` raises instead of being read as
+nanoseconds since 1970.
 
 ## 5. Animated bubbles
 
