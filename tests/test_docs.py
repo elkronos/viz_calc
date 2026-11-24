@@ -463,8 +463,11 @@ def test_migration_page_and_readme_link_the_old_scripts():
 def test_old_scripts_list_matches_the_commit():
     import subprocess
 
-    out = subprocess.run(["git", "-C", str(ROOT), "ls-tree", "-r", "--name-only", OLD_SCRIPTS_COMMIT],
-                         capture_output=True, text=True)
+    try:
+        out = subprocess.run(["git", "-C", str(ROOT), "ls-tree", "-r", "--name-only", OLD_SCRIPTS_COMMIT],
+                             capture_output=True, text=True)
+    except OSError:
+        pytest.skip("git is not installed")
     if out.returncode != 0:
         pytest.skip("the commit is not in this checkout")
     scripts = [p for p in out.stdout.splitlines() if p.startswith(("analyses/", "templates/"))]
