@@ -529,8 +529,8 @@ versions.
 - A plotting call that raises closes the figures it opened, so no half-drawn
   chart is left for `plt.show()` or Jupyter.
 - Spearman p-values for up to 9 pairs are exact permutation p-values (the t
-  approximation gave p = 0, and a star, for any perfect rank agreement at
-  n = 3–5).
+  approximation gave p = 0 for any perfect rank agreement, and so a star at
+  n = 3 or 4, where the exact p is 0.33 or 0.083).
 - Freedman–Diaconis bins on whole-number data use whole-number widths with
   edges on half-integers instead of a comb of empty bins.
 - `radar` and `circular_bar` raise a clear error for a non-polar `ax`;

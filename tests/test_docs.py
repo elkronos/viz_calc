@@ -407,6 +407,17 @@ def test_each_statistical_method_cites_its_source():
     assert ("Scott", "1992") in CITATION.findall(methods["Kernel density estimates"])
 
 
+def test_changelog_spearman_entry_names_the_sizes_that_got_a_false_star():
+    text = _read("CHANGELOG.md")
+    entry = text[text.index("- Spearman p-values for up to 9 pairs"):].split("\n- ")[0]
+    named = set()
+    for low, high, other in re.findall(r"n = (\d+)(?:–(\d+))?(?: or (\d+))?", entry):
+        named |= set(range(int(low), int(high or low) + 1)) | ({int(other)} if other else set())
+    # perfect rank agreement: the exact two-sided p is 2/n!, which stays at or above 0.05 only for n = 3 and 4
+    exact = {n: stats.correlation_test(range(n), range(n), method="spearman")["p"] for n in range(3, 10)}
+    assert named == {n for n, p in exact.items() if p >= 0.05}, entry
+
+
 # --- migration page ------------------------------------------------------------------------------------------------
 
 # The scripts that version 1.0 replaced, as they were at the last commit before the rebuild.
