@@ -509,7 +509,7 @@ def gantt(
     _check_distinct(task=task, start=start, end=end)
     _check_distinct(group=group, start=start, end=end)
     check_not_reserved(["duration_days"], task=task, start=start, end=end, group=group)
-    check_has_values(data, start, end)
+    check_has_values(data, task, start, end)
     check_complete(data, start, end)
     d = data.copy()
     tz = _timeline_columns(d, [start, end])
@@ -597,7 +597,7 @@ def duration_plot(
     check_not_reserved(["outer_days", "inner_days", "inner_share"], label=label, start=start, end=end,
                        inner_start=inner_start, inner_end=inner_end)
     colors = slot_colors(colors, ("outer", "inner"))
-    check_has_values(data, start, end)
+    check_has_values(data, label, start, end)
     check_complete(data, start, end)
     d = data.copy()
     # dict.fromkeys: the inner window may reuse the outer window's columns, which must be selected once

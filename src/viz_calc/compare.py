@@ -583,7 +583,7 @@ def dumbbell(
     check_not_reserved(["change", "pct_change"], label=label, start=start, end=end)
     check_numeric(data, start, end)
     check_finite(data, start, end)
-    check_has_values(data, start, end)
+    check_has_values(data, label, start, end)
     colors = slot_colors(colors, ("start", "end"))
     table = data[list(dict.fromkeys([label, start, end]))].copy()
     for c in dict.fromkeys((start, end)):

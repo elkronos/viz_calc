@@ -335,8 +335,8 @@ def quadrant_plot(
         centre count as "high", including values that differ from the mean
         only by floating-point rounding.
     label
-        Optional column whose values annotate each point. It may be *x* or
-        *y* itself.
+        Optional column whose values annotate each point; a point with a
+        missing label gets none. It may be *x* or *y* itself.
     fit
         Draw the ordinary least-squares line.
     """
@@ -347,6 +347,7 @@ def quadrant_plot(
     check_choice("center", center, ["mean", "median"])
     check_choice("method", method, ["pearson", "spearman"])
     check_color("color", color)
+    check_has_values(data, x, y, label)
     d = select_columns(data, [c for c in dict.fromkeys([x, y, label]) if c is not None]).dropna(subset=[x, y])
     if len(d) < 3:
         raise ValueError("need at least three complete observations")
@@ -380,7 +381,8 @@ def quadrant_plot(
         ax.plot(grid, intercept + slope * grid, color=OKABE_ITO[5], lw=1.5)
     if label is not None:
         for xi, yi, t in zip(xv, yv, d[label]):
-            ax.annotate(str(t), (xi, yi), xytext=(3, 3), textcoords="offset points", fontsize=7, color=NEUTRAL)
+            if not pd.isna(t):  # a missing label is left off rather than written as "nan"
+                ax.annotate(str(t), (xi, yi), xytext=(3, 3), textcoords="offset points", fontsize=7, color=NEUTRAL)
 
     spec = [("high x, high y", right & top, 0.97, 0.97, "right", "top"),
             ("low x, high y", ~right & top, 0.03, 0.97, "left", "top"),

@@ -22,6 +22,7 @@ from ._core import (
     check_count,
     check_dataframe,
     check_finite,
+    check_has_values,
     check_numeric,
     check_range,
     cleanup_on_error,
@@ -226,6 +227,7 @@ def profile_scatters(
     """
     columns = None if columns is None else column_list("columns", columns, distinct=True)
     check_dataframe(data, columns or [])
+    check_has_values(data, *(columns or []))
     check_choice("method", method, ["pearson", "spearman"])
     check_choice("p_adjust", p_adjust, ["holm", "fdr_bh", "bonferroni", "none"])
     for name, value in (("per_page", per_page), ("ncols", ncols), ("max_points", max_points)):

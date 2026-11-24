@@ -664,3 +664,33 @@ def test_profile_scatters_marks_a_pair_with_no_complete_rows():
     ax = res.figure[0].axes[empty[0]]
     assert ax.get_title(loc="left") == "n=0"
     assert [t.get_text() for t in ax.texts] == ["no complete rows"]
+
+
+# --- a role column with no values -----------------------------------------------------------------------------------
+
+MEASURES = ["length", "width", "depth", "mass"]
+
+
+@pytest.mark.parametrize("call, column", [
+    (lambda: vc.dumbbell(SMALL.assign(k=np.nan), label="k", start="a", end="b"), "k"),
+    (lambda: vc.gantt(datasets.projects().assign(task=np.nan), task="task", start="start", end="end"), "task"),
+    (lambda: vc.duration_plot(datasets.projects().assign(task=np.nan), "task", "start", "end", "work_start",
+                              "work_end"), "task"),
+    (lambda: vc.quadrant_plot(datasets.measurements().assign(lab=np.nan), x="length", y="width", label="lab"), "lab"),
+    (lambda: vc.radar(datasets.measurements().assign(length=np.nan), metrics=MEASURES, group="group"), "length"),
+    (lambda: vc.pca(datasets.measurements().assign(length=np.nan), MEASURES), "length"),
+    (lambda: vc.pca_plot(datasets.measurements().assign(length=np.nan), MEASURES, group="group"), "length"),
+    (lambda: vc.profile_scatters(datasets.measurements().assign(length=np.nan), columns=["length", "width"]),
+     "length"),
+], ids=["dumbbell", "gantt", "duration_plot", "quadrant_plot", "radar", "pca", "pca_plot", "profile_scatters"])
+def test_an_all_missing_role_column_raises_naming_it(call, column):
+    with pytest.raises(ValueError, match=f"column '{column}' has no non-missing values"):
+        call()
+    assert plt.get_fignums() == []
+
+
+def test_quadrant_plot_writes_no_label_for_a_point_without_one():
+    d = datasets.measurements().head(10).assign(lab=list("abcdefghi") + [None])
+    texts = [t.get_text() for t in vc.quadrant_plot(d, x="length", y="width", label="lab").axes.texts]
+    assert "nan" not in texts and "None" not in texts
+    assert sum(len(t) == 1 for t in texts) == 9

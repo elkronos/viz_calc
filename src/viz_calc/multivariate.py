@@ -23,6 +23,7 @@ from ._core import (
     check_dataframe,
     check_distinct,
     check_finite,
+    check_has_values,
     check_not_reserved,
     check_numeric,
     cleanup_on_error,
@@ -64,6 +65,7 @@ def pca(data: pd.DataFrame, features: Sequence[str], scale: bool = True) -> dict
     check_dataframe(data, features)
     check_numeric(data, *features)
     check_finite(data, *features)
+    check_has_values(data, *features)
     X = select_columns(data, features).dropna()
     if len(X) < 3:
         raise ValueError("need at least three complete rows")
@@ -291,9 +293,9 @@ def radar(
 
     Rows with a missing *group* are not dropped: they are drawn last, in
     grey, as "(missing)", and their row of the table has a missing *group*.
-    *group* needs at least one non-missing value and cannot be one of the
-    *metrics*. A group with no data on a metric is left as a gap on that
-    axis. Raw and scaled values are in the returned table. Radar charts are
+    *group* and each metric need at least one non-missing value, and
+    *group* cannot be one of the *metrics*. A group with no data on a metric
+    is left as a gap on that axis. Raw and scaled values are in the returned table. Radar charts are
     best for spotting profile *shapes*; the enclosed area depends on the
     order of the metrics and should not be compared.
 
@@ -308,6 +310,7 @@ def radar(
         check_distinct(group=group, metrics=m)
     check_numeric(data, *metrics)
     check_finite(data, *metrics)
+    check_has_values(data, *metrics)
     check_choice("normalize", normalize, ["data", "groups", "none"])
     check_choice("stat", stat, ["mean", "median"])
     if len(metrics) < 3:
