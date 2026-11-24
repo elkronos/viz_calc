@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable, Sequence
 from io import BytesIO
 from itertools import combinations
-from typing import Any
+from typing import IO, Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -262,7 +263,8 @@ def profile_scatters(
     return VizResult(figs, None, table, {"method": method, "p_adjust": p_adjust})
 
 
-def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: int = 200) -> str:
+def to_pptx(figures: Any, path: str | os.PathLike[str] | IO[bytes], titles: Iterable[Any] | None = None,
+            dpi: int = 200) -> str | IO[bytes]:
     """Write figures (or :class:`VizResult` objects) to a PowerPoint file, one per slide.
 
     Requires ``python-pptx``, installed with the ``pptx`` extra (see the
@@ -270,13 +272,24 @@ def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: i
     13.33 × 7.5 inch (16:9) slide while keeping their aspect ratio.
 
     *figures* is one figure or result, or any iterable of them. *titles*
-    gives one title per item in *figures*; a single string is the title of
-    the first item. A multi-page result (such
-    as the ``profile_*`` functions return) puts one page per slide, and each
-    slide gets the item's title with a page counter, e.g. ``"Counts (2/3)"``.
-    Only Matplotlib figures are supported; save Plotly figures with
-    ``figure.write_image`` or ``VizResult.save``.
+    gives one title per item in *figures*, and no more; a single string is
+    the title of the first item. A title that is not a string, such as a
+    year, is shown as ``str(title)``, and ``None`` or ``""`` gives a slide
+    without a title. Every line of a title is set in 24 pt. A multi-page
+    result (such as the ``profile_*`` functions return) puts one page per
+    slide, and each slide gets the item's title with a page counter, e.g.
+    ``"Counts (2/3)"``. Only Matplotlib figures are supported; save Plotly
+    figures with ``figure.write_image`` or ``VizResult.save``.
+
+    *path* is a file path, returned as a string, or a binary file-like
+    object such as ``io.BytesIO``, returned as given. A *dpi* too low for
+    the figure's text to be drawn raises ``ValueError``, as does one that
+    makes an image larger than Pillow, which python-pptx reads it with,
+    opens (twice ``PIL.Image.MAX_IMAGE_PIXELS``).
     """
+    import struct
+    import warnings
+
     dpi = check_range("dpi", dpi, 1, np.inf, include_high=False)
     pptx = require("pptx", "pptx")
     from PIL import Image
@@ -285,11 +298,14 @@ def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: i
     single = isinstance(figures, VizResult) or hasattr(figures, "savefig") or not isinstance(figures, Iterable)
     items = [figures] if single else list(figures)
     titles = [titles] if isinstance(titles, str) else list(titles) if titles is not None else []
+    if len(titles) > len(items):
+        raise ValueError(f"to_pptx got {len(titles)} titles for {len(items)} item(s); give at most one title per "
+                         "item (a multi-page result takes one title, and its slides are numbered)")
     slides = []  # (figure, title) pairs
     for i, it in enumerate(items):
         fig = (it if isinstance(it, VizResult) else VizResult(it)).figure  # a SubFigure becomes its whole figure
         pages = fig if isinstance(fig, list) else [fig]
-        title = titles[i] if i < len(titles) else None
+        title = None if i >= len(titles) or titles[i] is None else str(titles[i])
         for k, page in enumerate(pages, start=1):
             if not hasattr(page, "savefig"):
                 raise TypeError("to_pptx supports Matplotlib figures only; save Plotly figures with write_image")
@@ -301,16 +317,30 @@ def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: i
         top = 0.3
         if title:
             box = slide.shapes.add_textbox(Inches(0.5), Inches(0.2), Inches(12.3), Inches(0.7))
-            box.text_frame.text = title
-            box.text_frame.paragraphs[0].runs[0].font.size = Pt(24)
+            box.text_frame.text = title  # each line of the title is a paragraph
+            for paragraph in box.text_frame.paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(24)
             top = 1.0
         buf = BytesIO()
-        fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
-        buf.seek(0)
-        px_w, px_h = Image.open(buf).size  # the tight bbox changes the size, so measure the saved image
+        try:
+            fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
+        except RuntimeError as exc:
+            if "ppem" not in str(exc):  # FreeType cannot size a font to less than about a pixel
+                raise
+            raise ValueError(f"dpi={dpi:g} is too low to draw the text of this figure; use a higher dpi") from exc
+        # The tight bbox changes the size, so read it from the saved image's header (its IHDR chunk).
+        px_w, px_h = struct.unpack(">II", buf.getbuffer()[16:24])
+        limit = Image.MAX_IMAGE_PIXELS
+        if limit and px_w * px_h > 2 * limit:
+            raise ValueError(f"dpi={dpi:g} makes a {px_w} x {px_h} pixel image, more than the {2 * limit:,} pixels "
+                             "Pillow opens (python-pptx reads the image with it); use a lower dpi")
         buf.seek(0)
         w, h = px_w / dpi, px_h / dpi
         scale = min(12.3 / w, (7.5 - top - 0.3) / h)
-        slide.shapes.add_picture(buf, Inches((13.333 - w * scale) / 2), Inches(top), Inches(w * scale), Inches(h * scale))
+        with warnings.catch_warnings():  # Pillow's warning about large images is for images from elsewhere
+            warnings.simplefilter("ignore", Image.DecompressionBombWarning)
+            slide.shapes.add_picture(buf, Inches((13.333 - w * scale) / 2), Inches(top), Inches(w * scale),
+                                     Inches(h * scale))
     prs.save(path)
-    return str(path)
+    return str(path) if isinstance(path, (str, os.PathLike)) else path

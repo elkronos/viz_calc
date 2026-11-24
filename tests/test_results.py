@@ -287,3 +287,62 @@ def test_save_of_pages_returns_one_path_per_page_of_this_result(tmp_path):
     two = vc.VizResult(four.figure[:2])
     assert two.save(tmp_path / "boxes.png") == [str(tmp_path / "boxes_1.png"), str(tmp_path / "boxes_2.png")]
     assert (tmp_path / "boxes_3.png").exists()  # left from the longer save, as the docstring says
+
+
+# --- to_pptx --------------------------------------------------------------------------------------------------------
+
+
+def _slide_texts(deck):
+    pptx = pytest.importorskip("pptx")
+    return [[sh.text_frame for sh in s.shapes if sh.has_text_frame] for s in pptx.Presentation(deck).slides]
+
+
+def test_to_pptx_returns_a_stream_target_as_given_and_a_path_as_text(tmp_path):
+    pytest.importorskip("pptx")
+    res = vc.waffle(datasets.survey(), category="team")
+    buf = BytesIO()
+    assert vc.to_pptx(res, buf) is buf and buf.getvalue().startswith(b"PK")
+    assert vc.to_pptx(res, tmp_path / "deck.pptx") == str(tmp_path / "deck.pptx")
+
+
+def test_to_pptx_shows_any_title_as_text_and_sets_every_line_in_24_pt():
+    pytest.importorskip("pptx")
+    res = vc.waffle(datasets.survey(), category="team")
+    deck = vc.to_pptx([res, res, res, res, res], BytesIO(), titles=[2024, 0, 3.5, None, "Line one\nLine two"])
+    frames = _slide_texts(deck)
+    assert [[f.text for f in slide] for slide in frames] == [["2024"], ["0"], ["3.5"], [], ["Line one\nLine two"]]
+    sizes = [run.font.size.pt for p in frames[4][0].paragraphs for run in p.runs]
+    assert sizes == [24, 24]
+
+
+def test_to_pptx_rejects_more_titles_than_items():
+    pytest.importorskip("pptx")
+    pages = vc.profile_boxes(datasets.measurements(), per_page=2)
+    with pytest.raises(ValueError, match="got 3 titles for 1 item.*multi-page result takes one title"):
+        vc.to_pptx(pages, BytesIO(), titles=["A", "B", "C"])
+
+
+def test_to_pptx_explains_a_dpi_too_low_for_the_text():
+    pytest.importorskip("pptx")
+    with pytest.raises(ValueError, match="dpi=5 is too low to draw the text of this figure"):
+        vc.to_pptx(vc.profile_bars(datasets.measurements()), BytesIO(), dpi=5)
+
+
+def test_to_pptx_checks_the_image_size_itself_and_hides_pillows_warning(monkeypatch):
+    import struct
+    import warnings
+
+    pytest.importorskip("pptx")
+    from PIL import Image
+
+    res = vc.histogram(datasets.measurements(), "length")
+    png = BytesIO()
+    res.figure.savefig(png, format="png", dpi=100, bbox_inches="tight")
+    width, height = struct.unpack(">II", png.getvalue()[16:24])
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", width * height // 3)  # Pillow refuses more than twice this
+    with pytest.raises(ValueError, match=f"dpi=100 makes a {width} x {height} pixel image, more than the"):
+        vc.to_pptx(res, BytesIO(), dpi=100)
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", width * height * 2 // 3)  # Pillow only warns
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", Image.DecompressionBombWarning)
+        assert len(_slide_texts(vc.to_pptx(res, BytesIO(), dpi=100))) == 1
