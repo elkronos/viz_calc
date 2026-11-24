@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 CI = WORKFLOWS / "ci.yml"
 PUBLISH = WORKFLOWS / "publish.yml"
+DOCS = WORKFLOWS / "docs.yml"
 TAG_CHECK = "Check the release tag against the package version"  # a step of publish.yml
 RUNTIME_EXTRAS = ("network", "interactive", "pptx")  # "all" combines these; "dev" and "docs" are tooling
 DISTRIBUTIONS = {"dateutil": "python-dateutil", "PIL": "pillow", "pptx": "python-pptx"}  # import name -> package
@@ -309,6 +310,19 @@ def test_every_workflow_job_has_a_time_limit():
             assert re.search(r"^    timeout-minutes: [1-9][0-9]*$", lines, re.M), f"{name}: job {job} has no time limit"
 
 
+def test_workflows_default_to_a_read_only_token():
+    # A job that writes asks for it by name, so the jobs that install and run packages from PyPI can only read.
+    for name, text in _workflows().items():
+        assert re.search(r"^permissions:\n  contents: read\n(?!  )", text, re.M), f"{name} does not default to read"
+
+
+def test_checkouts_do_not_keep_the_token():
+    # The steps after a checkout install and run packages from PyPI, so the token is not left for them.
+    for name, text in _workflows().items():
+        for _, step in re.findall(r"^( +)- uses: actions/checkout@.*\n((?:\1  .*\n)*)", text, re.M):
+            assert "persist-credentials: false" in step, f"{name}: a checkout keeps the token"
+
+
 def test_jobs_that_install_the_checkout_cache_pip_downloads():
     for name, text in _workflows().items():
         for job, lines in _jobs(text).items():
@@ -337,7 +351,7 @@ def _needs(job: str) -> list[str]:
 def _step_script(workflow: str, name: str) -> str:
     """The ``run`` script of the workflow step with this name."""
     step = re.search(rf"^( +)- name: {re.escape(name)}\n((?:\1  .*\n)*)", workflow, re.M)
-    assert step, f"{PUBLISH.name} has no step named {name!r}"
+    assert step, f"no step is named {name!r}"
     run = re.search(r"^( +)run: \|\n((?:\1  .*\n|\n)*)", step.group(2), re.M)
     assert run, f"the step {name!r} has no run script"
     return textwrap.dedent(run.group(2))
@@ -387,3 +401,89 @@ def test_publish_workflow_stops_when_the_tag_is_not_v_and_the_version(tmp_path, 
     assert (result.returncode == 0) is passes, result.stdout + result.stderr
     if not passes:
         assert "v2.3.4" in result.stdout
+
+
+def _docs_workflow() -> str:
+    if not DOCS.is_file():
+        pytest.skip("the docs workflow is not next to the tests")
+    return DOCS.read_text(encoding="utf-8")
+
+
+def _condition(job: str) -> str:
+    """The ``if:`` expression of a job, given as the lines below its id, with a folded block joined."""
+    found = re.search(r"^    if: (?:>-\n((?:      .*\n)+)|(.*)\n)", job, re.M)
+    assert found, "the job has no if: condition"
+    return " ".join(line.strip() for line in found.group(1).splitlines()) if found.group(1) else found.group(2)
+
+
+def _evaluate(expression: str, context: dict[str, str]) -> bool:
+    """A workflow expression of ``github.*`` names, quoted strings, ``==``, ``&&``, ``||`` and parentheses."""
+    python = re.sub(r"\bgithub(?:\.[\w-]+)+", lambda name: repr(context.get(name.group(0), "")), expression)
+    return bool(eval(python.replace("&&", " and ").replace("||", " or "), {"__builtins__": {}}))
+
+
+CI_PUSH = {"github.event_name": "workflow_run", "github.ref": "refs/heads/main",
+           "github.event.workflow_run.conclusion": "success", "github.event.workflow_run.event": "push"}
+BY_HAND = {"github.event_name": "workflow_dispatch", "github.ref": "refs/heads/main"}
+
+
+@pytest.mark.parametrize(("event", "publishes"), [
+    (CI_PUSH, True),
+    ({**CI_PUSH, "github.event.workflow_run.conclusion": "failure"}, False),
+    ({**CI_PUSH, "github.event.workflow_run.event": "schedule"}, False),
+    ({**CI_PUSH, "github.event.workflow_run.event": "workflow_dispatch"}, False),
+    ({**CI_PUSH, "github.event.workflow_run.event": "pull_request"}, False),  # from a fork's branch named main
+    (BY_HAND, True),
+    ({**BY_HAND, "github.ref": "refs/heads/feature"}, False),
+])
+def test_docs_publish_only_from_main_after_ci_passes(event, publishes):
+    workflow = _docs_workflow()
+    on = re.search(r"^on:\n((?:  .*\n)+)", workflow, re.M).group(1)
+    assert sorted(re.findall(r"^  (\w+):", on, re.M)) == ["workflow_dispatch", "workflow_run"]
+    assert "    workflows: [CI]\n    types: [completed]\n    branches: [main]\n" in on
+    jobs = _jobs(workflow)
+    writers = [lines for lines in jobs.values() if "contents: write" in lines]
+    assert len(writers) == 1, "one job, the deploy, may write to the repository"
+    assert not re.search(r"^    if:", writers[0], re.M), "the deploy runs exactly when the job it needs passed"
+    gates = _needs(writers[0])
+    assert len(gates) == 1
+    assert _evaluate(_condition(jobs[gates[0]]), event) is publishes
+
+
+def test_docs_job_that_can_push_runs_no_package_code():
+    # Code from the checkout or from PyPI never runs with the token that can push to the repository.
+    writers = [lines for lines in _jobs(_docs_workflow()).values() if "contents: write" in lines]
+    assert len(writers) == 1
+    code = "".join(line for line in writers[0].splitlines(keepends=True) if not line.lstrip().startswith("#"))
+    assert not re.search(r"pip|python|mkdocs|actions/checkout|actions/setup-python", code)
+
+
+def test_docs_deploy_replaces_gh_pages_with_one_commit(tmp_path):
+    # As `mkdocs gh-deploy --force --no-history` did: one commit without parents, by the owner, holding the
+    # site and .nojekyll.
+    workflow = _docs_workflow()
+    bash, git = shutil.which("bash"), shutil.which("git")
+    if bash is None or git is None:
+        pytest.skip("bash or git is not installed")
+    remote = tmp_path / "remote.git"
+    subprocess.run([git, "init", "-q", "--bare", str(remote)], check=True)
+    env = {**os.environ, "HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GITHUB_REPOSITORY": "owner/repo",
+           "SHA": "0123456789abcdef0123456789abcdef01234567", "TOKEN": "t0ken",
+           # The push goes to the local repository instead of github.com.
+           "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": f"url.{remote.as_uri()}.insteadOf",
+           "GIT_CONFIG_VALUE_0": "https://x-access-token:t0ken@github.com/owner/repo.git"}
+    script = _step_script(workflow, "Publish to gh-pages")
+    for page in ("old", "new"):
+        (tmp_path / page / "site").mkdir(parents=True)
+        (tmp_path / page / "site" / "index.html").write_text(page, encoding="utf-8")
+        result = subprocess.run([bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+                                cwd=tmp_path / page, env=env, capture_output=True, text=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def remote_git(*args: str) -> str:
+        return subprocess.run([git, "--git-dir", str(remote), *args], capture_output=True, text=True, check=True).stdout
+
+    assert remote_git("log", "--format=%P|%an <%ae>|%cn|%s", "gh-pages").splitlines() == [
+        "|elkronos <130187349+elkronos@users.noreply.github.com>|elkronos|Publish docs for 0123456"]
+    assert remote_git("ls-tree", "--name-only", "gh-pages").split() == [".nojekyll", "index.html"]
+    assert remote_git("show", "gh-pages:index.html") == "new"

@@ -1,27 +1,38 @@
 name: Docs
 
-# Builds the documentation site and publishes it to the `gh-pages` branch.
+# Builds the documentation site and publishes it to the `gh-pages` branch once CI passes on a push to
+# `main`. Started by hand from `main`, it publishes the head of `main`.
 # One-time setup: Settings -> Pages -> Build and deployment -> Source:
 # "Deploy from a branch", Branch: gh-pages, folder: / (root).
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: docs
-  cancel-in-progress: true
+  contents: read
 
 jobs:
-  deploy:
+  build:
+    # The branches filter also passes a pull request from a fork's `main`, so CI must have run for a push.
+    if: >-
+      github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # A newer build cancels an older one, and a newer deploy an older deploy. Only jobs that run join a
+    # group, so a CI run that publishes nothing cancels nothing.
+    concurrency:
+      group: docs-build
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}  # the commit CI tested
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.12"
@@ -31,10 +42,40 @@ jobs:
         run: pip install -e ".[docs]"
       - name: Render gallery images and page
         run: python examples/gallery.py
+      - name: Build the site
+        run: mkdocs build --strict
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: site
+          path: site/
+          if-no-files-found: error
+
+  # The only job that can write to the repository. It runs git and GitHub's own actions, and no code from
+  # the checkout or from PyPI.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: docs-deploy
+      cancel-in-progress: true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: site
+          path: site/
       - name: Publish to gh-pages
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          TOKEN: ${{ github.token }}
         run: |
-          git config user.name "elkronos"
-          git config user.email "130187349+elkronos@users.noreply.github.com"
-          mkdocs gh-deploy --strict --force --no-history \
-            --remote-branch gh-pages \
-            --message "Publish docs for {sha}"
+          # One commit without history, as `mkdocs gh-deploy --force --no-history` made it.
+          cd site
+          touch .nojekyll
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name=elkronos -c user.email=130187349+elkronos@users.noreply.github.com \
+            commit -q -m "Publish docs for ${SHA::7}"
+          git push -q --force "https://x-access-token:$TOKEN@github.com/$GITHUB_REPOSITORY.git" gh-pages
