@@ -1,4 +1,4 @@
-"""viz_calc — visual calculators for pandas data.
+"""viz_calc: visual calculators for pandas data.
 
 Every plotting function returns a ``VizResult`` holding the figure *and*
 the numbers behind it (``.table``, ``.info``), computed with published,

@@ -585,6 +585,16 @@ def test_docs_and_docstrings_avoid_banned_words_and_emphasis():
         assert "**getting the statistics" not in _read(page), page
 
 
+def test_docs_and_docstrings_avoid_em_dashes_and_rhetorical_summaries():
+    for where, text in _prose().items():
+        assert "—" not in text, f"{where}: em dash in {text[text.index('—') - 40:text.index('—') + 40]!r}"
+    for name, obj in {**_api_objects(), "viz_calc": vc}.items():
+        summary = (inspect.getdoc(obj) or "").split("\n")[0]
+        assert not re.search(r"\?|\bnot\b", summary), f"{name}: question or contrast in the summary {summary!r}"
+    headings = re.findall(r"^#+ .*$", _read("docs/index.md"), re.M)
+    assert not [h for h in headings if h.endswith("?")], headings
+
+
 # --- methodology and citations -------------------------------------------------------------------------------------
 
 _NAME = r"[A-Z][\w\-]*"

@@ -891,7 +891,7 @@ def upset(
     sort_by: Literal["size", "degree"] = "size",
     color: str | None = None,
 ) -> VizResult:
-    """UpSet plot of set intersections — a scalable replacement for Venn diagrams.
+    """UpSet plot of set intersections.
 
     Venn diagrams become unreadable beyond three sets. UpSet shows each
     *exclusive* intersection as a column: a bar for its size and a dot

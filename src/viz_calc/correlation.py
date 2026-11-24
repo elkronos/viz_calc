@@ -205,7 +205,7 @@ def compare_correlations(
     decimals: int = 2,
     cmap: str = "PuOr_r",
 ) -> VizResult:
-    """Do correlations differ between groups? Fisher r-to-z tests, not eyeballing.
+    """Test whether correlations differ between groups with Fisher r-to-z tests.
 
     For every pair of groups, draws the matrix of *differences*
     ``r(group B) − r(group A)`` and stars cells where Fisher's z-test for two

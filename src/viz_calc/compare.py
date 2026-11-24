@@ -136,7 +136,7 @@ def estimation_plot(
     figsize: tuple[float, float] = (8, 7),
     ci: Literal["bca", "welch", "percentile"] = "bca",
 ) -> VizResult:
-    """Show every observation and the effect size, not just a p-value.
+    """Plot every observation, each group's mean with its CI, and each group's difference from a reference.
 
     A Cumming-style estimation plot (Ho et al., 2019). The upper panel shows
     the raw data per group with each group's mean and t-based CI. The lower

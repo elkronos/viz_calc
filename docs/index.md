@@ -18,7 +18,7 @@ res.save("effect.png")
 
 ![Estimation plot](images/estimation_plot.png)
 
-## Why another plotting package?
+## What viz_calc adds
 
 Matplotlib, seaborn and Plotly already draw charts well. viz_calc focuses on
 what they leave to you: getting the statistics behind a chart right, and
@@ -68,10 +68,10 @@ python-dateutil and Pillow, which pandas and Matplotlib already install.
 
 ## Where to go next
 
-* [Getting started](getting-started.md) — the five-minute tour.
-* Walkthroughs — task-oriented guides with interpretation, starting with
+* [Getting started](getting-started.md): the five-minute tour.
+* Walkthroughs: task-oriented guides with interpretation, starting with
   [comparing groups](walkthroughs/comparing-groups.md).
-* [Gallery](gallery.md) — charts with the code that made them (`sankey`,
+* [Gallery](gallery.md): charts with the code that made them (`sankey`,
   an interactive Plotly chart, is covered in the
   [multivariate walkthrough](walkthroughs/multivariate-and-networks.md#4-flows)
   instead).
