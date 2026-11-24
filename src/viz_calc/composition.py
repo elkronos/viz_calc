@@ -358,7 +358,7 @@ def donut_grid(
     ring. *col_wrap* (donuts per row) must be a positive integer.
 
     Note: people compare angles less accurately than lengths (Cleveland &
-    McGill, 1984); for precise comparisons use :func:`stacked_percentages`.
+    McGill, 1984); for precise comparisons use [`stacked_percentages`][viz_calc.stacked_percentages].
     """
     columns = None if columns is None else column_list("columns", columns, distinct=True)
     check_dataframe(data, columns or [])

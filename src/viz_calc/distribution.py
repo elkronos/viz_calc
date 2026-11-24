@@ -114,7 +114,7 @@ def histogram(
     data)"``. The Sturges bins that replace unusable FD bins are not
     rounded, so on zero-inflated counts they can have a fractional width.
     The other rules are used as published (see
-    :func:`viz_calc.stats.histogram_bins`).
+    [`histogram_bins`][viz_calc.stats.histogram_bins]).
 
     References
     ----------

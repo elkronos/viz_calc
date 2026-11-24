@@ -1,6 +1,6 @@
 """viz_calc — visual calculators for pandas data.
 
-Every plotting function returns a :class:`VizResult` holding the figure *and*
+Every plotting function returns a ``VizResult`` holding the figure *and*
 the numbers behind it (``.table``, ``.info``), computed with published,
 citable methods. Nothing is shown or written to disk unless you ask.
 

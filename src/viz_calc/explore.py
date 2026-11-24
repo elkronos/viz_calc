@@ -214,7 +214,7 @@ def profile_scatters(
     p-value (*p_adjust*: ``"holm"``, ``"fdr_bh"``, ``"bonferroni"`` or
     ``"none"``). Spearman p-values for pairs with at most 9 complete
     observations are exact permutation p-values (see
-    :func:`viz_calc.stats.correlation_test`), so a tiny pair does not get a
+    [`correlation_test`][viz_calc.stats.correlation_test]), so a tiny pair does not get a
     near-zero p-value from the large-sample approximation. Large data are
     subsampled to *max_points* points per panel for drawing only (statistics
     use all rows).
@@ -263,7 +263,7 @@ def profile_scatters(
 
 
 def to_pptx(figures: Any, path: str, titles: Iterable[str] | None = None, dpi: int = 200) -> str:
-    """Write figures (or :class:`VizResult` objects) to a PowerPoint file, one per slide.
+    """Write figures (or [`VizResult`][viz_calc.VizResult] objects) to a PowerPoint file, one per slide.
 
     Requires ``python-pptx``, installed with the ``pptx`` extra (see the
     install section of *Getting started*). Images are scaled to fit a

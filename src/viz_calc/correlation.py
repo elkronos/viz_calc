@@ -128,7 +128,7 @@ def correlogram(
     exploratory screening). Missing values are dropped pairwise, and each
     pair's ``n`` is reported. Spearman p-values for pairs with at most 9
     complete observations are exact permutation p-values (see
-    :func:`viz_calc.stats.correlation_test`), so a tiny pair cannot be starred
+    [`correlation_test`][viz_calc.stats.correlation_test]), so a tiny pair cannot be starred
     on the strength of the large-sample approximation.
 
     A diverging, perceptually balanced colormap centred on zero is used so

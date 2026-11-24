@@ -303,6 +303,28 @@ def test_polar_functions_draw_into_a_polar_axes():
     assert vc.circular_bar(small, label="id", value="mass", ax=ring).axes is ring
 
 
+# --- API reference -------------------------------------------------------------------------------------------------
+
+
+def _api_objects() -> dict[str, object]:
+    """{dotted name: object} for each entry of docs/api.md: the top-level names and the stats and datasets functions."""
+    objs = {f"viz_calc.{n}": getattr(vc, n) for n in vc.__all__ if n not in ("stats", "datasets")}
+    for module in (stats, datasets):
+        objs.update({f"{module.__name__}.{n}": f for n, f in vars(module).items()
+                     if not n.startswith("_") and inspect.isfunction(f) and f.__module__ == module.__name__})
+    return objs
+
+
+def test_api_docstrings_use_links_the_api_page_renders():
+    # mkdocstrings reads Markdown: a Sphinx role such as :func:`gantt` shows up as the literal text ":func:gantt"
+    objs = _api_objects()
+    for name, obj in objs.items():
+        doc = inspect.getdoc(obj) or ""
+        assert not re.search(r":\w+:`", doc), f"{name} has a Sphinx role: {re.search(r':[a-z]+:`[^`]*`', doc)[0]}"
+        for target in re.findall(r"\]\[([\w.]+)\]", doc):  # [`text`][viz_calc.name] links to another API entry
+            assert target in objs, f"{name} links to {target}, which the API page does not render"
+
+
 # --- migration page ------------------------------------------------------------------------------------------------
 
 # The scripts that version 1.0 replaced, as they were at the last commit before the rebuild.

@@ -568,7 +568,7 @@ def duration_plot(
 
     Example: a contract period with the time actually worked. The table
     reports both lengths in days and the inner share of the window. Like
-    :func:`gantt`, it raises if a window ends before it starts. Rows whose
+    [`gantt`][viz_calc.gantt], it raises if a window ends before it starts. Rows whose
     inner window is missing get no inner bar. The date columns must differ
     from *label*, and each window needs two different columns; an inner
     window may reuse *start* and *end* (active for the whole period). No
@@ -773,7 +773,7 @@ def animated_bubble(
     ``2024-01-05``, with the time of day (``2024-01-05 14:00``) and the zone
     when the data has them; text as written.
 
-    Returns a :class:`VizResult` whose ``info["animation"]`` is a Matplotlib
+    Returns a [`VizResult`][viz_calc.VizResult] whose ``info["animation"]`` is a Matplotlib
     ``FuncAnimation`` (kept alive by the figure, so ``plt.show()`` plays it)
     and ``info["frames"]`` the time values in playing order; the table has
     one row per frame, in the same order, with the mean of *x*, *y* and
