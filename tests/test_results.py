@@ -413,3 +413,44 @@ def test_vizresult_docstring_describes_figure_axes_and_info_as_returned():
     info = vc.pca_plot(datasets.measurements(), features=METRICS).info
     assert isinstance(info["scores"], pd.DataFrame) and isinstance(info["eigenvalues"], pd.Series)
     assert "tables (``DataFrame`` and ``Series``)" in doc and "scalar" not in doc
+
+
+# --- warnings hidden while dates are parsed -------------------------------------------------------------------------
+
+
+def test_date_parsing_hides_only_pandas_mixed_offset_warning(monkeypatch):
+    import warnings
+
+    to_datetime = pd.to_datetime
+
+    def warns(values, **kwargs):
+        warnings.warn("In a future version of pandas, parsing datetimes with mixed time zones will raise",
+                      FutureWarning, stacklevel=2)
+        warnings.warn("an unrelated deprecation", FutureWarning, stacklevel=2)
+        return to_datetime(values, **kwargs)
+
+    data = pd.DataFrame({"d": ["2021-01-01", "2021-01-15", "2021-02-01"], "v": [1.0, 2, 3]})
+    monkeypatch.setattr(pd, "to_datetime", warns)
+    with pytest.warns(FutureWarning, match="an unrelated deprecation") as seen:
+        vc.period_bars(data, date="d", value="v")
+    assert not [w for w in seen if "mixed time zones" in str(w.message)]
+
+
+def test_reading_frame_labels_hides_only_dateutils_time_zone_warning(monkeypatch):
+    import warnings
+
+    from dateutil import parser
+
+    from viz_calc import timeseries
+
+    parse = parser.parse
+
+    def warns(text, **kwargs):
+        warnings.warn("tzname EST identified but not understood", parser.UnknownTimezoneWarning, stacklevel=2)
+        warnings.warn("an unrelated warning", UserWarning, stacklevel=2)
+        return parse(text, **kwargs)
+
+    monkeypatch.setattr(parser, "parse", warns)
+    with pytest.warns(UserWarning, match="an unrelated warning") as seen:
+        assert timeseries._has_year("2021-03-04") is True
+    assert not [w for w in seen if issubclass(w.category, parser.UnknownTimezoneWarning)]

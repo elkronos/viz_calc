@@ -116,7 +116,9 @@ def _dates(s: pd.Series, name: str, keep_tz: bool = False, dayfirst: bool = Fals
     def attempt(values, **kwargs):
         try:
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)  # pandas 2.x warns about mixed offsets
+                # pandas 2.x warns about mixed UTC offsets, which the utc=True attempt below handles
+                warnings.filterwarnings("ignore", "In a future version of pandas, parsing datetimes with mixed time "
+                                        "zones", FutureWarning)
                 out = pd.to_datetime(values, **kwargs)
         except (ValueError, TypeError, OverflowError):
             return None
@@ -654,7 +656,7 @@ def _has_year(label: str) -> bool | None:
     """Whether the text *label* reads as a date that names its year (``None``: not a date at all)."""
     try:
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")  # e.g. dateutil's UnknownTimezoneWarning
+            warnings.simplefilter("ignore", dateparser.UnknownTimezoneWarning)
             # A date without a year ("1/2", "9am", "March") takes it from the default.
             years = {dateparser.parse(label, default=datetime.datetime(y, 1, 1)).year for y in (2000, 2004)}
     except (ValueError, OverflowError, TypeError):
