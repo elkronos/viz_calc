@@ -17,6 +17,7 @@ from ._core import (
     NEUTRAL,
     VizResult,
     _plain,
+    abbreviate_axes,
     category_order,
     check_choice,
     check_count,
@@ -206,6 +207,8 @@ def histogram(
         ax.spines[["top", "right"]].set_visible(False)
     for ax in list(axes.flat)[len(facets):]:
         ax.set_visible(False)
+    for ax in axes.flat:
+        abbreviate_axes(ax.xaxis, ax.yaxis)
     for ax in axes[-1]:
         ax.set_xlabel(level_label(x))
     for ax in axes[:, 0]:
@@ -277,6 +280,7 @@ def ridgeplot(
                 ax.plot([m, m], [base, base + np.interp(m, grid, d) / peak], color="black", lw=1, zorder=2 * i + 2)
         rows.append({group: g, **_describe(s)})
     ax.set_yticks([(len(groups) - 1 - i) * step for i in range(len(groups))], [group_label(g) for g in groups])
+    abbreviate_axes(ax.xaxis)
     ax.set_xlabel(level_label(x))
     ax.set_ylabel(level_label(group))
     ax.spines[["top", "right", "left"]].set_visible(False)
@@ -341,6 +345,7 @@ def raincloud(
             ax.scatter(s, pos - 0.22 + rng.uniform(-0.08, 0.08, s.size), s=10, color=cols[i], alpha=0.6, lw=0)
         rows.append({x: g, **_describe(pd.Series(s))})
     ax.set_yticks([len(groups) - 1 - i for i in range(len(groups))], [f"{level_label(g)}\n(n={r['n']})" for g, r in zip(groups, rows)])
+    abbreviate_axes(ax.xaxis)
     ax.set_xlabel(level_label(y))
     ax.set_ylabel(level_label(x))
     ax.spines[["top", "right"]].set_visible(False)

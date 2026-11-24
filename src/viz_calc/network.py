@@ -18,6 +18,7 @@ from matplotlib.patches import Patch
 from ._core import (
     NEUTRAL,
     VizResult,
+    abbreviate,
     check_choice,
     check_dataframe,
     check_distinct,
@@ -501,7 +502,7 @@ def network_map(
                 fig.add_trace(go.Scatter(x=[pos[u][0], pos[v][0]], y=[pos[u][1], pos[v][1]], mode="lines",
                                          line={"width": float(wdt), "color": "#aaaaaa"}, hoverinfo="skip",
                                          showlegend=False))
-        hover = [f"<b>{_plotly_text(r.node)}</b><br>degree {r.degree}<br>strength {r.strength:.3g}<br>"
+        hover = [f"<b>{_plotly_text(r.node)}</b><br>degree {r.degree}<br>strength {abbreviate(r.strength)}<br>"
                  f"betweenness {r.betweenness:.3f}<br>community {r.community}" for r in table.itertuples()]
         fig.add_trace(go.Scatter(x=[pos[n][0] for n in nodes], y=[pos[n][1] for n in nodes],
                                  mode="markers+text" if labels else "markers",

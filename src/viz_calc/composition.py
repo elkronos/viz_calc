@@ -25,6 +25,7 @@ from ._core import (
     _plain,
     _scalars,
     abbreviate,
+    abbreviate_axes,
     center_labels,
     check_choice,
     check_dataframe,
@@ -876,6 +877,7 @@ def bullet(
         if bottom < 0:
             ax.axvline(0, color="black" if 0 <= reach else ink, lw=0.8)
         ax.set_yticks([0], [level_label(row[label])])
+        abbreviate_axes(ax.xaxis)
         ax.set_ylim(-0.5, 0.5)
         ax.spines[["top", "right", "left"]].set_visible(False)
         rec = {label: row[label], "value": row[value]}
@@ -979,7 +981,8 @@ def upset(
     xs = np.arange(m)
     color = foreground(ax_bar, "#333333") if color is None else color
     bars = ax_bar.bar(xs, table["size"], color=color, width=0.6)
-    ax_bar.bar_label(bars, fontsize=8, padding=1)
+    ax_bar.bar_label(bars, labels=[f"{v:,}" for v in table["size"]], fontsize=8, padding=1)  # exact counts
+    abbreviate_axes(ax_bar.yaxis)
     ax_bar.set_ylabel("Intersection size")
     ax_bar.spines[["top", "right", "bottom"]].set_visible(False)
     ax_bar.tick_params(axis="x", bottom=False, labelbottom=False)
@@ -1000,6 +1003,7 @@ def upset(
     ax_set.invert_xaxis()
     ax_set.yaxis.tick_right()
     ax_set.set_yticks(range(k), [level_label(nme) for nme in names])
+    abbreviate_axes(ax_set.xaxis)
     ax_set.tick_params(axis="y", length=0, pad=6)
     ax_set.set_xlabel("Set size")
     ax_set.spines[["top", "left", "right"]].set_visible(False)

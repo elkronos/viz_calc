@@ -18,6 +18,7 @@ from ._core import (
     NEUTRAL,
     VizResult,
     _plain,
+    abbreviate_axes,
     category_order,
     check_choice,
     check_count,
@@ -236,6 +237,7 @@ def pca_plot(
     ax.axhline(0, color=foreground(ax, "#dddddd"), lw=0.8, zorder=0)
     ax.axvline(0, color=foreground(ax, "#dddddd"), lw=0.8, zorder=0)
     ax.set_aspect("equal", adjustable="datalim")
+    abbreviate_axes(ax.xaxis, ax.yaxis)
     if group is not None:
         ax.legend(title=level_label(group), frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
     title = "standardized features" if scale else "unscaled features"
@@ -365,6 +367,8 @@ def radar(
         ax.set_yticks([0, 0.5, 1], ["min", "", "max"], color=NEUTRAL, fontsize=8)
         ax.set_title(f"{stat} per group; axes scaled to the {'observed' if normalize == 'data' else 'group'} range",
                      fontsize="medium", color=NEUTRAL, pad=20)
-    ax.legend(title=str(group), frameon=False, loc="upper left", bbox_to_anchor=(1.05, 1.05))
+    else:
+        abbreviate_axes(ax.yaxis)
+    ax.legend(title=level_label(group), frameon=False, loc="upper left", bbox_to_anchor=(1.05, 1.05))
     table = raw.add_suffix(f"_{stat}").join(scaled.add_suffix("_scaled")).rename_axis(group).reset_index()
     return VizResult(fig, ax, table, {"normalize": normalize})

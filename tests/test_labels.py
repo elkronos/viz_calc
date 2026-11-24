@@ -273,3 +273,29 @@ def test_category_order_and_its_deprecated_alias_cannot_both_be_given():
     levels = sorted(survey[item].dropna().unique())
     with pytest.raises(TypeError, match="not both"):
         vc.stacked_percentages(survey, group="team", category=item, category_order=levels, category_order_=levels)
+
+
+# --- tick formats -----------------------------------------------------------------------------------------------------
+
+def test_large_values_use_abbreviated_ticks_and_exact_bar_labels():
+    t = datasets.trial()
+    res = vc.histogram(t.assign(score=t.score / t.score.max() * 999_999), x="score")
+    ax = res.axes.flat[0]
+    res.figure.canvas.draw()
+    assert ax.xaxis.get_offset_text().get_text() == ""
+    assert _ticks(ax)[1:3] == ["0.2M", "0.4M"]
+    big = {"A": set(range(1_234_567)), "B": set(range(1_234_560, 1_234_600))}
+    res = vc.upset(big)
+    assert sorted(t.get_text() for t in res.axes[0].texts) == ["1,234,560", "33", "7"]
+    d = datasets.measurements()
+    res = vc.quadrant_plot(d.assign(mass=d["mass"] * 1e6), x="length", y="mass", standardize=False)
+    res.figure.canvas.draw()
+    assert res.axes.yaxis.get_offset_text().get_text() == ""
+
+
+def test_network_map_hover_abbreviates_strength():
+    pytest.importorskip("networkx")
+    pytest.importorskip("plotly")
+    edges = pd.DataFrame({"s": ["a", "b"], "t": ["b", "c"], "w": [18_000.0, 2.0]})
+    res = vc.network_map(edges, "s", "t", weight="w", interactive=True)
+    assert "strength 18K" in res.figure.data[-1].hovertext[0]

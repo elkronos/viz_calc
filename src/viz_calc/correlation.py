@@ -17,6 +17,7 @@ from ._core import (
     NEUTRAL,
     OKABE_ITO,
     VizResult,
+    abbreviate_axes,
     category_order,
     check_choice,
     check_count,
@@ -386,5 +387,6 @@ def quadrant_plot(
                  loc="left", fontsize="medium")
     ax.set_xlabel(f"{level_label(x)} (z-score)" if standardize else level_label(x))
     ax.set_ylabel(f"{level_label(y)} (z-score)" if standardize else level_label(y))
+    abbreviate_axes(ax.xaxis, ax.yaxis)
     ax.spines[["top", "right"]].set_visible(False)
     return VizResult(fig, ax, pd.DataFrame(rows), {"correlation": cor, "center": (cx, cy), "standardized": standardize})

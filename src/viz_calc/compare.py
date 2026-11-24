@@ -21,6 +21,7 @@ from ._core import (
     VizResult,
     _plain,
     abbreviate,
+    abbreviate_axes,
     category_order,
     center_labels,
     check_choice,
@@ -258,8 +259,9 @@ def estimation_plot(
         ax_raw.errorbar(i + 0.22, m, yerr=[[m - lo], [hi - m]], fmt="o", color=foreground(ax_raw), ms=5, capsize=0,
                         lw=1.5)
         rows.append({x: g, "n": s.size, "mean": m, "sd": st._sd(s), "ci_low": lo, "ci_high": hi})
-    ax_raw.set_ylabel(y)
-    ax_raw.set_title(f"{y} by {x}: raw data with mean and {level_percent(level)} CI", loc="left")
+    ax_raw.set_ylabel(level_label(y))
+    abbreviate_axes(ax_raw.yaxis, ax_diff.yaxis)
+    ax_raw.set_title(f"{level_label(y)} by {level_label(x)}: raw data with mean and {level_percent(level)} CI", loc="left")
 
     comps = []
     ref = samples[reference]
@@ -434,6 +436,7 @@ def benchmark_bar(
     ax.set_xticks(pos, [level_label(g) for g in table[x]])
     ax.set_xlabel(level_label(x))
     ax.set_ylabel(f"Mean {level_label(y)}")
+    abbreviate_axes(ax.yaxis)
     shown = _threshold_text(thr, tol, table[["mean", "ci_low", "ci_high"]].to_numpy())
     ax.set_title(f"Mean {level_label(y)} by {level_label(x)} vs benchmark {shown} (bars: {err_text})", loc="left")
     present = [s for s in ("above", "below", "indistinguishable") if s in set(table["status"])]  # "no data" draws nothing
