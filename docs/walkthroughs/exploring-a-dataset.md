@@ -22,6 +22,8 @@ res = vc.profile_bars(df, max_levels=10)
 res.table.head()
 ```
 
+![Profile bars](../images/profile_bars.png)
+
 A column is included when it has at most `max_levels` distinct values.
 Missing values get their own "(missing)" bar rather than disappearing.
 
@@ -59,6 +61,8 @@ columns, which is what a box plot compares.
 res = vc.profile_scatters(df, method="pearson", p_adjust="holm")
 res.table[["x", "y", "r", "ci_low", "ci_high", "p_adjusted"]]
 ```
+
+![Profile scatters](../images/profile_scatters.png)
 
 | x | y | r | ci_low | ci_high | p_adjusted |
 |---|---|---|---|---|---|

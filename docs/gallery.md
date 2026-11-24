@@ -20,6 +20,15 @@ likert_items = ["Workload is manageable", "My manager supports me", "Tools are a
 levels = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"]
 monthly = (sales.assign(month=sales["date"].dt.to_period("M").astype(str))
            .groupby("month", as_index=False)[["online", "store"]].sum())
+# made-up Gapminder-style data: six countries every five years (GDP per person in $1,000s, population in millions)
+start = pd.DataFrame({"country": ["A", "B", "C", "D", "E", "F"],
+                      "continent": ["Africa", "Africa", "Asia", "Asia", "Europe", "Europe"],
+                      "gdp": [1.5, 3.0, 4.0, 9.0, 25.0, 35.0], "life_exp": [55.0, 60.0, 66.0, 71.0, 77.0, 80.0],
+                      "population": [30.0, 60.0, 90.0, 140.0, 10.0, 70.0]})
+countries = pd.concat([start.assign(year=year, gdp=start["gdp"] * 1.04 ** (year - 2000),
+                                    life_exp=start["life_exp"] + 0.25 * (year - 2000),
+                                    population=start["population"] * 1.01 ** (year - 2000))
+                       for year in range(2000, 2021, 5)], ignore_index=True)
 ```
 
 ## Comparing groups
@@ -267,6 +276,17 @@ res = vc.duration_plot(proj, label="task", start="start", end="end",
 
 ![duration_plot](images/duration_plot.png)
 
+### `animated_bubble`
+
+```python
+res = vc.animated_bubble(countries, time="year", x="gdp", y="life_exp", size="population",
+    color="continent", label="country")
+```
+
+![animated_bubble](images/animated_bubble.png)
+
+The image is the first of five frames; `res.info["animation"]` plays them all.
+
 ## Multivariate and networks
 
 ### `pca_plot`
@@ -295,6 +315,14 @@ res = vc.network_map(edges, source="source", target="target", weight="strength",
 
 ## Exploring a dataset
 
+### `profile_bars`
+
+```python
+res = vc.profile_bars(meas, max_levels=10)
+```
+
+![profile_bars](images/profile_bars.png)
+
 ### `profile_boxes`
 
 ```python
@@ -302,3 +330,11 @@ res = vc.profile_boxes(meas, max_levels=10)
 ```
 
 ![profile_boxes](images/profile_boxes.png)
+
+### `profile_scatters`
+
+```python
+res = vc.profile_scatters(meas, method="pearson", p_adjust="holm")
+```
+
+![profile_scatters](images/profile_scatters.png)

@@ -35,6 +35,15 @@ likert_items = ["Workload is manageable", "My manager supports me", "Tools are a
 levels = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"]
 monthly = (sales.assign(month=sales["date"].dt.to_period("M").astype(str))
            .groupby("month", as_index=False)[["online", "store"]].sum())
+# made-up Gapminder-style data: six countries every five years (GDP per person in $1,000s, population in millions)
+start = pd.DataFrame({"country": ["A", "B", "C", "D", "E", "F"],
+                      "continent": ["Africa", "Africa", "Asia", "Asia", "Europe", "Europe"],
+                      "gdp": [1.5, 3.0, 4.0, 9.0, 25.0, 35.0], "life_exp": [55.0, 60.0, 66.0, 71.0, 77.0, 80.0],
+                      "population": [30.0, 60.0, 90.0, 140.0, 10.0, 70.0]})
+countries = pd.concat([start.assign(year=year, gdp=start["gdp"] * 1.04 ** (year - 2000),
+                                    life_exp=start["life_exp"] + 0.25 * (year - 2000),
+                                    population=start["population"] * 1.01 ** (year - 2000))
+                       for year in range(2000, 2021, 5)], ignore_index=True)
 
 EXAMPLES = {
     # compare
@@ -81,13 +90,17 @@ EXAMPLES = {
     "gantt": lambda: vc.gantt(proj, task="task", start="start", end="end", group="team"),
     "duration_plot": lambda: vc.duration_plot(proj, label="task", start="start", end="end",
                                               inner_start="work_start", inner_end="work_end"),
+    "animated_bubble": lambda: vc.animated_bubble(countries, time="year", x="gdp", y="life_exp", size="population",
+                                                  color="continent", label="country"),
     # multivariate
     "pca_plot": lambda: vc.pca_plot(meas, features=["length", "width", "depth", "mass"], group="group", loadings=True),
     "radar": lambda: vc.radar(meas, metrics=["length", "width", "depth", "mass"], group="group"),
     # network
     "network_map": lambda: vc.network_map(edges, source="source", target="target", weight="strength", size_by="betweenness"),
     # explore
+    "profile_bars": lambda: vc.profile_bars(meas, max_levels=10),
     "profile_boxes": lambda: vc.profile_boxes(meas, max_levels=10),
+    "profile_scatters": lambda: vc.profile_scatters(meas, method="pearson", p_adjust="holm"),
 }
 
 
@@ -98,9 +111,15 @@ SECTIONS = {
     "Distributions": ["histogram", "ridgeplot", "raincloud"],
     "Part-to-whole, flows and sets": ["waffle", "percent_grid", "stacked_percentages", "donut_grid", "nested_pie",
                                       "circular_bar", "waterfall", "funnel", "bullet", "upset"],
-    "Time and projects": ["period_bars", "timeseries_fill", "calendar_heatmap", "gantt", "duration_plot"],
+    "Time and projects": ["period_bars", "timeseries_fill", "calendar_heatmap", "gantt", "duration_plot",
+                          "animated_bubble"],
     "Multivariate and networks": ["pca_plot", "radar", "network_map"],
-    "Exploring a dataset": ["profile_boxes"],
+    "Exploring a dataset": ["profile_bars", "profile_boxes", "profile_scatters"],
+}
+
+# A line under the image, for charts whose image needs one.
+NOTES = {
+    "animated_bubble": 'The image is the first of five frames; `res.info["animation"]` plays them all.',
 }
 
 
@@ -129,6 +148,8 @@ def write_markdown() -> None:
         for name in names:
             lines += [f"### `{name}`", "", "```python", f"res = {snippets[name]}", "```", "",
                       f"![{name}](images/{name}.png)", ""]
+            if name in NOTES:
+                lines += [NOTES[name], ""]
     (OUT.parent / "gallery.md").write_text("\n".join(lines), encoding="utf-8")
     print("wrote gallery.md")
 

@@ -115,6 +115,8 @@ html = anim.to_jshtml()                     # in a notebook, show it with IPytho
 res.table                                   # one row per frame: the mean of x, y and size
 ```
 
+![Animated bubble chart, first frame](../images/animated_bubble.png)
+
 | year | gdp | life_exp | population |
 |---|---|---|---|
 | 2000 | 12.9 | 68.2 | 66.7 |

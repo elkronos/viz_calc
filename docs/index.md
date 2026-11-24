@@ -72,5 +72,6 @@ python-dateutil and Pillow, which pandas and Matplotlib already install.
 * Walkthroughs — task-oriented guides with interpretation, starting with
   [comparing groups](walkthroughs/comparing-groups.md).
 * [Gallery](gallery.md) — charts with the code that made them (`sankey`,
-  `animated_bubble`, `profile_bars` and `profile_scatters` are covered in the
-  walkthroughs instead).
+  an interactive Plotly chart, is covered in the
+  [multivariate walkthrough](walkthroughs/multivariate-and-networks.md#4-flows)
+  instead).

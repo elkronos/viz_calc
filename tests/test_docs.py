@@ -508,6 +508,14 @@ def test_gallery_reads_and_writes_text_as_utf8():
         assert any(kw.arg == "encoding" for kw in call.keywords), f"line {call.lineno} has no encoding="
 
 
+def test_every_matplotlib_chart_has_an_image_in_the_docs():
+    pages = [ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md"))]
+    shown = {name for page in pages for name in re.findall(r"images/(\w+)\.png", page.read_text(encoding="utf-8"))}
+    assert all((ROOT / "docs" / "images" / f"{name}.png").is_file() for name in shown)
+    # sankey draws only a Plotly figure, and a static Plotly image needs kaleido, which is not a dependency
+    assert [name for name in CHARTS if name not in shown] == ["sankey"]
+
+
 def test_docs_images_are_the_gallery_examples():
     gallery = _gallery()
     images = {p.stem for p in (ROOT / "docs" / "images").glob("*.png")}
