@@ -460,6 +460,8 @@ def nested_pie(
     if not (agg["value"] > 0).any():  # not agg["value"].sum(), which can overflow
         raise ValueError("nested_pie needs a positive total; every value is zero or missing")
     parents = list(pd.unique(agg[outer].dropna()))
+    check_labels(outer, parents, missing=agg[outer].isna().any())
+    check_labels(inner, list(pd.unique(agg[inner].dropna())), missing=agg[inner].isna().any())
     base_cols = palette(len(parents), colors)
     # Match rows to parents by value (as codes), which also works for nullable dtypes; -1 marks a missing parent.
     codes = level_codes(parents, agg[outer])
@@ -548,6 +550,7 @@ def circular_bar(
     # Match rows to groups by value (as codes), which also works for nullable dtypes; -1 marks a missing group.
     codes = level_codes(groups, d[group]) if group is not None else np.zeros(len(d), dtype=int)
     if (codes < 0).any():  # rows without a group are drawn grey, not dropped
+        check_labels(group, groups, missing=True)
         groups, cols = groups + [None], cols + [NEUTRAL]
         codes = np.where(codes < 0, len(groups) - 1, codes)
     parts, part_codes, slot_idx, slot = [], [], [], 0
@@ -643,6 +646,9 @@ def waterfall(
     # The text drawn for each step; a missing label stays missing in the table and reads "(missing)" on the chart.
     labels = [np.nan if pd.api.types.is_scalar(v) and pd.isna(v) else level_label(v) for v in data[label]]
     vals = data[value].to_numpy(dtype=float)
+    for name, given, steps in (("start_label", start_label, labels[1:]), ("total_label", total_label, labels)):
+        if given is not None and str(given) in steps:  # the two bars could not be told apart
+            raise ValueError(f"{name}={given!r} is also the label of a step; choose another {name} or rename the step")
     if values_are == "levels":
         changes = np.r_[vals[0], np.diff(vals)]
         if start_label is None:

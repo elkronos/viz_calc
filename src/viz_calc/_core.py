@@ -630,9 +630,13 @@ def with_missing(levels: Sequence[Any], values: pd.Series) -> list[Any]:
     """*levels*, then ``None`` if *values* has missing values: the level of the rows whose group is missing.
 
     :func:`group_mask` selects those rows and :func:`group_label` names the
-    level "(missing)".
+    level "(missing)"; a level of *levels* labelled "(missing)" too raises
+    an error.
     """
-    return [*levels, None] if values.isna().any() else list(levels)
+    if not values.isna().any():
+        return list(levels)
+    check_labels(values.name, levels, missing=True)
+    return [*levels, None]
 
 
 def group_mask(values: pd.Series, level: Any) -> pd.Series:

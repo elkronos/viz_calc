@@ -170,3 +170,34 @@ def test_messages_show_numpy_scalars_as_python_values(draw, text):
     with pytest.raises(ValueError) as error:
         draw()
     assert text in str(error.value) and "np." not in str(error.value)
+
+
+# --- levels that would be labelled alike ------------------------------------------------------------------------------
+
+def test_a_real_missing_level_next_to_missing_values_is_rejected():
+    d = pd.DataFrame({"c": ["(missing)", "a", None, "a", "(missing)", "b"], "v": [1.0, 2, 3, 4, 5, 6]})
+    for draw in (lambda: vc.waffle(d, category="c"), lambda: vc.nested_pie(d.assign(i="x"), outer="c", inner="i"),
+                 lambda: vc.circular_bar(d.assign(k=list("pqrstu")), label="k", value="v", group="c"),
+                 lambda: vc.lollipop(d, x="c", y="v"), lambda: vc.histogram(d, x="v", hue="c")):
+        with pytest.raises(ValueError, match=r"level '\(missing\)' and missing values"):
+            draw()
+    vc.waffle(d.dropna(), category="c")  # without missing values the level is drawn
+
+
+def test_levels_that_read_alike_are_rejected():
+    d = pd.DataFrame({"g": pd.Series([1, "1", 2, 1, "1", 2], dtype=object), "y": np.arange(6.0)})
+    with pytest.raises(ValueError, match="would both be labelled '1'"):
+        vc.benchmark_bar(d, x="g", y="y")
+
+
+@pytest.mark.parametrize("kwargs", [{}, {"start_label": "b"}, {"total_label": "c"}])
+def test_waterfall_rejects_a_total_named_like_a_step(kwargs):
+    d = pd.DataFrame({"k": ["Total", "b", "c", "d"] if not kwargs else ["a", "b", "c", "d"], "v": [3.0, 5, 2, 8]})
+    with pytest.raises(ValueError, match="also the label of a step"):
+        vc.waterfall(d, label="k", value="v", **kwargs)
+
+
+@pytest.mark.parametrize("labels", [["x", "x"], [None, "y"], [1, "1"]])
+def test_timeseries_fill_rejects_labels_that_do_not_tell_the_series_apart(labels):
+    with pytest.raises(ValueError, match="two different names"):
+        vc.timeseries_fill(datasets.sales().head(60), time="date", series=["online", "store"], labels=labels)

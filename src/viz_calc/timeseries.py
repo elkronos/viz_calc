@@ -30,6 +30,7 @@ from ._core import (
     check_dataframe,
     check_finite,
     check_has_values,
+    check_labels,
     check_not_reserved,
     check_numeric,
     cleanup_on_error,
@@ -276,8 +277,8 @@ def timeseries_fill(
     series
         A list of the two numeric columns to compare.
     labels
-        A list of two legend names, one per series (default: the column
-        names).
+        A list of two different legend names, one per series (default: the
+        column names); neither may be missing.
     colors
         A tuple of two colours: ``(first series, second series)``. Each is
         used for its series' line and for the shading where it leads.
@@ -310,7 +311,10 @@ def timeseries_fill(
     else:  # a lone string or number is one name, not a list of them
         names = list(labels) if isinstance(labels, Iterable) and not isinstance(labels, str) else [labels]
     if len(names) != 2:
-        raise ValueError(f"labels must be a list of two names, one per series, got {labels!r}")
+        raise ValueError(f"labels must be a list of two names, one per series, got {_plain(labels)!r}")
+    if any(pd.api.types.is_scalar(n) and pd.isna(n) for n in names) or str(names[0]) == str(names[1]):
+        raise ValueError(f"labels must be two different names, so the legend and the table's leader column tell "
+                         f"the series apart, got {_plain(labels)!r}")
     colors = slot_colors(colors, ("first series", "second series"))
     check_has_values(data, time, a, b)
     d = data[[time, a, b]].copy()
@@ -527,6 +531,8 @@ def gantt(
     cols = palette(len(groups), colors)
     # An Index matches datetime-like groups by value; a missing group (-1) is drawn grey.
     codes = level_codes(groups, d[group]) if group is not None else np.zeros(len(d), dtype=int)
+    if group is not None:
+        check_labels(group, groups, missing=(codes < 0).any())
     col = [cols[c] if c >= 0 else NEUTRAL for c in codes]
     names = [level_label(v) for v in d[task]]
     fig, ax = get_ax(ax, figsize=(10, 0.45 * len(d) + 1.5))
@@ -811,6 +817,7 @@ def animated_bubble(
     cats = category_order(data[color]) if color is not None else [None]
     cols = palette(len(cats), colors)
     if color is not None and data[color].isna().any():  # rows without a colour category are drawn grey, not dropped
+        check_labels(color, cats, missing=True)
         cats, cols = cats + [None], cols + [NEUTRAL]
     smax = float(data[size].max()) or 1.0
     fig, ax = plt.subplots(figsize=(9, 6))

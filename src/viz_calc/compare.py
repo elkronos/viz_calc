@@ -29,6 +29,7 @@ from ._core import (
     check_distinct,
     check_finite,
     check_has_values,
+    check_labels,
     check_not_reserved,
     check_numeric,
     cleanup_on_error,
@@ -503,6 +504,7 @@ def lollipop(
     if missing.any():  # the rows without an x come last, whatever their value
         last = np.argsort(missing, kind="stable")
         table, missing = table.iloc[last].reset_index(drop=True), missing[last]
+    check_labels(x, table[x][~missing].tolist(), missing=missing.any())
     dot = [NEUTRAL if m else color for m in missing] if missing.any() else color
 
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)) if horizontal else (8, 5))
@@ -679,6 +681,7 @@ def divergent_bar(
     if missing.any():  # the rows without a category come last, whatever their total
         last = np.argsort(missing, kind="stable")
         table, missing = table.iloc[last].reset_index(drop=True), missing[last]
+    check_labels(category, table[category][~missing].tolist(), missing=missing.any())
     left_colors, right_colors = ([NEUTRAL if m else c for m in missing] if missing.any() else c for c in colors)
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)))
     pos = np.arange(len(table))

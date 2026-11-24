@@ -24,6 +24,7 @@ from ._core import (
     check_distinct,
     check_finite,
     check_has_values,
+    check_labels,
     check_not_reserved,
     check_numeric,
     check_range,
@@ -161,6 +162,7 @@ def histogram(
     hues = category_order(data[hue], hue_order) if hue is not None else [None]
     cols = palette(len(hues), colors)
     if hue is not None and data[hue].isna().any():  # the rows without a hue are drawn last, in grey
+        check_labels(hue, hues, missing=True)
         hues, cols = hues + [None], cols + [NEUTRAL]
     ncol = min(col_wrap, len(facets))
     nrow = int(np.ceil(len(facets) / ncol))
