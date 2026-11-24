@@ -360,6 +360,33 @@ def test_api_reference_lists_have_one_paragraph_per_entry():
         assert not joined, f"{name}: no blank line before the reference {joined[0]!r}"
 
 
+def _doc(obj) -> str:
+    """The docstring with its line breaks folded, so phrases can be searched across lines."""
+    return " ".join((inspect.getdoc(obj) or "").split())
+
+
+def _documented(func) -> list[str]:
+    """The names in a function's numpy-style Parameters section."""
+    section = re.split(r"\n\n\w+\n-+\n", inspect.getdoc(func).split("Parameters\n----------\n")[1])[0]
+    return re.findall(r"^(\w+)$", section, re.M)
+
+
+def test_docstrings_match_the_code():
+    # functions that describe their parameters one by one leave none out
+    for func in (vc.estimation_plot, vc.percent_grid):
+        undocumented = set(inspect.signature(func).parameters) - set(_documented(func)) - {"data"}
+        assert not undocumented, f"{func.__name__} does not document {sorted(undocumented)}"
+    # donut_grid: labels=False removes the share labels and keeps the totals in the centre
+    res = vc.donut_grid(pd.DataFrame({"a": [1, 3], "b": [3, 3]}), labels=False)
+    assert [t.get_text() for ax in res.axes.flat for t in ax.texts if t.get_text()] == ["4", "6"]
+    assert "labels=False`` leaves out every share but keeps the totals" in _doc(vc.donut_grid)
+    # ridgeplot: a group with fewer than two distinct values gets no curve and so no median mark
+    df = pd.DataFrame({"g": ["a"] * 5 + ["b"] * 3 + ["c"], "y": [1, 2, 3, 4, 5, 7, 7, 7, 9]})
+    marks = [line for line in vc.ridgeplot(df, x="y", group="g").axes.lines if line.get_color() == "black"]
+    assert len(marks) == 1
+    assert "fewer than two distinct values has no curve and no median mark" in _doc(vc.ridgeplot)
+
+
 def test_mkdocs_edit_uri_only_with_page_actions():
     # Material uses edit_uri only for the edit and view buttons, which are off unless listed as theme features
     config = _read("mkdocs.yml")

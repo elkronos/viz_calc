@@ -191,6 +191,8 @@ def estimation_plot(
         is cycled). Defaults to the Okabe–Ito palette.
     seed
         Seed for jitter and bootstrap, so the figure is reproducible.
+    figsize
+        Figure size in inches, ``(width, height)``.
     ci
         Interval for the mean difference: ``"bca"`` (bias-corrected and
         accelerated bootstrap, the default), ``"percentile"`` (bootstrap

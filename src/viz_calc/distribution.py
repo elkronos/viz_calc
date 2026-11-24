@@ -231,7 +231,8 @@ def ridgeplot(
 
     Useful when there are too many groups for overlaid histograms. All
     curves share one x-axis and a common height scale, so peak heights are
-    comparable. The median of each group is marked. Rows with a missing
+    comparable. The median of each group is marked. A group with fewer than
+    two distinct values has no curve and no median mark. Rows with a missing
     *group* are not dropped: they are drawn last (at the bottom), in grey,
     as "(missing)", whatever *order* lists, with the missing value in the
     table's *group* column.

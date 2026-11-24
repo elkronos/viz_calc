@@ -188,6 +188,13 @@ def percent_grid(
         0/1 data; required otherwise. It must be one of the column's two
         values (a column with a single value cannot be checked, so a
         misspelled *success* there reads as 0 %).
+    facet
+        Column whose levels each get a panel. Without it, one panel covers
+        all rows.
+    facet_order
+        The *facet* levels to draw, in panel order; each must occur in the
+        data. Defaults to the categories of a ``Categorical`` column, and to
+        sorted order otherwise.
     level
         Confidence level of the interval, strictly between 0 and 1.
     colors
@@ -350,7 +357,8 @@ def donut_grid(
     Every category keeps the same colour in every donut. The row total is
     printed in the centre. Each share is printed on its wedge in black or
     white, whichever reads better on the wedge's colour; shares below
-    *min_label* percent (a finite number) are not labelled. *columns* (a
+    *min_label* percent (a finite number) are not labelled, and
+    ``labels=False`` leaves out every share but keeps the totals. *columns* (a
     list of distinct labels or any other iterable of them, e.g.
     ``df.columns[1:]``, but not a lone string) defaults to the numeric,
     non-boolean columns. Values must be non-negative and not missing (fill
