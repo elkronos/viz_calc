@@ -27,6 +27,7 @@ from ._core import (
     foreground,
     palette,
     require,
+    safe_sum,
     text_color,
 )
 
@@ -557,7 +558,9 @@ def sankey(
     Repeated source→target rows are summed; a missing source, target or flow
     value, or a negative, infinite or complex flow, raises an error (dropping
     the row would silently change the totals). The table reports each node's
-    total inflow and outflow.
+    total inflow and outflow; integer totals are exact unless they could
+    leave the int64 range (then they are floats), and totals beyond the
+    largest float raise ``ValueError``.
 
     Node names are shown as written: ``<``, ``>`` and ``&`` are escaped so
     that Plotly does not read them as HTML markup. *title* is passed to
@@ -581,7 +584,8 @@ def sankey(
         raise ValueError("flows must be non-negative")
     if np.isinf(data[value].to_numpy(dtype=float, na_value=np.nan)).any():
         raise ValueError(f"flow values in {value!r} must be finite")
-    flows = data.groupby([source, target], sort=False, observed=True)[value].sum().reset_index()
+    # safe_sum: integer totals that cannot wrap around, float16 summed in float64, an error for overflowing totals
+    flows = safe_sum(data[value], [data[source], data[target]]).reset_index()
     nodes = list(pd.unique(pd.concat([flows[source], flows[target]])))
     index = {n: i for i, n in enumerate(nodes)}
     with plt.rc_context({"axes.facecolor": "white"}):  # Plotly's background, whatever the Matplotlib style
@@ -592,8 +596,8 @@ def sankey(
               "color": "rgba(150,150,150,0.35)"},
     ))
     fig.update_layout(title_text=title, font_size=12)
-    inflow = flows.groupby(target, observed=True)[value].sum()
-    outflow = flows.groupby(source, observed=True)[value].sum()
+    inflow = safe_sum(flows[value], flows[target])
+    outflow = safe_sum(flows[value], flows[source])
     table = pd.DataFrame({"node": nodes, "inflow": [inflow.get(n, 0) for n in nodes],
                           "outflow": [outflow.get(n, 0) for n in nodes]})
     return VizResult(fig, None, table, {"flows": flows})

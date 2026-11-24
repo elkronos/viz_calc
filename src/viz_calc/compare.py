@@ -489,10 +489,11 @@ def lollipop(
         check_finite(data, y)
         if stat == "sum":  # in float where an int64 sum could wrap around
             agg = safe_sum(data[y], key, sort=True, dropna=False)
-        else:
-            agg = data.groupby(key, observed=True, dropna=False)[y].agg(stat)
+        else:  # in float64 with NaN, also for nullable and Arrow columns
+            values = pd.Series(data[y].to_numpy(dtype=float, na_value=np.nan), index=data.index)
+            agg = values.groupby(key, observed=True, dropna=False).agg(stat)
     elif y is not None:
-        agg = data.groupby(key, observed=True, dropna=False)[y].count()
+        agg = data.groupby(key, observed=True, dropna=False)[y].count().astype(np.int64)
     else:
         agg = data.groupby(key, observed=True, dropna=False).size()
     table = agg.rename("value").reset_index()
@@ -681,12 +682,14 @@ def divergent_bar(
     left_colors, right_colors = ([NEUTRAL if m else c for m in missing] if missing.any() else c for c in colors)
     fig, ax = get_ax(ax, figsize=(8, max(3, 0.4 * len(table) + 1)))
     pos = np.arange(len(table))
-    ax.barh(pos, -table[left], color=left_colors, label=left_label or left)
-    ax.barh(pos, table[right], color=right_colors, label=right_label or right)
+    # Drawn in float: negating an unsigned column would wrap around (uint8 200 drew as 56).
+    widths = [table[c].to_numpy(dtype=float, na_value=np.nan) for c in (left, right)]
+    ax.barh(pos, -widths[0], color=left_colors, label=left_label or left)
+    ax.barh(pos, widths[1], color=right_colors, label=right_label or right)
     ax.axvline(0, color=foreground(ax), lw=0.8)
     ax.set_yticks(pos, ["(missing)" if m else level_label(v) for v, m in zip(table[category], missing)])
     ax.xaxis.set_major_formatter(AbbrevFormatter(absolute=True))
-    lim = max(table[left].max(), table[right].max()) * 1.1
+    lim = (max(np.nanmax(w) for w in widths) or 1.0) * 1.1  # all zero: still a usable axis
     ax.set_xlim(-lim, lim)
     ax.set_ylabel(category)
     ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=2)

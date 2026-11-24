@@ -185,8 +185,10 @@ def profile_boxes(
                 ax.set_title(f"{r.numeric} by {r.categorical}  (n=0)", fontsize="small", loc="left")
                 continue
             levels = category_order(d.iloc[:, 0])
-            ax.boxplot([d.iloc[:, 1][level_mask(d.iloc[:, 0], lv)] for lv in levels], showfliers=True,
-                       flierprops={"markersize": 2, "markeredgecolor": NEUTRAL}, medianprops={"color": OKABE_ITO[5]})
+            # In float: quartiles of small integers would wrap around, and bool has no subtraction
+            ax.boxplot([d.iloc[:, 1][level_mask(d.iloc[:, 0], lv)].to_numpy(dtype=float) for lv in levels],
+                       showfliers=True, flierprops={"markersize": 2, "markeredgecolor": NEUTRAL},
+                       medianprops={"color": OKABE_ITO[5]})
             ax.set_xticks(range(1, len(levels) + 1), [level_label(lv) for lv in levels], rotation=45, ha="right")
             ax.set_title(f"{r.numeric} by {r.categorical}  (η²={r.eta_squared:.2f})", fontsize="small", loc="left")
         fig.tight_layout()

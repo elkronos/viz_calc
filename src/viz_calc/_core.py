@@ -712,34 +712,64 @@ def exact_mean(values: Any) -> float:
     return float(sum(map(Fraction, parts)) / len(v))
 
 
+def numpy_values(values: pd.Series) -> np.ndarray:
+    """*values* in a NumPy dtype, which Matplotlib and arithmetic handle alike in every pandas version.
+
+    A nullable or Arrow-backed number column (``Int64``, ``Float64``,
+    ``int64[pyarrow]``) becomes its NumPy counterpart when nothing is
+    missing, and float64 with ``NaN`` for ``pd.NA`` otherwise. Any other
+    column is returned as its NumPy array.
+    """
+    if isinstance(values.dtype, pd.api.extensions.ExtensionDtype) and pd.api.types.is_numeric_dtype(values):
+        return values.to_numpy(dtype=float if values.isna().any() else values.dtype.numpy_dtype, na_value=np.nan)
+    return values.to_numpy()
+
+
 def safe_sum(values: pd.Series, by: Any = None, sort: bool = False, min_count: int = 0,
              dropna: bool = True) -> Any:
     """Sum of *values* (per group of *by*) that cannot wrap around, with ``NaN`` rather than ``pd.NA`` for missing.
 
     Integer sums in int64 wrap around silently, so where an integer sum
     reaches 2**62 (a margin for float rounding) it is taken in float instead.
-    Otherwise integer sums stay exact. A result in a nullable dtype (``Int64``,
-    ``Float64``) comes back as a NumPy one: int64 when nothing is missing,
-    float64 with ``NaN`` otherwise, which Matplotlib can draw. *by* is a
-    Series or a list of them. *sort*, *dropna* (``False`` makes missing keys
-    a group of their own) and *min_count* are passed on to the pandas
-    ``groupby`` and ``sum``.
+    Otherwise integer sums stay exact. float16 values are summed in float64
+    (pandas 3 keeps float16, whose sums overflow past 65,504). A result in a
+    nullable or Arrow dtype (``Int64``, ``Float64``) comes back as a NumPy
+    one: int64 when nothing is missing, float64 with ``NaN`` otherwise, which
+    Matplotlib can draw. A sum of finite values beyond the largest float
+    raises ``ValueError`` naming the column, rather than giving ``inf``. *by*
+    is a Series or a list of them. *sort*, *dropna* (``False`` makes missing
+    keys a group of their own) and *min_count* are passed on to the pandas
+    ``groupby`` and ``sum``; a group with fewer than *min_count* values sums
+    to ``NaN`` also for Arrow-backed values, where pandas 2.0 ignores
+    *min_count*.
     """
     def total(v: pd.Series) -> Any:
-        if by is None:
-            return v.sum(min_count=min_count)
-        return v.groupby(by, sort=sort, observed=True, dropna=dropna).sum(min_count=min_count)
+        with np.errstate(over="ignore", invalid="ignore"):  # an overflow is reported below
+            if by is None:
+                return v.sum(min_count=min_count)
+            grouped = v.groupby(by, sort=sort, observed=True, dropna=dropna)
+            sums = grouped.sum(min_count=min_count)
+        if min_count > 0:
+            short = grouped.count().to_numpy() < min_count
+            if short.any():
+                sums = sums.mask(short)
+        return sums
 
+    if values.dtype == np.float16:
+        values = values.astype(np.float64)
     if pd.api.types.is_integer_dtype(values) and not pd.api.types.is_bool_dtype(values):
-        floats = total(pd.Series(values.to_numpy(dtype=float, na_value=np.nan), index=values.index))
+        floats = total(pd.Series(values.to_numpy(dtype=float, na_value=np.nan), index=values.index, name=values.name))
         if np.any(np.abs(floats) >= 2.0**62):
             return floats
     result = total(values)
     if by is None:
-        return np.nan if pd.isna(result) else result
-    if isinstance(result.dtype, pd.api.extensions.ExtensionDtype) and pd.api.types.is_numeric_dtype(result):
-        dtype = float if result.isna().any() else result.dtype.numpy_dtype
-        result = pd.Series(result.to_numpy(dtype=dtype, na_value=np.nan), index=result.index, name=result.name)
+        result = np.nan if pd.isna(result) else result
+    elif isinstance(result.dtype, pd.api.extensions.ExtensionDtype) and pd.api.types.is_numeric_dtype(result):
+        result = pd.Series(numpy_values(result), index=result.index, name=result.name)
+    if pd.api.types.is_float_dtype(np.asarray(result)) and np.isinf(result).any():
+        if not np.isinf(values.to_numpy(dtype=float, na_value=np.nan)).any():
+            where = "" if by is None else f" of {result.index[np.isinf(result.to_numpy())][0]!r}"
+            raise ValueError(f"the {values.name!r} values{where} add up to more than the largest float")
     return result
 
 

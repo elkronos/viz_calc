@@ -44,9 +44,14 @@ _SUMMARY = ["n", "mean", "median", "sd", "q1", "q3"]  # the columns _describe ad
 
 
 def _describe(s: pd.Series) -> dict[str, float]:
-    s = s.dropna()
-    return {"n": int(s.size), "mean": s.mean(), "median": s.median(), "sd": st._sd(s.to_numpy(float)),
-            "q1": s.quantile(0.25), "q3": s.quantile(0.75)}
+    # In float64: quartiles of small or unsigned integers would wrap around (int8 gave q1 = 32 for -32), bool has
+    # no subtraction, float16 means overflow on pandas 2.0, and nullable columns would give pd.NA and object dtype.
+    x = s.to_numpy(dtype=float, na_value=np.nan)
+    x = x[~np.isnan(x)]
+    scale = st._unit_scale(x)  # a power of two (exact), so the mean of values near the float limit cannot overflow
+    s = pd.Series(x)
+    return {"n": int(x.size), "mean": float((s / scale).mean() * scale), "median": float(s.median()),
+            "sd": st._sd(x), "q1": float(s.quantile(0.25)), "q3": float(s.quantile(0.75))}
 
 
 def _kde(values: np.ndarray, grid: np.ndarray, bw_method: Any = None) -> np.ndarray | None:
@@ -269,7 +274,7 @@ def ridgeplot(
             ax.fill_between(grid, base, y, color=cols[i], alpha=0.8, zorder=2 * i + 1, lw=0)
             ax.plot(grid, y, color="white", lw=1.2, zorder=2 * i + 2)
             if show_median:
-                m = s.median()
+                m = float(np.nanmedian(s.to_numpy(dtype=float, na_value=np.nan)))
                 ax.plot([m, m], [base, base + np.interp(m, grid, d) / peak], color="black", lw=1, zorder=2 * i + 2)
         rows.append({group: g, **_describe(s)})
     ax.set_yticks([(len(groups) - 1 - i) * step for i in range(len(groups))], [group_label(g) for g in groups])

@@ -43,6 +43,7 @@ from ._core import (
     level_label,
     level_mask,
     level_percent,
+    numpy_values,
     palette,
     safe_sum,
     select_columns,
@@ -889,13 +890,18 @@ def bullet(
         ax.set_yticks([0], [level_label(row[label])])
         ax.set_ylim(-0.5, 0.5)
         ax.spines[["top", "right", "left"]].set_visible(False)
-        rec = {label: row[label], "value": row[value]}
+        rec = {label: row[label], "value": None}
         if target is not None:
-            rec.update(target=row[target], pct_of_target=vals[i] / targets[i] * 100 if targets[i] else np.nan)
+            rec.update(target=None, pct_of_target=vals[i] / targets[i] * 100 if targets[i] else np.nan)
         rows.append(rec)
     if own_figure:  # leave the layout of the caller's figure alone
         fig.tight_layout()
-    return VizResult(fig, axes, pd.DataFrame(rows))
+    table = pd.DataFrame(rows)
+    # Whole columns, not the rows above, whose mixed types made a nullable or Arrow value column object dtype
+    table["value"] = numpy_values(data[value])
+    if target is not None:
+        table["target"] = numpy_values(data[target])
+    return VizResult(fig, axes, table)
 
 
 @cleanup_on_error
