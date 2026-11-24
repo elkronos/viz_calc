@@ -397,6 +397,16 @@ def test_design_decisions_cite_a_published_source():
         assert CITATION.search(source), f"design decision {decision.strip()!r}: {source.strip()!r} is not a citation"
 
 
+def test_each_statistical_method_cites_its_source():
+    section = _section(_read("docs/methodology.md"), "## Statistical methods")
+    methods = {part.splitlines()[0]: part for part in section.split("\n### ")[1:]}
+    assert len(methods) >= 10
+    for title, text in methods.items():
+        assert CITATION.search(text), f"methodology: {title!r} cites no source"
+    # Scott's KDE bandwidth rule is from his 1992 book; the 1979 paper is the histogram rule
+    assert ("Scott", "1992") in CITATION.findall(methods["Kernel density estimates"])
+
+
 # --- migration page ------------------------------------------------------------------------------------------------
 
 # The scripts that version 1.0 replaced, as they were at the last commit before the rebuild.

@@ -14,7 +14,8 @@ proportion strictly between 0 and 1 (`0.95`, not `95`); anything else raises
 a `ValueError` instead of producing `NaN` intervals.
 
 ### Confidence interval for a mean
-Student-*t* interval: $\bar x \pm t_{n-1,\,1-\alpha/2}\, s/\sqrt{n}$.
+Student-*t* interval (Student, 1908):
+$\bar x \pm t_{n-1,\,1-\alpha/2}\, s/\sqrt{n}$.
 Used by `estimation_plot`, `benchmark_bar`.
 
 ### Welch's *t*-test (unequal variances)
@@ -130,8 +131,9 @@ $n \le 3$ or $|r| = 1$ (up to rounding).
 
 The Pearson p-value is the usual *t* test. For Spearman with $n \le 9$
 complete pairs the p-value is exact: under independence all $n!$ pairings
-of the ranks are equally likely, and p is the share of them whose $|\rho|$
-is at least the observed one (tied values keep their midranks, so the test is
+of the ranks are equally likely (Kendall & Gibbons, 1990), and p is the
+share of them whose $|\rho|$ is at least the observed one (tied values keep
+their midranks, so the test is
 conditional on the ties). The *t* approximation is badly anti-conservative
 there: it gives $p = 0$ for any perfect rank agreement, whereas the exact
 two-sided p for $|\rho| = 1$ is $2/n!$, i.e. 0.33 at $n = 3$ and 0.083 at
@@ -167,7 +169,8 @@ Sturges (1926) are also available and used as published. Bins are computed
 once on all data so groups and facets are directly comparable.
 
 ### Kernel density estimates
-Gaussian KDE with Scott's bandwidth rule (SciPy's default), adjustable with
+Gaussian KDE with Scott's (1992) bandwidth rule (SciPy's default),
+adjustable with
 `bw_method`. Raincloud densities are trimmed to each group's observed range.
 
 ### Largest-remainder apportionment
@@ -177,8 +180,8 @@ size (Balinski & Young, 1982). Used by `waffle`.
 
 ### Eta-squared
 $\eta^2 = SS_\text{between}/SS_\text{total}$, the share of a numeric
-variable's variance explained by a grouping. Used to rank panels in
-`profile_boxes`. A constant column has no variance to explain, so its
+variable's variance explained by a grouping (Cohen, 1988). Used to rank
+panels in `profile_boxes`. A constant column has no variance to explain, so its
 $\eta^2$ is missing (its floating-point sums of squares would hold only
 rounding noise, as for a column of 0.1).
 
@@ -188,7 +191,8 @@ $= s^2/(n-1)$; component signs fixed so the largest loading is positive
 (Jolliffe & Cadima, 2016). Ellipses are drawn from the eigen-decomposition
 of each group's covariance. The "data" ellipse is the normal-theory ellipse
 at the group's mean and covariance, with radius
-$\sqrt{\chi^2_2(\text{level})}$: for a large group it holds about *level*
+$\sqrt{\chi^2_2(\text{level})}$ (Johnson & Wichern, 2007): for a large group
+it holds about *level*
 of the population, while a small group's own points nearly all fall inside
 it. The "confidence" ellipse is Hotelling's (1931) $T^2$ region for the
 group mean: the covariance of the mean (divided by *n*) with radius
@@ -203,7 +207,8 @@ ellipse is cut off at the edges of the plot.
 Repeated edges are merged by summing their weights. Louvain community
 detection (Blondel et al., 2008) via NetworkX, seeded, on the undirected graph
 (reciprocal directed weights are summed). Louvain squares sums of
-strengths and the spring layout multiplies weights, so when the largest
+strengths and the spring layout (Fruchterman & Reingold, 1991) multiplies
+weights, so when the largest
 weight is above 2²⁵⁶ or below 2⁻²⁵⁶ both get the weights divided or
 multiplied by a power of two, which would otherwise overflow or underflow to
 zero (exact, and modularity does not depend on scale); a node strength above
@@ -275,6 +280,7 @@ record which comparison was used.
 * Brandes, U. (2001). A faster algorithm for betweenness centrality. *Journal of Mathematical Sociology*, 25(2), 163–177.
 * Brown, L. D., Cai, T. T., & DasGupta, A. (2001). Interval estimation for a binomial proportion. *Statistical Science*, 16(2), 101–133.
 * Cleveland, W. S., & McGill, R. (1984). Graphical perception: theory, experimentation, and application to the development of graphical methods. *Journal of the American Statistical Association*, 79(387), 531–554.
+* Cohen, J. (1988). *Statistical Power Analysis for the Behavioral Sciences* (2nd ed.). Erlbaum.
 * Cohen, J., Cohen, P., West, S. G., & Aiken, L. S. (2003). *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences* (3rd ed.). Erlbaum.
 * Crameri, F., Shephard, G. E., & Heron, P. J. (2020). The misuse of colour in science communication. *Nature Communications*, 11, 5444.
 * Csárdi, G., & Nepusz, T. (2006). The igraph software package for complex network research. *InterJournal, Complex Systems*, 1695.
@@ -286,17 +292,22 @@ record which comparison was used.
 * Fieller, E. C., Hartley, H. O., & Pearson, E. S. (1957). Tests for rank correlation coefficients. I. *Biometrika*, 44(3/4), 470–481.
 * Fisher, R. A. (1921). On the "probable error" of a coefficient of correlation deduced from a small sample. *Metron*, 1, 3–32.
 * Freedman, D., & Diaconis, P. (1981). On the histogram as a density estimator: L2 theory. *Zeitschrift für Wahrscheinlichkeitstheorie und verwandte Gebiete*, 57, 453–476.
+* Fruchterman, T. M. J., & Reingold, E. M. (1991). Graph drawing by force-directed placement. *Software: Practice and Experience*, 21(11), 1129–1164.
 * Hedges, L. V. (1981). Distribution theory for Glass's estimator of effect size and related estimators. *Journal of Educational Statistics*, 6(2), 107–128.
 * Hedges, L. V., & Olkin, I. (1985). *Statistical Methods for Meta-Analysis*. Academic Press.
 * Ho, J., Tumkaya, T., Aryal, S., Choi, H., & Claridge-Chang, A. (2019). Moving beyond P values: data analysis with estimation graphics. *Nature Methods*, 16, 565–566.
 * Holm, S. (1979). A simple sequentially rejective multiple test procedure. *Scandinavian Journal of Statistics*, 6(2), 65–70.
 * Hotelling, H. (1931). The generalization of Student's ratio. *Annals of Mathematical Statistics*, 2(3), 360–378.
+* Johnson, R. A., & Wichern, D. W. (2007). *Applied Multivariate Statistical Analysis* (6th ed.). Pearson Prentice Hall.
 * Jolliffe, I. T., & Cadima, J. (2016). Principal component analysis: a review and recent developments. *Philosophical Transactions of the Royal Society A*, 374, 20150202.
+* Kendall, M. G., & Gibbons, J. D. (1990). *Rank Correlation Methods* (5th ed.). Edward Arnold.
 * Lex, A., Gehlenborg, N., Strobelt, H., Vuillemot, R., & Pfister, H. (2014). UpSet: visualization of intersecting sets. *IEEE Transactions on Visualization and Computer Graphics*, 20(12), 1983–1992.
 * Okabe, M., & Ito, K. (2008). *Color Universal Design (CUD): How to make figures and presentations that are friendly to colorblind people*. J*Fly.
 * Robbins, N. B., & Heiberger, R. M. (2011). Plotting Likert and other rating scales. *Proceedings of the 2011 Joint Statistical Meeting*, Section on Survey Research Methods, 1058–1066.
 * Scott, D. W. (1979). On optimal and data-based histograms. *Biometrika*, 66(3), 605–610.
+* Scott, D. W. (1992). *Multivariate Density Estimation: Theory, Practice, and Visualization*. Wiley.
 * Steiger, J. H. (1980). Tests for comparing elements of a correlation matrix. *Psychological Bulletin*, 87(2), 245–251.
+* Student (1908). The probable error of a mean. *Biometrika*, 6(1), 1–25.
 * Sturges, H. A. (1926). The choice of a class interval. *Journal of the American Statistical Association*, 21(153), 65–66.
 * Weissgerber, T. L., Milic, N. M., Winham, S. J., & Garovic, V. D. (2015). Beyond bar and line graphs: time for a new data presentation paradigm. *PLoS Biology*, 13(4), e1002128.
 * Welch, B. L. (1947). The generalization of "Student's" problem when several different population variances are involved. *Biometrika*, 34(1–2), 28–35.
