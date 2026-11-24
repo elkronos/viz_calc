@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.colors import to_hex
+from matplotlib.layout_engine import ConstrainedLayoutEngine
 
 from . import stats as st
 from ._core import (
@@ -279,7 +280,10 @@ def compare_correlations(
     for ax in list(axes.flat)[len(pairs):]:
         ax.set_visible(False)
     fig.suptitle(f"Differences in {method} correlations  (* p < {alpha}, Fisher z, {p_adjust}-adjusted)", x=0.01, ha="left")
-    fig.tight_layout()
+    # Under rcParams["figure.constrained_layout.use"] the colour bars are already laid out, and Matplotlib
+    # refuses to switch such a figure to tight_layout.
+    if not isinstance(fig.get_layout_engine(), ConstrainedLayoutEngine):
+        fig.tight_layout()
     return VizResult(fig, axes, table, {"method": method, "p_adjust": p_adjust, "alpha": alpha,
                                         "group_correlations": per_group,
                                         "dropped_missing_group": int(data[group].isna().sum())})

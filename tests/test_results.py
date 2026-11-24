@@ -360,3 +360,21 @@ def test_abbrev_formatter_works_on_a_dummy_axis():
     points = plt.figure().add_subplot().scatter([1, 2, 3], [1, 2, 3], c=[10000, 20000, 30000])
     _, labels = points.legend_elements(fmt=AbbrevFormatter())
     assert labels and all("K" in label for label in labels)
+
+
+# --- the user's layout settings -------------------------------------------------------------------------------------
+
+
+def test_compare_correlations_draws_under_a_constrained_layout_setting():
+    import warnings
+
+    meas = datasets.measurements()
+    with plt.rc_context({"figure.constrained_layout.use": True}), warnings.catch_warnings():
+        warnings.simplefilter("error")
+        res = vc.compare_correlations(meas, group="group")
+        res.save(BytesIO(), format="png")
+    assert type(res.figure.get_layout_engine()).__name__ == "ConstrainedLayoutEngine"
+    width = res.figure.get_window_extent().width
+    boxes = [ax.get_window_extent() for ax in res.figure.axes]
+    assert all(0 <= b.x0 and b.x1 <= width for b in boxes)  # every heatmap and colour bar inside the figure
+    assert not any(a.overlaps(b) for i, a in enumerate(boxes) for b in boxes[i + 1:])
