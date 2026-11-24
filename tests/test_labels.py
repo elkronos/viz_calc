@@ -431,3 +431,20 @@ def test_network_map_numbers_tied_communities_the_same_whatever_the_row_order():
     ids = {int(vc.network_map(edges.sample(frac=1, random_state=k), "source", "target", weight="strength")
                .table.set_index("node").loc["Ana", "community"]) for k in range(6)}
     assert len(ids) == 1
+
+
+# --- histogram bars ---------------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("stat", ["count", "percent"])
+def test_histogram_info_holds_the_drawn_bars(stat):
+    t = datasets.trial()
+    res = vc.histogram(t, x="score", stat=stat)
+    bins = res.info["bins"]
+    heights = [p.get_height() for p in res.axes.flat[0].patches]
+    assert list(bins.columns) == ["bin_left", "bin_right", "count", "height"]
+    assert np.allclose(bins["height"], heights) and bins["count"].sum() == len(t)
+    res = vc.histogram(t, x="score", hue="arm", facet="site", stat=stat)
+    bins = res.info["bins"]
+    assert list(bins.columns) == ["facet", "hue", "bin_left", "bin_right", "count", "height"]
+    assert bins["count"].sum() == len(t)
+    assert len(bins) == (len(res.info["bin_edges"]) - 1) * len(res.table)

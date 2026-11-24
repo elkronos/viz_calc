@@ -102,7 +102,10 @@ def histogram(
     title says how many there are. The table's summaries use every value.
     The *density_curve* is fitted to every value and scaled to the bars, so
     for ``"density"`` and ``"percent"`` it too is relative to the values
-    inside the edges.
+    inside the edges. ``info["bins"]`` holds the bars that were drawn: one
+    row per bin of each facet and hue group (columns ``facet`` and ``hue``
+    as in the table), with the bin's edges ``bin_left`` and ``bin_right``,
+    its ``count`` and its ``height`` in units of *stat*.
 
     If the Freedman–Diaconis width is unusable (the IQR is zero, e.g. heavily
     tied or zero-inflated data, or FD would need more than 100,000 bins)
@@ -171,7 +174,7 @@ def histogram(
     fig, axes = plt.subplots(nrow, ncol, figsize=(5 * ncol, 3.6 * nrow), squeeze=False, sharex=True, sharey=True)
     grid = np.linspace(edges[0], edges[-1], 256)
     width = np.diff(edges)
-    rows = []
+    rows, bars = [], []
     for ax, f in zip(axes.flat, facets):
         fdata = data if facet is None else data[group_mask(data[facet], f)]
         for h, col in zip(hues, cols):
@@ -202,6 +205,8 @@ def histogram(
                 v = {"mean": np.mean, "median": np.median}[ref_line](s) if isinstance(ref_line, str) else float(ref_line)
                 ax.axvline(v, color=col if hue is not None else foreground(ax), ls="--", lw=1.2)
             rows.append({"facet": f, "hue": h, **_describe(pd.Series(s))})
+            bars.append(pd.DataFrame({"facet": [f] * len(counts), "hue": [h] * len(counts), "bin_left": edges[:-1],
+                                      "bin_right": edges[1:], "count": counts, "height": heights}))
         if facet is not None:
             ax.set_title(f"{level_label(facet)} = {group_label(f)}", fontsize="medium", loc="left")
         ax.spines[["top", "right"]].set_visible(False)
@@ -218,8 +223,11 @@ def histogram(
     note = f"; {outside} value{'s' if outside > 1 else ''} outside the bins not shown" if outside else ""
     fig.suptitle(f"Distribution of {level_label(x)}  (bins: {rule}, width ≈ {np.mean(width):.3g}{note})", x=0.01, ha="left")
     fig.tight_layout()
-    table = pd.DataFrame(rows).drop(columns=[c for c, used in (("facet", facet), ("hue", hue)) if used is None])
-    return VizResult(fig, axes, table, {"bin_edges": edges, "bin_rule": rule, "stat": stat, "outside_bins": outside})
+    unused = [c for c, used in (("facet", facet), ("hue", hue)) if used is None]
+    table = pd.DataFrame(rows).drop(columns=unused)
+    bars = pd.concat(bars, ignore_index=True).drop(columns=unused)
+    return VizResult(fig, axes, table, {"bin_edges": edges, "bin_rule": rule, "stat": stat, "outside_bins": outside,
+                                        "bins": bars})
 
 
 @cleanup_on_error
