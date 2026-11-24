@@ -139,3 +139,58 @@ def test_network_map_interactive_does_not_ignore_ax():
     with pytest.raises(ValueError, match="interactive=True.*cannot be drawn into ax"):
         vc.network_map(datasets.network(), "source", "target", interactive=True, ax=ax)
     assert not ax.has_data()
+
+
+# --- which figures a failed call closes ------------------------------------------------------------------------------
+
+
+def test_a_failed_call_leaves_open_the_figures_another_thread_makes_meanwhile():
+    import threading
+
+    from viz_calc._core import cleanup_on_error
+
+    elsewhere, call_started, other_done = [], threading.Event(), threading.Event()
+
+    def other_thread():
+        call_started.wait(10)
+        elsewhere.append(plt.figure())
+        other_done.set()
+
+    @cleanup_on_error
+    def fails():
+        plt.subplots()
+        call_started.set()
+        other_done.wait(10)
+        raise RuntimeError("boom")
+
+    thread = threading.Thread(target=other_thread)
+    thread.start()
+    with pytest.raises(RuntimeError, match="boom"):
+        fails()
+    thread.join()
+    assert plt.get_fignums() == [elsewhere[0].number]
+    assert plt.rcParams["figure.hooks"] == []
+
+
+def test_a_failed_call_closes_the_figures_of_the_plotting_calls_it_made():
+    from viz_calc._core import cleanup_on_error
+
+    @cleanup_on_error
+    def inner(fail):
+        plt.figure()
+        if fail:
+            raise ValueError("inner")
+
+    @cleanup_on_error
+    def outer():
+        own = plt.figure()
+        with pytest.raises(ValueError, match="inner"):
+            inner(fail=True)
+        assert plt.get_fignums() == [keep.number, own.number]  # the inner call closed only its own figure
+        inner(fail=False)
+        raise RuntimeError("outer")
+
+    keep = plt.figure()
+    with pytest.raises(RuntimeError, match="outer"):
+        outer()
+    assert plt.get_fignums() == [keep.number]

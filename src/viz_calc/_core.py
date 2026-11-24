@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import functools
 import inspect
 import math
@@ -365,6 +366,20 @@ def _figures(result: Any) -> list[Any]:
     return [f for f in (figure if isinstance(figure, list) else [figure]) if isinstance(f, FigureBase)]
 
 
+#: The figures pyplot has made for the plotting call running in this thread, or ``None`` outside a call.
+_made: contextvars.ContextVar[list[Any] | None] = contextvars.ContextVar("viz_calc_made", default=None)
+
+#: ``rcParams["figure.hooks"]`` entry for :func:`_note_figure`, active while a plotting call runs.
+_NOTE_FIGURE = f"{__name__}:_note_figure"
+
+
+def _note_figure(figure: Any) -> None:
+    """Note *figure*, which ``plt.figure`` has just made, as made by the plotting call running in this thread."""
+    made = _made.get()
+    if made is not None:
+        made.append(figure)
+
+
 def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
     """Decorator for the plotting functions: their text is drawn as written, and a failed call closes its figures.
 
@@ -376,9 +391,10 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
     ``text.parse_math`` is off only while the call runs.
 
     A failed call would otherwise leave a half-drawn figure registered with
-    pyplot, which Jupyter or ``plt.show()`` would then display. Figures that
-    existed before the call (such as the one holding a caller's *ax*) are
-    left open.
+    pyplot, which Jupyter or ``plt.show()`` would then display. Only the
+    figures the call made are closed: those that existed before it (such as
+    the one holding a caller's *ax*) and those other threads make while it
+    runs are left open.
 
     An *ax* argument that is not one Matplotlib Axes (a figure, or the whole
     array from ``plt.subplots``) raises ``TypeError`` before the call starts.
@@ -391,16 +407,23 @@ def cleanup_on_error(func: Callable[P, R]) -> Callable[P, R]:
         if ax_at is not None:  # before anything is validated or drawn
             ax = kwargs["ax"] if "ax" in kwargs else args[ax_at] if len(args) > ax_at else None
             _check_ax_type(func.__name__, ax)
-        before = set(plt.get_fignums())
         axes = [a for a in (*args, *kwargs.values()) if isinstance(a, Axes)]
         text = _Text(axes)
+        hooks = plt.rcParams["figure.hooks"]
+        rc = {**_NO_MATH, "figure.hooks": hooks if _NOTE_FIGURE in hooks else [*hooks, _NOTE_FIGURE]}
+        outer, made = _made.get(), []
+        token = _made.set(made)
         try:
-            with plt.rc_context(_NO_MATH):
+            with plt.rc_context(rc):
                 result = func(*args, **kwargs)
         except BaseException:
-            for num in set(plt.get_fignums()) - before:
-                plt.close(num)
+            for figure in made:
+                plt.close(figure)
             raise
+        finally:
+            _made.reset(token)
+        if outer is not None:  # a plotting call made by another one: its figures are the outer call's too
+            outer.extend(made)
         # The result holds the whole figure of a caller's Axes; outside its (sub)figure the call drew nothing.
         callers = {a.figure.figure for a in axes}
         text.settle([f for f in _figures(result) if f not in callers])
