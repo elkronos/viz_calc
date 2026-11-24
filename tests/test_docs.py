@@ -4,6 +4,7 @@ Every Python block on the pages below is run in page order, and each results
 table shown after a block is compared with what that block computes.
 """
 
+import fnmatch
 import functools
 import inspect
 import os
@@ -444,6 +445,31 @@ def test_mkdocs_edit_uri_only_with_page_actions():
     config = _read("mkdocs.yml")
     if re.search(r"^edit_uri:", config, re.M):
         assert re.search(r"^\s+- content\.action\.(edit|view)$", config, re.M), "edit_uri is set but has no effect"
+
+
+# --- repository hygiene --------------------------------------------------------------------------------------------
+
+
+def test_files_the_docs_examples_write_are_ignored_by_git():
+    gitignore = ROOT / ".gitignore"
+    if not gitignore.is_file():
+        pytest.skip("not a repository checkout")
+    patterns = [ln.lstrip("/") for ln in gitignore.read_text(encoding="utf-8").splitlines()
+                if ln and not ln.startswith("#")]
+    texts = [_read(page) for page in PAGES] + [inspect.getdoc(obj) or "" for obj in _api_objects().values()]
+    written = {name for text in texts
+               for name in re.findall(r"\"([\w\-]+\.(?:png|svg|pdf|jpg|html|gif|mp4|pptx))\"", text)}
+    assert {"effect.png", "bubbles.gif", "first-look.pptx"} <= written
+    unignored = sorted(name for name in written if not any(fnmatch.fnmatch(name, p) for p in patterns))
+    assert not unignored, f"run from the repository root, the docs' examples leave untracked {unignored}"
+
+
+def test_readme_lints_what_ci_lints():
+    ci = ROOT / ".github" / "workflows" / "ci.yml"
+    if not ci.is_file():
+        pytest.skip("the workflows are not next to the tests")
+    command = re.search(r"run: (ruff check [^\n]+)", ci.read_text(encoding="utf-8"))[1]
+    assert f"\n{command}" in _read("README.md"), f"README.md does not run {command!r}"
 
 
 # --- methodology and citations -------------------------------------------------------------------------------------
