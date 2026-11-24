@@ -325,6 +325,16 @@ def test_api_docstrings_use_links_the_api_page_renders():
             assert target in objs, f"{name} links to {target}, which the API page does not render"
 
 
+def test_api_page_says_where_each_entry_imports_from():
+    text = _read("docs/api.md")
+    intro = text.split("\n## ")[0]
+    for name in re.findall(r"^::: viz_calc\.(\w+)$", text, re.M):
+        if name in ("stats", "datasets"):  # their functions are not top-level names (vc.wilson_ci does not exist)
+            assert f"`viz_calc.{name}`" in intro, f"docs/api.md does not say the {name} functions are in viz_calc.{name}"
+        else:
+            assert name in vc.__all__, f"docs/api.md says {name} imports from the top level"
+
+
 # --- migration page ------------------------------------------------------------------------------------------------
 
 # The scripts that version 1.0 replaced, as they were at the last commit before the rebuild.
