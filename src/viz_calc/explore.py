@@ -16,11 +16,13 @@ from ._core import (
     NEUTRAL,
     OKABE_ITO,
     VizResult,
+    abbreviate_axes,
     category_order,
     check_choice,
     check_count,
     check_dataframe,
     check_finite,
+    check_labels,
     check_numeric,
     check_range,
     cleanup_on_error,
@@ -29,6 +31,7 @@ from ._core import (
     level_mask,
     require,
     select_columns,
+    short_label,
 )
 
 __all__ = ["profile_bars", "profile_boxes", "profile_scatters", "to_pptx"]
@@ -87,9 +90,13 @@ def profile_bars(
     """Bar chart of value counts for every low-cardinality column.
 
     A column is included when it has at most *max_levels* distinct values.
-    Missing values are counted as their own bar so they are not hidden.
-    Charts are laid out *per_page* to a figure; ``figure`` is the list of
-    figures and ``table`` has the counts.
+    Missing values (``None``, ``NaN``, ``NaT`` and ``pd.NA`` alike) are
+    counted as one bar of their own, last, so they are not hidden. Levels
+    are in category order for a ``Categorical`` (unused categories are left
+    out) and sorted otherwise. Charts are laid out *per_page* to a figure;
+    ``figure`` is the list of figures and ``table`` has the counts. Tick
+    labels and titles longer than 30 characters are cut short with an
+    ellipsis; the table keeps the full level text.
     """
     cols = None if columns is None else column_list("columns", columns, distinct=True)
     check_dataframe(data, cols or [])
@@ -103,21 +110,23 @@ def profile_bars(
     figs, rows = [], []
     for start, fig, axes in _pages(len(cols), per_page, ncols):
         for ax, c in zip(axes, cols[start:]):
-            counts = _categorical(data[c]).value_counts(dropna=False, sort=False)
-            # pandas 2.0 lists a missing-value row with count 0 for nullable dtypes that have no missing values
-            counts = counts[~(counts.index.isna() & (counts.to_numpy() == 0))]
-            try:
-                counts = counts.sort_index()
-            except TypeError:
-                pass
-            names = ["(missing)" if pd.isna(k) else level_label(k) for k in counts.index]
-            bars = ax.bar(range(len(counts)), counts.to_numpy(), color=color)
+            s = _categorical(data[c])
+            levels = category_order(s) if s.notna().any() else []  # a Categorical's used categories, or sorted
+            counts = [int(level_mask(s, lv).sum()) for lv in levels]
+            names = [level_label(lv) for lv in levels]
+            missing = int(s.isna().sum())  # one bar, however the values are missing
+            if missing:
+                check_labels(c, levels, missing=True)
+                names, counts = names + ["(missing)"], counts + [missing]
+            ticks = [short_label(n) for n in names]
+            bars = ax.bar(range(len(counts)), counts, color=color)
             if labels:
-                ax.bar_label(bars, fontsize=7, padding=1)
-            ax.set_xticks(range(len(counts)), names, rotation=45 if max(map(len, names)) > 3 else 0, ha="right" if max(map(len, names)) > 3 else "center")
-            ax.set_title(f"{c}  (n={int(counts.sum())})", fontsize="medium", loc="left")
+                ax.bar_label(bars, labels=[f"{v:,}" for v in counts], fontsize=7, padding=1)  # exact counts
+            abbreviate_axes(ax.yaxis)
+            ax.set_xticks(range(len(counts)), ticks, rotation=45 if max(map(len, ticks)) > 3 else 0, ha="right" if max(map(len, ticks)) > 3 else "center")
+            ax.set_title(f"{short_label(level_label(c))}  (n={sum(counts)})", fontsize="medium", loc="left")
             ax.spines[["top", "right"]].set_visible(False)
-            rows += [{"column": c, "level": n, "count": int(v)} for n, v in zip(names, counts)]
+            rows += [{"column": c, "level": n, "count": v} for n, v in zip(names, counts)]
         fig.tight_layout()
         figs.append(fig)
     return VizResult(figs, None, pd.DataFrame(rows))
@@ -141,7 +150,11 @@ def profile_boxes(
     out; a pair given explicitly that has no complete rows gets ``n=0``, a
     missing eta-squared and an empty panel. A constant numeric column has no
     variance to explain, so its eta-squared is missing too. *categorical* and
-    *numeric*, when both are given, may not name the same column.
+    *numeric*, when both are given, may not name the same column. Every
+    panel of a categorical column shows all of its levels; a level with no
+    values of the panel's numeric column has an empty slot labelled
+    ``(n=0)``. Tick labels and the column names in titles longer than 30
+    characters are cut short with an ellipsis.
     """
     check_dataframe(data)
     check_count("max_levels", max_levels)
@@ -180,15 +193,19 @@ def profile_boxes(
         for ax, r in zip(axes, table.iloc[start:].itertuples()):
             d = select_columns(data, [r.categorical, r.numeric]).dropna()
             ax.spines[["top", "right"]].set_visible(False)
+            pair = f"{short_label(level_label(r.numeric))} by {short_label(level_label(r.categorical))}"
             if d.empty:
                 ax.text(0.5, 0.5, "no complete rows", transform=ax.transAxes, ha="center", va="center", color=NEUTRAL)
-                ax.set_title(f"{r.numeric} by {r.categorical}  (n=0)", fontsize="small", loc="left")
+                ax.set_title(f"{pair}  (n=0)", fontsize="small", loc="left")
                 continue
-            levels = category_order(d.iloc[:, 0])
-            ax.boxplot([d.iloc[:, 1][level_mask(d.iloc[:, 0], lv)] for lv in levels], showfliers=True,
+            # The levels of the whole column, so every panel of one categorical column shows the same ones.
+            levels = category_order(select_columns(data, [r.categorical]).iloc[:, 0])
+            boxes = [d.iloc[:, 1][level_mask(d.iloc[:, 0], lv)].to_numpy(dtype=float) for lv in levels]
+            ax.boxplot(boxes, showfliers=True,
                        flierprops={"markersize": 2, "markeredgecolor": NEUTRAL}, medianprops={"color": OKABE_ITO[5]})
-            ax.set_xticks(range(1, len(levels) + 1), [level_label(lv) for lv in levels], rotation=45, ha="right")
-            ax.set_title(f"{r.numeric} by {r.categorical}  (η²={r.eta_squared:.2f})", fontsize="small", loc="left")
+            ticks = [short_label(level_label(lv)) + ("" if b.size else " (n=0)") for lv, b in zip(levels, boxes)]
+            ax.set_xticks(range(1, len(levels) + 1), ticks, rotation=45, ha="right")
+            ax.set_title(f"{pair}  (η²={r.eta_squared:.2f})", fontsize="small", loc="left")
         fig.tight_layout()
         figs.append(fig)
     return VizResult(figs, None, table)

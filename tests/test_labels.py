@@ -359,3 +359,65 @@ def test_upset_keeps_the_same_intersections_whatever_the_row_order():
         a = vc.upset(d, sort_by=sort_by, max_intersections=None).table
         b = vc.upset(d[::-1], sort_by=sort_by, max_intersections=None).table
         pd.testing.assert_frame_equal(a, b)
+
+
+# --- profile pages ----------------------------------------------------------------------------------------------------
+
+def test_profile_bars_sorts_levels_that_cannot_be_compared_by_type_whatever_the_row_order():
+    d = pd.DataFrame({"g": pd.Series([2020, "2019", 2018, 2.5, "2017", 2020], dtype=object)})
+    for frame in (d, d[::-1]):
+        assert _ticks(vc.profile_bars(frame).figure[0].axes[0]) == ["2.5", "2018", "2020", "2017", "2019"]
+
+
+def test_profile_bars_labels_float32_and_float16_levels_with_their_own_digits():
+    for dtype in (np.float32, np.float16):
+        d = pd.DataFrame({"b": np.array([0.1, 0.2, 0.1, 0.3] * 15, dtype=dtype)})
+        assert vc.profile_bars(d).table["level"].tolist() == ["0.1", "0.2", "0.3"]
+
+
+def test_profile_bars_counts_none_and_nan_as_one_missing_bar():
+    d = pd.DataFrame({"b": pd.Series(["a", np.nan, None, "a", pd.NA], dtype=object)})
+    assert vc.profile_bars(d).table[["level", "count"]].values.tolist() == [["a", 2], ["(missing)", 3]]
+
+
+def test_profile_bars_rejects_levels_that_would_be_labelled_alike():
+    with pytest.raises(ValueError, match=r"level '\(missing\)' and missing values"):
+        vc.profile_bars(pd.DataFrame({"c": ["(missing)", "a", None]}))
+    with pytest.raises(ValueError, match="would both be labelled '1'"):
+        vc.profile_bars(pd.DataFrame({"g": pd.Series([1, "1", 2], dtype=object)}))
+
+
+def test_profile_bars_labels_bars_with_exact_counts():
+    res = vc.profile_bars(pd.DataFrame({"b": np.repeat(["x", "y"], [1_234_567, 3])}))
+    assert [t.get_text() for t in res.figure[0].axes[0].texts] == ["1,234,567", "3"]
+
+
+def test_long_levels_and_column_names_do_not_break_the_profile_pages():
+    long = "Somewhat agree with the statement as it was written in the survey"
+    d = pd.DataFrame({f"q{i}": [long, "No", "Yes"] * 20 for i in range(6)})
+    d[long] = ["p", "q", "r"] * 20
+    d["num"] = np.arange(60.0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        bars = vc.profile_bars(d)
+        boxes = vc.profile_boxes(d)
+    assert long in bars.table["level"].tolist()  # the table keeps the full text
+    ticks = _ticks(bars.figure[0].axes[0])
+    assert max(map(len, ticks)) <= 30 and any(t.endswith("\u2026") for t in ticks)
+    assert all(len(ax.get_title(loc="left")) < 100 for f in boxes.figure for ax in f.axes)
+
+
+def test_profile_bars_leaves_out_unused_categories():
+    d = datasets.measurements()
+    d = d.assign(grade=pd.Categorical(d["grade"], categories=list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")))
+    table = vc.profile_bars(d, columns=["grade"]).table
+    assert table["level"].tolist() == sorted(datasets.measurements()["grade"].unique())
+    assert (vc.profile_bars(d).table["column"] == "grade").sum() == 3
+
+
+def test_profile_boxes_shows_every_level_of_a_column_in_each_panel():
+    d = datasets.measurements()
+    d.loc[d["group"] == "beta", "width"] = np.nan
+    res = vc.profile_boxes(d, categorical=["group"], numeric=["length", "width"])
+    ticks = {ax.get_title(loc="left").split("  ")[0]: _ticks(ax) for f in res.figure for ax in f.axes}
+    assert ticks == {"length by group": ["alpha", "beta", "gamma"], "width by group": ["alpha", "beta (n=0)", "gamma"]}
