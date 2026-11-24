@@ -1030,7 +1030,11 @@ def test_betweenness_arithmetic_choice():
     m = 2200
     big = pd.DataFrame({"s": rng.integers(0, 400, m), "t": rng.integers(400, 800, m), "w": rng.integers(1, 9, m)})
     big = big.drop_duplicates(["s", "t"]).head(2050)
-    res = vc.network_map(big, "s", "t", weight="w", communities=False, labels=False)
+    # 2,050 edges, above the 2,000 where exact arithmetic used to stop, among 92 nodes rather than 800, so the
+    # betweenness and the layout take a fraction of a second
+    dense = pd.DataFrame([(s, t) for s in range(46) for t in range(46, 92)], columns=["s", "t"]).head(2050)
+    res = vc.network_map(dense.assign(w=big["w"].to_numpy()), "s", "t", weight="w", communities=False, labels=False)
+    assert res.info["graph"].number_of_edges() == 2050
     assert res.info["betweenness_arithmetic"] == "exact"  # exact at any size
     small = big.head(50)
     assert vc.network_map(small, "s", "t", weight="w", communities=False).info["betweenness_arithmetic"] == "exact"
