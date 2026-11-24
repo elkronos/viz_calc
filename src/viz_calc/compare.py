@@ -19,6 +19,7 @@ from ._core import (
     OKABE_ITO,
     AbbrevFormatter,
     VizResult,
+    _level_key,
     _plain,
     abbreviate,
     abbreviate_axes,
@@ -853,7 +854,7 @@ def likert(
     check_has_values(data, *items)
     if isinstance(levels, str):
         raise TypeError("levels must be a list of response options, not a str")
-    levels = list(levels)
+    levels = [_level_key(lv) for lv in levels]  # a numpy.datetime64 misses the equal Timestamp on NumPy 1.x
     if len(levels) < 2:
         raise ValueError("levels needs at least two response options")
     repeated = [lv for i, lv in enumerate(levels) if lv in levels[:i]]

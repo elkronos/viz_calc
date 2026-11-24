@@ -947,7 +947,8 @@ def upset(
                                   index=sets.index)
     else:
         # A missing value is not a member, as in a DataFrame (one shared NaN would be a fake common member).
-        sets = {k: {e for e in v if not (pd.api.types.is_scalar(e) and pd.isna(e))} for k, v in sets.items()}
+        # A numpy.datetime64 and the equal Timestamp are one member (on NumPy 1.x they hash differently).
+        sets = {k: {_level_key(e) for e in v if not (pd.api.types.is_scalar(e) and pd.isna(e))} for k, v in sets.items()}
         universe = sorted(set().union(*sets.values()), key=str)
         membership = pd.DataFrame({k: [e in s for e in universe] for k, s in sets.items()}, index=universe)
     names = list(membership.columns)

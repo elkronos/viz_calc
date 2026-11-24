@@ -328,3 +328,19 @@ def test_likert_ties_keep_the_order_of_items():
     d = pd.DataFrame({q: ["a", "b"] * 5 for q in items})
     res = vc.likert(d, items=items, levels=["a", "b"])
     assert res.table["item"].tolist() == items
+
+
+# --- numpy.datetime64 levels and members ------------------------------------------------------------------------------
+
+def test_likert_matches_numpy_datetime_levels_to_timestamps():
+    d = pd.DataFrame({"q": pd.to_datetime(["2024-01-01", "2024-02-01"] * 3)})
+    res = vc.likert(d, items=["q"], levels=[np.datetime64("2024-01-01"), np.datetime64("2024-02-01")])
+    assert res.table["net"].tolist() == [0.0]
+    d = pd.DataFrame({"q": pd.to_timedelta([1, 2] * 3, unit="D")})
+    res = vc.likert(d, items=["q"], levels=[np.timedelta64(1, "D"), np.timedelta64(2, "D")])
+    assert res.table["net"].tolist() == [0.0]
+
+
+def test_upset_counts_a_numpy_datetime_and_the_equal_timestamp_as_one_member():
+    res = vc.upset({"A": [np.datetime64("2024-01-01T00:00:00", "ns")], "B": [pd.Timestamp("2024-01-01")]})
+    assert res.table[["A", "B", "size"]].values.tolist() == [[True, True, 1]]
